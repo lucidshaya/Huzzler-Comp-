@@ -55,7 +55,7 @@ export async function startAttempt(userId: string) {
   if (j.status === "PAID") {
     if (prev) return prev;
   } else if (j.status === "TESTS_FAILED") {
-    if (j.attempts_used >= MAX_ATTEMPTS) throw forbidden("You've used both attempts included in your plan.", "NO_ATTEMPTS_LEFT");
+    if (j.attempts_used >= MAX_ATTEMPTS) throw forbidden("You've used all the attempts included in your plan.", "NO_ATTEMPTS_LEFT");
     if (j.next_attempt_at && new Date(j.next_attempt_at) > new Date()) throw forbidden(`Your retake opens on ${new Date(j.next_attempt_at).toDateString()}.`, "RETAKE_WAIT");
   } else if (j.status === "TESTING" && prev?.status === "in_progress") {
     return prev;
@@ -336,14 +336,16 @@ export async function maybeFinalizeAttempt(attemptId: string) {
     await enqueue("generate_offers", { userId: attempt.user_id });
   } else {
     const canRetake = attemptsUsed < MAX_ATTEMPTS;
+    // The first failure gets an immediate retry; later ones wait.
+    const waitDays = attemptsUsed === 1 ? 0 : RETAKE_WAIT_DAYS;
     await transition(attempt.user_id, "TESTS_FAILED", `scored ${outcome.weighted}`, {
-      extra: { attempts_used: attemptsUsed, next_attempt_at: canRetake ? new Date(Date.now() + RETAKE_WAIT_DAYS * DAY).toISOString() : null },
+      extra: { attempts_used: attemptsUsed, next_attempt_at: canRetake && waitDays ? new Date(Date.now() + waitDays * DAY).toISOString() : null },
     });
     await notify(
       attempt.user_id,
       "onboarding.failed",
       "Your results are ready",
-      canRetake ? `You scored ${outcome.weighted}%. You can retake the tests below 70% in ${RETAKE_WAIT_DAYS} days.` : `You scored ${outcome.weighted}%. See your feedback for what to work on next.`,
+      canRetake ? `You scored ${outcome.weighted}%. You can retake the tests below 70% ${waitDays ? `in ${waitDays} days` : "right away"}.` : `You scored ${outcome.weighted}%. See your feedback for what to work on next.`,
     );
   }
 }

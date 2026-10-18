@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Award, ChevronDown, MessageCircleQuestion } from "lucide-react";
 import { Appeal } from "@/components/app/Appeal";
 import { api } from "@/lib/api";
+import { MAX_TEST_ATTEMPTS } from "@/lib/journey";
 import {
   Card,
   ErrorNote,
@@ -99,13 +100,25 @@ function Results() {
               </div>
             ) : (
               <div className="text-sm md:text-right">
-                {data.journey.attempts_used < 2 ? (
+                {data.journey.attempts_used < MAX_TEST_ATTEMPTS ? (
                   <>
                     You can retake <b>{r.summary.failed_tests.map((t) => `T${t}`).join(", ")}</b>{" "}
-                    from <b>{fmtDate(data.journey.next_attempt_at)}</b>.
+                    {data.journey.next_attempt_at &&
+                    new Date(data.journey.next_attempt_at) > new Date() ? (
+                      <>
+                        from <b>{fmtDate(data.journey.next_attempt_at)}</b>.
+                      </>
+                    ) : (
+                      <>
+                        <b>now</b>.{" "}
+                        <Link to="/tests" className="font-semibold text-primary underline">
+                          Start your retake
+                        </Link>
+                      </>
+                    )}
                   </>
                 ) : (
-                  <>You've used both attempts. Use the feedback below to keep improving.</>
+                  <>You've used all your attempts. Use the feedback below to keep improving.</>
                 )}
               </div>
             )}

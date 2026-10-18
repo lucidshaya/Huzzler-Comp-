@@ -687,7 +687,7 @@ function Index() {
               <p className="mt-3 text-charcoal/70">{p.note}</p>
               <ul className="mt-6 space-y-2.5 text-sm font-semibold text-charcoal/80">
                 {[
-                  "5 onboarding tests, 2 attempts",
+                  "5 onboarding tests, 3 attempts",
                   "Simulated internship offers",
                   "A real team and 5 projects",
                   "Hints and AI mentor chat",

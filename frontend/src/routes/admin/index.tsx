@@ -14,7 +14,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
-import { signOut } from "@/lib/supabase";
+import { signOut, supabase } from "@/lib/supabase";
 import { ThemeToggle } from "@/lib/theme";
 import { Spinner } from "@/components/app/ui";
 import { OverviewTab } from "@/components/admin/Overview";

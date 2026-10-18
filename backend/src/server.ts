@@ -1,13 +1,7 @@
 import { env } from "./config/env.js";
 import { logger } from "./lib/logger.js";
 import { createApp } from "./app.js";
-import { SCHEDULE } from "./jobs/processors.js";
-import { enqueue } from "./jobs/queue.js";
 
+// Long-running host (local dev, or any Node server). On Vercel, api/index.js serves the app instead.
+// Recurring jobs are scheduled by pg_cron in the database, not here.
 createApp().listen(env.PORT, () => logger.info({ port: env.PORT }, "Huzzler API listening"));
-
-// Without Redis (local dev) there's no worker process, so run the schedule in-process.
-if (!env.REDIS_URL && env.NODE_ENV !== "production") {
-  for (const s of SCHEDULE) setInterval(() => void enqueue(s.name), s.everyMs).unref();
-  logger.warn("REDIS_URL not set: background jobs run in-process (development only)");
-}

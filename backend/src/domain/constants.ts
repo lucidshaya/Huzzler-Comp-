@@ -21,7 +21,7 @@ export const TEST_WEIGHTS: Record<number, number> = { 1: 10, 2: 20, 3: 25, 4: 25
 export const TEST_TIME_LIMITS_MIN: Record<number, number> = { 1: 20, 2: 45, 3: 90, 4: 60, 5: 20 };
 export const PASS_MARK = 70;
 export const MIN_SINGLE_TEST = 50;
-export const MAX_ATTEMPTS = 2;
+export const MAX_ATTEMPTS = 3;            // attempt 2 is an instant retry; attempt 3 waits RETAKE_WAIT_DAYS
 export const RETAKE_WAIT_DAYS = 7;
 export const BORDERLINE_BAND = 5;          // second grading if |score - 70| <= 5
 export const REVIEW_DISAGREEMENT = 10;     // two gradings this far apart -> human review

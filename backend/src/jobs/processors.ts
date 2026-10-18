@@ -49,13 +49,3 @@ export const processors: Record<JobName, Processor> = {
     }
   },
 };
-
-/** Recurring jobs (cron, UTC). */
-export const SCHEDULE: Array<{ name: JobName; cron: string; everyMs: number }> = [
-  { name: "expire_offers", cron: "15 * * * *", everyMs: 3_600_000 },
-  { name: "run_matching", cron: "*/30 * * * *", everyMs: 1_800_000 },
-  { name: "retry_awaiting_ai", cron: "*/10 * * * *", everyMs: 600_000 },
-  { name: "nudges", cron: "0 16 * * *", everyMs: 86_400_000 },          // 17:00 WAT
-  { name: "inactivity_check", cron: "0 6 * * *", everyMs: 86_400_000 },
-  { name: "lapse_check", cron: "0 7 * * *", everyMs: 86_400_000 },
-];

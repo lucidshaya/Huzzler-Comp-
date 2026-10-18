@@ -4,18 +4,22 @@ Experience-as-a-service for young African tech talent: sign up → choose a fiel
 
 ```
 frontend/   TanStack Start (React + Vite + Tailwind) web app, PWA-ready, SSR for public pages
-backend/    Express API + BullMQ worker, Supabase migrations, content bank, rubrics, scripts
-infra/      docker-compose for local Redis
+backend/    Express API, database job queue, Supabase migrations, content bank, rubrics, scripts
 docs/       decisions and runbooks
 ```
 
 ## First-time setup
 
-1. **Database.** In the Supabase dashboard → SQL editor, run in order:
-   - `backend/supabase/migrations/20261018000001_init.sql`
-   - `backend/supabase/migrations/20261018000002_catalogue.sql`
+1. **Database.** One hosted Supabase database (`wszohrtiiwugtsehumrt`) backs everything: data, the background job queue (`jobs` table) and the job schedule (pg_cron). Local development uses the same database. `backend/supabase/migrations/` is its schema history; every schema change is a new migration file, never an edit in the dashboard.
+   ```bash
+   cd backend
+   npx supabase login
+   npx supabase link --project-ref wszohrtiiwugtsehumrt
+   npm run db:push          # applies the migrations the database hasn't seen yet
+   ```
+   If the first two migrations were already run by hand in the SQL editor, mark them as applied once before pushing: `npx supabase migration repair --status applied 20261018000001 20261018000002`.
 
-   (Or with the Supabase CLI: `supabase link --project-ref wszohrtiiwugtsehumrt && supabase db push` from `backend/`.)
+   To change the schema: `npm run db:new -- <name>`, write the SQL in the new file, then `npm run db:push`. Once the repo secret `SUPABASE_DB_URL` is set, merging to `main` applies new migrations automatically (`.github/workflows/db-migrate.yml`).
 2. **Auth settings** (Supabase → Authentication):
    - Site URL `http://localhost:4001`; add `http://localhost:4001/callback` to redirect URLs (plus your production URL later).
    - Enable the Google provider (needs a Google OAuth client).
@@ -27,9 +31,8 @@ docs/       decisions and runbooks
    npm install
    npm run seed             # test bank, projects, personas, FAQ, admin account
    npm run paystack:setup   # creates the ₦2,500/month Paystack plan and stores its code
-   npm run dev              # API on :3001 (jobs run in-process without Redis)
+   npm run dev              # API on :3001 (background jobs run in-process in development)
    ```
-   Optional durable queue: `docker compose -f infra/docker-compose.yml up -d`, set `REDIS_URL=redis://127.0.0.1:6379`, then also run `npm run dev:worker`.
 4. **Frontend**
    ```bash
    cd frontend
@@ -37,6 +40,32 @@ docs/       decisions and runbooks
    npm run dev              # http://localhost:4001
    ```
 5. **Paystack webhook.** In the Paystack dashboard (test mode) set the webhook URL to `https://<your-api-host>/api/webhooks/paystack`. Locally, expose port 3001 with a tunnel (e.g. `cloudflared tunnel --url http://localhost:3001`). Payments still unlock without the webhook — the return page verifies with Paystack directly.
+
+## Deploying (Vercel)
+
+One repo, two Vercel projects, one database:
+
+| Vercel project | Root directory | URL |
+| --- | --- | --- |
+| `huzzlerr` (web) | `frontend` | https://huzzlerr.vercel.app |
+| `huzzlerr-api` (API) | `backend` | https://huzzlerr-api.vercel.app |
+
+Both deploy from `main`; preview deployments come from other branches.
+
+**Web project** (framework auto-detected; Nitro builds for Vercel). Environment variables:
+`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_PAYSTACK_PUBLIC_KEY`, `VITE_API_URL=https://huzzlerr-api.vercel.app`.
+
+**API project** (`backend/vercel.json`: the Express app runs as one function, `api/index.js`). Environment variables: everything in `backend/.env.example`, with
+`APP_URL=https://huzzlerr.vercel.app`, `API_URL=https://huzzlerr-api.vercel.app`, `CORS_ORIGINS=https://huzzlerr.vercel.app`, and `CRON_SECRET` (`openssl rand -hex 32`). Leave `AI_MOCK` unset.
+
+**Background jobs.** The API writes jobs to the `jobs` table and starts running them immediately. pg_cron (migration `20261018000003_jobs.sql`) enqueues the recurring jobs and calls `POST /api/jobs/drain` every minute for delayed and retried work. Give it the API's address and secret once, in the Supabase SQL editor:
+```sql
+select vault.create_secret('https://huzzlerr-api.vercel.app', 'huzzler_api_url');
+select vault.create_secret('<same value as CRON_SECRET>', 'huzzler_cron_secret');
+```
+Failed jobs stay in `jobs` with `last_error`; `npm run jobs:drain` runs due jobs from your machine when debugging.
+
+**After the first deploy:** add `https://huzzlerr.vercel.app` as the Supabase Auth Site URL and `https://huzzlerr.vercel.app/callback` as a redirect URL, and set the Paystack webhook to `https://huzzlerr-api.vercel.app/api/webhooks/paystack`.
 
 ## Admin
 

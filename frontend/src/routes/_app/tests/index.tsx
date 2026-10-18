@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Clock, Hourglass, Lock, Play, RotateCcw } from "lucide-react";
 import { api } from "@/lib/api";
-import { useMe, useRefreshMe } from "@/lib/journey";
+import { MAX_TEST_ATTEMPTS, useMe, useRefreshMe } from "@/lib/journey";
 import {
   Card,
   ErrorNote,
@@ -62,7 +62,7 @@ function TestsOverview() {
   const j = me.journey;
   const retakeOpen =
     j.status === "TESTS_FAILED" &&
-    j.attempts_used < 2 &&
+    j.attempts_used < MAX_TEST_ATTEMPTS &&
     (!j.next_attempt_at || new Date(j.next_attempt_at) <= new Date());
 
   if (!data?.attempt || !Array.isArray(data.tests) || (j.status === "TESTS_FAILED" && retakeOpen)) {
@@ -110,7 +110,7 @@ function TestsOverview() {
               "Preparing…"
             ) : j.status === "TESTS_FAILED" ? (
               <>
-                <RotateCcw className="h-4 w-4" /> Start attempt 2
+                <RotateCcw className="h-4 w-4" /> Start attempt {j.attempts_used + 1}
               </>
             ) : (
               <>

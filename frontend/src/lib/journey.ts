@@ -287,3 +287,6 @@ export const MILESTONES: Array<{
   { key: "p5", label: "Capstone", reached: (s) => s === "PROJECT_5" || s === "CERTIFIED" },
   { key: "cert", label: "Certified", reached: (s) => s === "CERTIFIED" },
 ];
+
+/** Mirrors backend MAX_ATTEMPTS: attempt 2 is an instant retry, attempt 3 opens after a wait. */
+export const MAX_TEST_ATTEMPTS = 3;

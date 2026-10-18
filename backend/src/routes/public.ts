@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "../lib/supabase.js";
@@ -6,7 +7,8 @@ import { h, parse } from "./util.js";
 import { notFound, HttpError } from "../lib/errors.js";
 import { verifySignature } from "../services/paystack.js";
 import { recordWebhook } from "../services/payments.js";
-import { enqueue } from "../jobs/queue.js";
+import { enqueue, kickDrain } from "../jobs/queue.js";
+import { env } from "../config/env.js";
 import { getGuardianRequest, respondGuardian } from "../services/profile.js";
 import { verifyCertificate, publicPortfolio } from "../services/certification.js";
 import { recordCiResult } from "../services/projects.js";
@@ -25,6 +27,15 @@ publicRouter.get(
     return { roles: roles.data, archetypes: archetypes.data, compatibility: compat.data, plans: plans.data };
   }),
 );
+
+// pg_cron pings this every minute (see migration 20261018000003_jobs.sql). Ack fast, drain in the background.
+publicRouter.post("/jobs/drain", (req, res) => {
+  const token = Buffer.from(req.header("authorization")?.replace(/^Bearer /, "") ?? "");
+  const expected = Buffer.from(env.CRON_SECRET ?? "");
+  if (!env.CRON_SECRET || token.length !== expected.length || !crypto.timingSafeEqual(token, expected)) return res.status(401).end();
+  kickDrain();
+  res.status(202).json({ ok: true });
+});
 
 // Paystack webhook: verify signature on the raw body, store, ack fast, process in the queue.
 publicRouter.post("/webhooks/paystack", async (req, res, next) => {

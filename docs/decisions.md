@@ -3,7 +3,8 @@
 ## Structure
 - **Kept the existing `frontend/` + `backend/` layout** instead of the brief's `apps/` + `packages/` pnpm monorepo. The frontend is a Lovable-synced TanStack Start app; moving it would break the Lovable link. Shared constants live in `backend/src/domain` (mirrored in `frontend/src/lib/journey.ts`).
 - **TanStack Start instead of plain Vite + React Router.** It was already in place and gives server rendering for `/verify/:certId` and `/u/:username` (SEO/link previews), which the brief requires.
-- **Worker** is `backend/src/worker.ts` (same package as the API) rather than a separate app.
+- **One database, no Redis or worker.** Background jobs are rows in the Supabase `jobs` table, claimed with `FOR UPDATE SKIP LOCKED`, retried with exponential backoff; pg_cron owns the schedule and pings `POST /api/jobs/drain`. This lets the API run on Vercel (serverless, no long-running worker) and keeps all state in one place. In development jobs run in-process so a local server never drains the shared queue.
+- **Hosting:** Vercel, one project per app (`frontend`, `backend`) from the same repo. The API is a separate project because the web build is Nitro output, which doesn't host the Express app.
 
 ## AI
 - Structured output uses `output_config.format` (JSON schema) + Zod re-validation instead of a forced tool call. Same guarantee; it's the current recommended mechanism. Retry once, then human review.

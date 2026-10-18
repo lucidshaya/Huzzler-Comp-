@@ -200,8 +200,8 @@ function RulesCard() {
           no test below 50%.
         </li>
         <li className="flex gap-2">
-          <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" /> 2 full attempts included.
-          Retake only the tests under 70%, after 7 days.
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" /> 3 attempts included.
+          Retake the tests under 70% right away, then once more after 7 days.
         </li>
         <li className="flex gap-2">
           <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" /> Tests are timed and save drafts

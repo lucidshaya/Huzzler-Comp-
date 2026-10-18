@@ -3,3 +3,8 @@ dist
 .env
 .env.*
 !.env.example
+public
+.vercel
+
+.vercel
+.env*

@@ -35,7 +35,10 @@ const Env = z.object({
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default("Huzzler <no-reply@huzzler.app>"),
 
-  REDIS_URL: z.string().optional(),
+  // Bearer token pg_cron sends to POST /api/jobs/drain (also stored in Supabase Vault).
+  CRON_SECRET: z.string().min(32).optional(),
+  // How long one drain keeps claiming jobs; keep it under the function's maxDuration.
+  JOBS_DRAIN_BUDGET_MS: z.coerce.number().default(40_000),
   SENTRY_DSN: z.string().optional(),
   LOG_LEVEL: z.string().default("info"),
 

@@ -1,0 +1,23 @@
+name: Database migrations
+
+# Applies new files in backend/supabase/migrations to the hosted database when they land on main.
+# Needs the repo secret SUPABASE_DB_URL: Supabase -> Connect -> Session pooler connection string.
+on:
+  push:
+    branches: [main]
+    paths: ["backend/supabase/migrations/**"]
+  workflow_dispatch:
+
+concurrency: db-migrate
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: backend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with: { version: latest }
+      - run: supabase db push --db-url "$SUPABASE_DB_URL" --include-all
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
