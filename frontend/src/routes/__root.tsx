@@ -11,6 +11,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { SessionExpiredDialog, resolveError, goToSignIn } from "../components/app/Feedback";
 
 function NotFoundComponent() {
   return (
@@ -41,30 +42,41 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
 
+  const r = resolveError(error);
+  const expired = r.action?.run === "signin";
+  const Icon = r.icon;
+  const retry = () => {
+    router.invalidate();
+    reset();
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          This page didn't load
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 text-foreground">
+      <div className="hz-fade-up flex max-w-md flex-col items-center text-center">
+        <span className="grid h-16 w-16 place-items-center rounded-2xl bg-primary/10 text-primary ring-4 ring-primary/10">
+          <Icon className="h-8 w-8" />
+        </span>
+        <h1 className="mt-5 font-display text-2xl font-bold tracking-tight">
+          {expired ? r.title : "This page didn't load"}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
+          {expired ? r.message : "Something went wrong on our end. Try again — and if it keeps happening, head back to your dashboard."}
         </p>
+        {import.meta.env.DEV && !expired && (
+          <pre className="mt-4 max-h-40 w-full overflow-auto rounded-lg bg-muted p-3 text-left text-xs text-red-500">{error.message}</pre>
+        )}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
-          <button
-            onClick={() => {
-              router.invalidate();
-              reset();
-            }}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            Try again
-          </button>
-          <a
-            href="/"
-            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Go home
+          {expired ? (
+            <button onClick={() => void goToSignIn()} className="btn-duo !py-2.5 !px-5 text-sm">
+              Sign in again
+            </button>
+          ) : (
+            <button onClick={retry} className="btn-duo !py-2.5 !px-5 text-sm">
+              Try again
+            </button>
+          )}
+          <a href="/dashboard" className="btn-duo-outline !py-2.5 !px-5 text-sm">
+            Go to dashboard
           </a>
         </div>
       </div>
@@ -99,7 +111,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           name: "Huzzler",
           url: "/",
           description:
-            "Experience as a Software for African Builders. AI-verified product experience on real teams.",
+            "Experience-as-a-service for young African tech talent: prove your skills, join a real team, ship five projects and earn a verifiable certificate.",
         }),
       },
     ],
@@ -127,27 +139,11 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.location.hash.includes("access_token")) {
-      const hash = window.location.hash.substring(1);
-      const params = new URLSearchParams(hash);
-      const accessToken = params.get("access_token");
-
-      if (accessToken) {
-        localStorage.setItem("huzzler_token", accessToken);
-        // Wipe hash from history immediately to stop reload loop
-        window.history.replaceState(null, "", "/dashboard");
-        if (window.location.pathname !== "/dashboard") {
-          window.location.href = "/dashboard";
-        }
-      }
-    }
-  }, []);
-
   return (
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
+      <SessionExpiredDialog />
     </QueryClientProvider>
   );
 }

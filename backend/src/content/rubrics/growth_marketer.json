@@ -1,0 +1,36 @@
+{
+  "role_id": "growth_marketer",
+  "version": "1.0.0",
+  "guidelines": "A junior Digital / Growth Marketer working on products for Nigerian and African users. Good work is audience-specific, benefit-led, honest (no unverifiable claims) and measurable.",
+  "rubrics": {
+    "t3": {
+      "title": "Landing page copy",
+      "criteria": [
+        { "id": "value_prop", "name": "Value proposition", "weight": 30, "description": "Headline and subhead make the specific benefit clear to the target user in seconds." },
+        { "id": "audience", "name": "Audience fit", "weight": 20, "description": "Speaks to the stated audience's needs, language and objections." },
+        { "id": "structure", "name": "Page structure", "weight": 20, "description": "Logical sections: benefits, proof, how it works, FAQ, clear CTA." },
+        { "id": "cta", "name": "Calls to action", "weight": 15, "description": "Specific, low-friction CTAs." },
+        { "id": "honesty", "name": "Honesty and compliance", "weight": 15, "description": "No invented stats, guarantees or misleading claims." }
+      ]
+    },
+    "t4": {
+      "title": "Go-to-market mini plan",
+      "criteria": [
+        { "id": "segment", "name": "Target segment", "weight": 20, "description": "A specific, reachable initial segment with rationale." },
+        { "id": "positioning", "name": "Positioning", "weight": 20, "description": "Clear positioning vs alternatives." },
+        { "id": "channels", "name": "Channels and tactics", "weight": 25, "description": "Realistic channels for the segment and budget, sequenced." },
+        { "id": "metrics", "name": "Metrics and budget", "weight": 20, "description": "Funnel metrics, targets and a rough budget." },
+        { "id": "risks", "name": "Risks", "weight": 15, "description": "Main risks and how to test assumptions cheaply." }
+      ]
+    },
+    "project": {
+      "title": "Marketing project deliverable",
+      "criteria": [
+        { "id": "fit", "name": "Delivers the task", "weight": 30, "description": "Requested copy, plan or analysis delivered." },
+        { "id": "audience", "name": "Audience and positioning", "weight": 25, "description": "Specific and consistent with the product." },
+        { "id": "measurability", "name": "Measurability", "weight": 25, "description": "Clear success metrics and tracking." },
+        { "id": "craft", "name": "Craft", "weight": 20, "description": "Clear, persuasive, honest writing." }
+      ]
+    }
+  }
+}

@@ -1,0 +1,98 @@
+// T1 Fundamentals: auto-graded multiple choice. [prompt, [a,b,c,d], correctIndex, explanation]
+type Q = [string, [string, string, string, string], number, string];
+
+export const MCQ: Record<string, Q[]> = {
+  software_engineer: [
+    ["Which HTTP status code best signals that a POST body failed validation?", ["200 OK", "302 Found", "422 Unprocessable Entity", "500 Internal Server Error"], 2, "422 means the request was well-formed but semantically invalid; 400 is an acceptable fallback."],
+    ["What does `const` guarantee in JavaScript?", ["The value can never change", "The binding can't be reassigned", "The object is frozen", "The variable is hoisted with a value"], 1, "const prevents reassignment of the binding; objects it points to can still be mutated."],
+    ["You committed to the wrong branch but haven't pushed. Which is safest to move the commit?", ["git push --force", "git reset --hard origin/main then re-type the work", "git cherry-pick the commit onto the right branch, then reset the wrong branch", "Delete the repository and re-clone"], 2, "Cherry-pick copies the commit; then reset the wrong branch locally."],
+    ["Which data structure gives O(1) average lookup by key?", ["Array", "Linked list", "Hash map", "Binary search tree"], 2, "Hash maps give O(1) average-case lookup."],
+    ["In TypeScript, what is the type of `x` after `if (typeof x === 'string')` inside the block, when x: string | number?", ["unknown", "string", "number", "string | number"], 1, "typeof narrowing refines the union to string."],
+    ["What does `await` do inside an async function?", ["Blocks the whole Node.js process", "Pauses that function until the promise settles", "Converts a callback to a promise", "Runs the promise in a new thread"], 1, "await yields the async function until the promise settles; the event loop keeps running."],
+    ["Which HTTP method should be idempotent?", ["POST", "PUT", "PATCH (always)", "CONNECT"], 1, "PUT replaces a resource; repeating it has the same effect."],
+    ["A user's password must be stored as:", ["Plain text in a private table", "Base64-encoded", "A salted hash using a slow algorithm like bcrypt/argon2", "Encrypted with a key in the code"], 2, "Use slow, salted password hashing; never reversible storage."],
+  ],
+  product_manager: [
+    ["What is the main purpose of a PRD?", ["To lock the design before engineering starts", "To align the team on the problem, scope and success criteria", "To estimate the release date", "To list every possible feature"], 1, "A PRD aligns everyone on what problem we're solving, for whom, and how we'll know it worked."],
+    ["Which is the best example of an outcome rather than an output?", ["Ship the referral page", "Run 3 user interviews", "Increase week-1 retention from 30% to 35%", "Write 10 user stories"], 2, "Outcomes are changes in user or business behaviour."],
+    ["RICE prioritisation scores features by:", ["Revenue, Impact, Cost, Effort", "Reach, Impact, Confidence, Effort", "Risk, Importance, Complexity, Estimate", "Reach, Insight, Cost, Execution"], 1, "RICE = Reach × Impact × Confidence ÷ Effort."],
+    ["A guardrail metric is:", ["The primary metric you're trying to move", "A metric you watch to make sure you don't cause harm elsewhere", "A vanity metric", "A metric only engineers see"], 1, "Guardrails catch side effects (e.g. support tickets rising)."],
+    ["The best first step when a stakeholder demands a feature is to:", ["Add it to the sprint", "Say no", "Understand the underlying problem they're trying to solve", "Ask engineering for an estimate"], 2, "Dig into the problem before discussing solutions."],
+    ["An MVP is best described as:", ["The first version with all planned features", "The smallest thing that lets you learn whether the idea works", "A prototype only designers see", "A low-quality release"], 1, "MVPs exist to learn cheaply."],
+    ["Good acceptance criteria are:", ["Written after the feature ships", "Specific and testable", "Optional for small stories", "Written only by QA"], 1, "Acceptance criteria must be testable."],
+    ["In a daily standup, the PM should mainly:", ["Assign everyone's tasks for the day", "Surface blockers and keep the team focused on the sprint goal", "Present the roadmap", "Review code"], 1, "Standups are about blockers and alignment."],
+  ],
+  uiux_designer: [
+    ["Minimum WCAG AA contrast ratio for normal body text is:", ["2:1", "3:1", "4.5:1", "7:1"], 2, "AA requires 4.5:1 for normal text (3:1 for large)."],
+    ["Recommended minimum touch target size on mobile is roughly:", ["24×24 px", "32×32 px", "44–48 px square", "60×60 px"], 2, "Apple suggests 44pt; Material suggests 48dp."],
+    ["Hick's law says:", ["Users read in an F pattern", "Decision time increases with the number of choices", "Bigger targets are faster to hit", "Users prefer familiar patterns"], 1, "More options → longer decisions."],
+    ["Which is a usability heuristic from Nielsen?", ["Mobile first", "Visibility of system status", "Use brand colours", "Always use modals"], 1, "Visibility of system status is heuristic #1."],
+    ["A good empty state should:", ["Be left blank to stay minimal", "Explain what goes here and offer the next action", "Show an error icon", "Redirect to the home page"], 1, "Empty states guide the first action."],
+    ["When is a usability test with 5 users most useful?", ["To get statistically significant conversion data", "To find the major usability problems in a flow", "To choose brand colours", "To validate pricing"], 1, "Small qualitative tests reveal most major issues."],
+    ["Why not rely on colour alone to show an error?", ["It's slower to render", "Colour-blind users may miss it", "It breaks dark mode", "It's against brand guidelines"], 1, "Pair colour with text/icons."],
+    ["A design system primarily helps teams:", ["Avoid user research", "Build consistent UI faster with shared components and rules", "Replace front-end engineers", "Choose fonts"], 1, "Consistency and speed via reusable parts."],
+  ],
+  devops_engineer: [
+    ["Which command shows running containers?", ["docker images", "docker ps", "docker logs", "docker build"], 1, "docker ps lists running containers."],
+    ["Why order Dockerfile steps from least to most frequently changing?", ["Smaller images", "Better layer cache reuse", "Required by Docker", "Better security"], 1, "Stable layers first maximises cache hits."],
+    ["In Linux, `chmod 600 file` means:", ["Everyone can read", "Owner read/write only", "Owner execute only", "Group read/write"], 1, "6 = rw for owner, 0 for group and others."],
+    ["Where should CI secrets be stored?", ["In the repo, base64-encoded", "In the CI provider's secret store", "In the Dockerfile", "In a public gist"], 1, "Use the CI secret store; never commit secrets."],
+    ["A blue/green deployment:", ["Deploys to half the servers", "Runs two environments and switches traffic between them", "Is a database migration strategy", "Only applies to Kubernetes"], 1, "Two environments, instant switch and rollback."],
+    ["Which signal is a good alert for a web service?", ["CPU at 60%", "Error rate above SLO for 5 minutes", "Any log line containing 'warn'", "Disk at 20%"], 1, "Alert on user-facing symptoms against SLOs."],
+    ["What does `set -e` do in a bash script?", ["Echoes each command", "Exits on the first command that fails", "Enables environment variables", "Runs as root"], 1, "Fail fast on errors."],
+    ["A health check endpoint should:", ["Return the full app config", "Quickly report whether the service can serve traffic", "Run database migrations", "Require admin auth"], 1, "Fast, cheap readiness/liveness signal."],
+  ],
+  technical_writer: [
+    ["Which is the clearest instruction?", ["The button should be clicked by the user.", "Click Save.", "It is recommended that saving be performed.", "One might click the save button."], 1, "Imperative, active voice."],
+    ["A tutorial differs from a reference because it:", ["Lists every parameter", "Teaches through a guided, end-to-end task", "Is shorter", "Has no code"], 1, "Tutorials are learning-oriented; references are information-oriented."],
+    ["Which belongs in a README first?", ["License text", "What the project does and how to get started", "Contributor list", "Changelog"], 1, "Lead with what it is and quick start."],
+    ["\"Its\" vs \"it's\": which is correct? \"The API returns ___ response in JSON.\"", ["it's", "its", "its'", "it is"], 1, "'its' is possessive."],
+    ["Release notes should prioritise:", ["Internal refactors", "Changes that affect users, especially breaking ones", "Commit hashes", "Team shout-outs"], 1, "Users care about what changed for them."],
+    ["Good API reference for an endpoint includes:", ["Only the URL", "Method, path, parameters, request/response examples and errors", "A marketing description", "The source code"], 1, "Complete, example-driven reference."],
+    ["Consistent terminology matters because:", ["It's required by Markdown", "Readers assume different words mean different things", "It improves SEO only", "It shortens documents"], 1, "Synonyms confuse readers."],
+    ["Which heading structure is best for scanning?", ["One long section", "Descriptive, task-based headings in a logical hierarchy", "Clever puns", "All headings at the same level"], 1, "Task-based hierarchy aids scanning."],
+  ],
+  data_analyst: [
+    ["Which SQL clause filters rows after aggregation?", ["WHERE", "HAVING", "ORDER BY", "LIMIT"], 1, "HAVING filters groups after GROUP BY."],
+    ["The median is better than the mean when:", ["Data is normally distributed", "Data has extreme outliers", "You need the total", "Data is categorical"], 1, "Median is robust to outliers."],
+    ["A LEFT JOIN returns:", ["Only matching rows", "All rows from the left table plus matches from the right", "All rows from both tables", "Only non-matching rows"], 1, "Left rows always kept; NULLs where no match."],
+    ["Correlation of 0.8 between ad spend and sales means:", ["Ad spend causes sales", "They move together strongly; causation isn't established", "Sales cause ad spend", "There's an error"], 1, "Correlation ≠ causation."],
+    ["Best chart to show a trend over 12 months:", ["Pie chart", "Line chart", "Scatter plot", "Treemap"], 1, "Line charts show change over time."],
+    ["What does COUNT(DISTINCT user_id) return?", ["Total rows", "Number of unique users", "Sum of user ids", "Rows with NULL user_id"], 1, "Unique non-null values."],
+    ["Conversion rate from 1,200 visitors and 90 sign-ups is:", ["0.75%", "7.5%", "13.3%", "75%"], 1, "90 / 1200 = 7.5%."],
+    ["Before analysing a new dataset, you should first:", ["Build a dashboard", "Check for missing values, duplicates and odd ranges", "Run a regression", "Present findings"], 1, "Profile and clean first."],
+  ],
+  qa_engineer: [
+    ["Boundary value analysis tests:", ["Random values", "Values at and just around the edges of valid ranges", "Only valid values", "Only the UI"], 1, "Bugs cluster at boundaries."],
+    ["A regression test checks that:", ["New features are fast", "Existing behaviour still works after a change", "The UI looks good", "Requirements are complete"], 1, "Regression = previously working behaviour."],
+    ["The most important part of a bug report is:", ["The reporter's opinion", "Clear steps to reproduce with expected vs actual result", "A long title", "The severity alone"], 1, "Reproducibility is everything."],
+    ["Severity vs priority: a typo in the CEO's name on the homepage is:", ["High severity, low priority", "Low severity, high priority", "Low severity, low priority", "High severity, high priority"], 1, "Small defect, but fix it fast."],
+    ["Which is a negative test for a login form?", ["Valid email and password", "Empty password", "Remember-me checked", "Fast network"], 1, "Negative tests use invalid input."],
+    ["The test pyramid suggests:", ["Mostly end-to-end tests", "Many unit tests, fewer integration, fewest E2E", "Only manual tests", "Equal numbers of each"], 1, "Fast, cheap tests at the base."],
+    ["A flaky test is one that:", ["Always fails", "Passes and fails without code changes", "Is slow", "Tests the UI"], 1, "Non-deterministic results."],
+    ["Mutation testing measures:", ["Code coverage lines", "Whether tests catch deliberately introduced bugs", "Performance", "Security"], 1, "Killed mutants show test strength."],
+  ],
+  growth_marketer: [
+    ["CAC stands for:", ["Customer Acquisition Cost", "Campaign Attribution Channel", "Conversion After Click", "Cost Above Cap"], 0, "Total acquisition spend ÷ new customers."],
+    ["CTR is calculated as:", ["Conversions ÷ clicks", "Clicks ÷ impressions", "Spend ÷ clicks", "Impressions ÷ reach"], 1, "Click-through rate."],
+    ["A good value proposition is:", ["A list of features", "A clear statement of the specific benefit for a specific user", "The company mission", "A slogan with no meaning"], 1, "Specific benefit, specific user."],
+    ["An A/B test should change:", ["As many things as possible", "One meaningful variable at a time", "Only colours", "Nothing until launch"], 1, "Isolate the variable to learn."],
+    ["ROAS of 3 means:", ["₦3 spent per ₦1 revenue", "₦3 revenue per ₦1 ad spend", "3% conversion", "3 campaigns"], 1, "Return on ad spend."],
+    ["The best early channel for a niche B2B tool in Lagos is likely:", ["National TV", "Direct outreach and communities where the buyers already are", "Billboards", "Celebrity endorsement"], 1, "Go where the buyers are; cheap and measurable."],
+    ["Which claim is safest in ad copy?", ["\"Guaranteed to double your income\"", "\"Used by 2,000 Lagos traders\" (if true and verifiable)", "\"#1 app in Africa\" (unverified)", "\"Risk-free forever\""], 1, "Only verifiable claims."],
+    ["A funnel's activation stage refers to:", ["First visit", "The user's first experience of core value", "Paying", "Referring a friend"], 1, "Activation = first 'aha'."],
+  ],
+};
+
+// T5 Teamwork judgement (situational judgement), shared by all roles.
+// Each option scores 0-3 against how experienced teammates handle the situation.
+export const SJT: Array<{ prompt: string; options: Array<[string, number]>; rationale: string }> = [
+  { prompt: "A teammate's task you depend on is two days late and they haven't posted in chat.", options: [["Do their task yourself without telling them", 0], ["Message them directly, ask how it's going and whether they need help, and flag the risk to the PM if it stays blocked", 3], ["Complain in the team chat", 0], ["Wait until the deadline passes", 1]], rationale: "Reach out first, offer help, then escalate the risk." },
+  { prompt: "In review, a teammate points out a real flaw in your work in a blunt way.", options: [["Defend your work point by point", 1], ["Thank them, fix the flaw, and mention privately that a softer tone would help", 3], ["Ignore the comment", 0], ["Report them to Huzzler", 0]], rationale: "Separate the feedback (valid) from the tone." },
+  { prompt: "You realise you'll miss your deadline because the task was bigger than expected.", options: [["Say nothing and work late", 1], ["Tell the PM now, explain why, and propose a smaller scope or new date", 3], ["Submit something incomplete without saying so", 0], ["Ask another teammate to finish it", 1]], rationale: "Surface risk early with options." },
+  { prompt: "Two teammates disagree strongly about an approach and the thread is getting heated.", options: [["Take a side", 1], ["Suggest a short call to list the trade-offs and let the owner/PM decide", 3], ["Mute the chat", 0], ["Tell them to stop arguing", 1]], rationale: "Structure the disagreement and get a decision." },
+  { prompt: "You don't understand part of the task brief.", options: [["Guess and hope it's right", 0], ["Re-read the brief and hints, then ask a specific question in team chat", 3], ["Wait for someone to notice", 0], ["Ask the mentor to do it", 1]], rationale: "Self-serve first, then ask specifically." },
+  { prompt: "A teammate is doing far less than everyone else.", options: [["Do their share quietly", 1], ["Check in with them privately, and if nothing changes raise it in the retro or with the PM", 3], ["Give them a bad peer review without saying anything", 0], ["Call them out publicly", 0]], rationale: "Private, direct conversation first." },
+  { prompt: "You find a bug in something already marked done by another teammate.", options: [["Fix it silently", 1], ["Tell the owner with steps to reproduce and offer to help fix it", 3], ["Ignore it, it's not your task", 0], ["Post a screenshot mocking it", 0]], rationale: "Report clearly, collaborate on the fix." },
+  { prompt: "The PM changes priorities mid-sprint and your half-done task is deprioritised.", options: [["Keep working on it anyway", 0], ["Ask why to understand the decision, save your progress notes, and switch", 3], ["Argue until it's restored", 1], ["Stop working until the next sprint", 0]], rationale: "Understand, document, adapt." },
+];

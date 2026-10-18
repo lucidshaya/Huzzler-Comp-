@@ -247,3 +247,66 @@
 }
 .animate-slide-in-right { animation: slide-in-right 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
+
+/* ---------------------------------------------------------------------------
+   Huzzler loader + skeletons
+   --------------------------------------------------------------------------- */
+@keyframes hz-squish {
+  0%, 100% { transform: scale(1, 1); }
+  30% { transform: scale(1.06, 0.94); }
+  55% { transform: scale(0.97, 1.04); }
+  75% { transform: scale(1.02, 0.99); }
+}
+@keyframes hz-draw {
+  0% { stroke-dashoffset: 260; fill-opacity: 0; }
+  55% { stroke-dashoffset: 0; fill-opacity: 0; }
+  75%, 100% { stroke-dashoffset: 0; fill-opacity: 1; }
+}
+@keyframes hz-orbit {
+  from { transform: rotate(0deg) translateX(var(--hz-orbit, 62px)) rotate(0deg); }
+  to { transform: rotate(360deg) translateX(var(--hz-orbit, 62px)) rotate(-360deg); }
+}
+@keyframes hz-halo {
+  0% { transform: scale(0.85); opacity: 0.55; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+@keyframes hz-indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+@keyframes hz-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes hz-shimmer {
+  100% { transform: translateX(100%); }
+}
+
+.hz-squish { animation: hz-squish 1.8s cubic-bezier(0.45, 0, 0.25, 1) infinite; transform-origin: 50% 60%; }
+.hz-draw { stroke-dasharray: 260; animation: hz-draw 1.8s ease-in-out infinite alternate; }
+.hz-orbit { animation: hz-orbit 2.4s linear infinite; }
+.hz-orbit-slow { animation: hz-orbit 3.6s linear infinite reverse; }
+.hz-halo { animation: hz-halo 1.8s ease-out infinite; }
+.hz-indeterminate { animation: hz-indeterminate 1.4s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
+.hz-fade-up { animation: hz-fade-up 360ms ease-out both; }
+
+/* Static (skeleton) loading: a soft placeholder with a slow sheen. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.6rem;
+  background: color-mix(in oklab, var(--muted) 85%, var(--foreground) 6%);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--background) 55%, transparent), transparent);
+  animation: hz-shimmer 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hz-squish, .hz-orbit, .hz-orbit-slow, .hz-halo, .hz-indeterminate, .skeleton::after { animation: none; }
+  .hz-draw { animation: none; stroke-dashoffset: 0; fill-opacity: 1; }
+}

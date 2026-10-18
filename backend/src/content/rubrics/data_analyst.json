@@ -1,0 +1,33 @@
+{
+  "role_id": "data_analyst",
+  "version": "1.0.0",
+  "guidelines": "A junior Data Analyst. Numeric answers are checked mechanically elsewhere; here judge the reasoning, communication and recommendations.",
+  "rubrics": {
+    "t3": {
+      "title": "Clean and analyse a dataset (auto-graded numerically; rubric used only for written notes)",
+      "criteria": [
+        { "id": "method", "name": "Method", "weight": 50, "description": "Cleaning steps and analysis approach are sound and explained." },
+        { "id": "communication", "name": "Communication", "weight": 50, "description": "Findings stated clearly with numbers." }
+      ]
+    },
+    "t4": {
+      "title": "Insight memo with recommendations",
+      "criteria": [
+        { "id": "insight", "name": "Insight quality", "weight": 30, "description": "Finds the non-obvious, decision-relevant pattern in the data provided." },
+        { "id": "evidence", "name": "Evidence", "weight": 25, "description": "Claims backed by specific numbers from the data; no invented figures." },
+        { "id": "recommendations", "name": "Recommendations", "weight": 25, "description": "Concrete, prioritised actions tied to the insights, with expected impact." },
+        { "id": "caveats", "name": "Caveats", "weight": 10, "description": "Notes data limitations and confounders." },
+        { "id": "clarity", "name": "Clarity", "weight": 10, "description": "Executive-readable: the answer first." }
+      ]
+    },
+    "project": {
+      "title": "Data project deliverable",
+      "criteria": [
+        { "id": "fit", "name": "Delivers the task", "weight": 30, "description": "The requested metric, query, dashboard or memo is delivered." },
+        { "id": "rigour", "name": "Analytical rigour", "weight": 30, "description": "Correct definitions, sound methods, reproducible queries." },
+        { "id": "insight", "name": "Insight and recommendations", "weight": 25, "description": "Turns numbers into decisions." },
+        { "id": "communication", "name": "Communication", "weight": 15, "description": "Clear for non-analysts." }
+      ]
+    }
+  }
+}

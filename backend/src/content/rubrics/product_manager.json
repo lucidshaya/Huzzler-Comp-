@@ -1,0 +1,36 @@
+{
+  "role_id": "product_manager",
+  "version": "1.0.0",
+  "guidelines": "A junior Product Manager on a small cross-functional team. Good PM work is specific, grounded in users and evidence, makes trade-offs explicit, and is written so engineers, designers and QA can act on it without a meeting.",
+  "rubrics": {
+    "t3": {
+      "title": "Mini PRD",
+      "criteria": [
+        { "id": "problem", "name": "Problem and users", "weight": 25, "description": "States a specific user problem, who has it, and evidence or reasoning for why it matters now." },
+        { "id": "scope", "name": "Scope and non-goals", "weight": 20, "description": "Clear in-scope list and explicit non-goals; scope fits a small team in the stated timeframe." },
+        { "id": "requirements", "name": "Requirements", "weight": 25, "description": "Testable functional requirements or user stories with acceptance criteria; edge cases considered." },
+        { "id": "metrics", "name": "Success metrics", "weight": 15, "description": "A primary metric and guardrails that would show whether the feature worked." },
+        { "id": "clarity", "name": "Clarity and structure", "weight": 15, "description": "Concise, well structured, unambiguous; a teammate could start work from it." }
+      ]
+    },
+    "t4": {
+      "title": "Success metrics for a case",
+      "criteria": [
+        { "id": "north_star", "name": "Primary metric", "weight": 30, "description": "Chooses a primary metric tied to the user value in the case, defined precisely (numerator, denominator, window)." },
+        { "id": "guardrails", "name": "Guardrails and counter-metrics", "weight": 20, "description": "Identifies what could get worse and how it will be watched." },
+        { "id": "instrumentation", "name": "Measurement plan", "weight": 20, "description": "Explains what events/data are needed and how a change would be detected (baseline, target, timeframe)." },
+        { "id": "tradeoffs", "name": "Reasoning and trade-offs", "weight": 20, "description": "Justifies choices against alternatives; acknowledges limitations of the metrics." },
+        { "id": "clarity", "name": "Clarity", "weight": 10, "description": "Readable and decision-ready." }
+      ]
+    },
+    "project": {
+      "title": "PM project deliverable",
+      "criteria": [
+        { "id": "fit", "name": "Fit to the task brief", "weight": 30, "description": "Delivers what the task asked for, at the level of the project." },
+        { "id": "decisions", "name": "Decisions and prioritisation", "weight": 25, "description": "Makes and explains prioritisation and scope decisions; trade-offs explicit." },
+        { "id": "actionability", "name": "Actionability for the team", "weight": 25, "description": "Teammates in other roles can act on it: acceptance criteria, owners, dependencies." },
+        { "id": "communication", "name": "Communication", "weight": 20, "description": "Clear, concise and well organised." }
+      ]
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "role_id": null,
+  "version": "1.0.0",
+  "guidelines": "Capstone demo-day summary written by one team member about their own contribution to a full software product built by the team.",
+  "rubrics": {
+    "demo": {
+      "title": "Capstone demo summary",
+      "criteria": [
+        { "id": "ownership", "name": "Ownership", "weight": 30, "description": "Clearly describes what this person owned and delivered, distinct from the team." },
+        { "id": "outcome", "name": "Product outcome", "weight": 25, "description": "Explains the problem, the product and what was shipped." },
+        { "id": "decisions", "name": "Decisions and learning", "weight": 25, "description": "Key decisions, trade-offs and what they would do differently." },
+        { "id": "communication", "name": "Communication", "weight": 20, "description": "Clear and concise for a hiring manager." }
+      ]
+    }
+  }
+}

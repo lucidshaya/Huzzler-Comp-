@@ -1,0 +1,33 @@
+{
+  "role_id": "qa_engineer",
+  "version": "1.0.0",
+  "guidelines": "A junior QA / Test Engineer. Sandbox and mutation/coverage results are provided for automated tests; use them as ground truth.",
+  "rubrics": {
+    "t3": {
+      "title": "Write test cases for a spec",
+      "criteria": [
+        { "id": "coverage", "name": "Coverage of the spec", "weight": 30, "description": "Every requirement in the spec has at least one test case." },
+        { "id": "edge_cases", "name": "Edge and negative cases", "weight": 25, "description": "Boundaries, invalid input, failure paths, permissions." },
+        { "id": "precision", "name": "Precise steps and expected results", "weight": 25, "description": "Reproducible steps, clear preconditions and expected outcomes." },
+        { "id": "prioritisation", "name": "Prioritisation", "weight": 10, "description": "Marks critical paths / severity." },
+        { "id": "structure", "name": "Structure", "weight": 10, "description": "Organised and easy to execute." }
+      ]
+    },
+    "t4": {
+      "title": "Automated tests (auto-graded by sandbox; rubric for written notes)",
+      "criteria": [
+        { "id": "effectiveness", "name": "Effectiveness (from mutation/coverage)", "weight": 60, "description": "Use the sandbox mutation and coverage scores." },
+        { "id": "readability", "name": "Test readability", "weight": 40, "description": "Clear names, arrange-act-assert, no flaky waits." }
+      ]
+    },
+    "project": {
+      "title": "QA project deliverable",
+      "criteria": [
+        { "id": "fit", "name": "Delivers the task", "weight": 30, "description": "Requested test plan, bug reports or automated tests delivered." },
+        { "id": "effectiveness", "name": "Effectiveness", "weight": 30, "description": "Finds real issues; automated tests run (use CI results)." },
+        { "id": "reports", "name": "Bug report quality", "weight": 20, "description": "Reproducible, severity, expected vs actual." },
+        { "id": "communication", "name": "Communication", "weight": 20, "description": "Clear status for the team." }
+      ]
+    }
+  }
+}

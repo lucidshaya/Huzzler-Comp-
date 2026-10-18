@@ -1,0 +1,35 @@
+{
+  "role_id": "software_engineer",
+  "version": "1.0.0",
+  "guidelines": "A junior Software Engineer (JavaScript/TypeScript). Correctness is measured by the hidden tests and passed to you as sandbox results — do not re-judge correctness you cannot verify. Judge readability, structure, naming, error handling, tests and the quality of explanations.",
+  "rubrics": {
+    "t3": {
+      "title": "Implement a small feature (code review of the submission)",
+      "criteria": [
+        { "id": "correctness_signal", "name": "Correctness (from sandbox results)", "weight": 35, "description": "Score this from the hidden test pass rate given in the sandbox results; if no results are provided, judge plausibility conservatively." },
+        { "id": "design", "name": "Structure and design", "weight": 20, "description": "Sensible decomposition, no needless complexity, fits the existing code." },
+        { "id": "readability", "name": "Readability", "weight": 20, "description": "Clear naming, small functions, comments only where needed." },
+        { "id": "edge_cases", "name": "Edge cases and errors", "weight": 15, "description": "Handles empty/invalid input and failure paths." },
+        { "id": "tests", "name": "Tests", "weight": 10, "description": "Adds or updates tests that cover the new behaviour." }
+      ]
+    },
+    "t4": {
+      "title": "Review a PR and explain the issues",
+      "criteria": [
+        { "id": "bugs_found", "name": "Real issues found", "weight": 40, "description": "Identifies the actual defects in the PR (logic bugs, security issues, missing error handling)." },
+        { "id": "explanations", "name": "Explanations", "weight": 25, "description": "Explains why each issue matters and its impact." },
+        { "id": "suggestions", "name": "Actionable suggestions", "weight": 20, "description": "Proposes concrete fixes." },
+        { "id": "tone", "name": "Review tone and prioritisation", "weight": 15, "description": "Respectful, prioritised (blocking vs nit), no noise." }
+      ]
+    },
+    "project": {
+      "title": "Engineering project deliverable",
+      "criteria": [
+        { "id": "fit", "name": "Delivers the task", "weight": 35, "description": "Implements what the task asked; acceptance test results count heavily when provided." },
+        { "id": "quality", "name": "Code quality", "weight": 25, "description": "Readable, structured, consistent with the codebase." },
+        { "id": "testing", "name": "Testing", "weight": 20, "description": "Tests for new behaviour; existing tests kept green." },
+        { "id": "communication", "name": "PR description and collaboration", "weight": 20, "description": "Clear PR description, links to the task, notes for reviewers." }
+      ]
+    }
+  }
+}

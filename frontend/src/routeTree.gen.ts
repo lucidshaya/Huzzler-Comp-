@@ -10,20 +10,36 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AssessmentsRouteImport } from './routes/assessments'
+import { Route as AppRouteImport } from './routes/_app'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CallbackRouteImport } from './routes/callback'
-import { Route as DashboardRouteImport } from './routes/dashboard'
-import { Route as OnboardingRouteImport } from './routes/onboarding'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as SetupRouteImport } from './routes/setup'
+import { Route as AppBeginRouteImport } from './routes/_app/begin'
+import { Route as AppBillingRouteImport } from './routes/_app/billing'
+import { Route as AppCertificateRouteImport } from './routes/_app/certificate'
+import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
+import { Route as AppOffersRouteImport } from './routes/_app/offers'
+import { Route as AppResultsRouteImport } from './routes/_app/results'
+import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminLoginRouteImport } from './routes/admin/login'
+import { Route as BillingCallbackRouteImport } from './routes/billing.callback'
+import { Route as GuardianTokenRouteImport } from './routes/guardian.$token'
+import { Route as UUsernameRouteImport } from './routes/u.$username'
+import { Route as VerifyCertIdRouteImport } from './routes/verify.$certId'
+import { Route as AppTestsIndexRouteImport } from './routes/_app/tests/index'
+import { Route as AppTestsTestNoRouteImport } from './routes/_app/tests/$testNo'
+import { Route as AppWorkspaceIndexRouteImport } from './routes/_app/workspace/index'
+import { Route as AppWorkspaceTaskTaskIdRouteImport } from './routes/_app/workspace/task.$taskId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AssessmentsRoute = AssessmentsRouteImport.update({
-  id: '/assessments',
-  path: '/assessments',
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -36,66 +52,265 @@ const CallbackRoute = CallbackRouteImport.update({
   path: '/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
-const OnboardingRoute = OnboardingRouteImport.update({
-  id: '/onboarding',
-  path: '/onboarding',
+const SetupRoute = SetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AppBeginRoute = AppBeginRouteImport.update({
+  id: '/begin',
+  path: '/begin',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppBillingRoute = AppBillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCertificateRoute = AppCertificateRouteImport.update({
+  id: '/certificate',
+  path: '/certificate',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDashboardRoute = AppDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOffersRoute = AppOffersRouteImport.update({
+  id: '/offers',
+  path: '/offers',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppResultsRoute = AppResultsRouteImport.update({
+  id: '/results',
+  path: '/results',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSettingsRoute = AppSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/admin/',
+  path: '/admin/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminLoginRoute = AdminLoginRouteImport.update({
+  id: '/admin/login',
+  path: '/admin/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BillingCallbackRoute = BillingCallbackRouteImport.update({
+  id: '/billing/callback',
+  path: '/billing/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GuardianTokenRoute = GuardianTokenRouteImport.update({
+  id: '/guardian/$token',
+  path: '/guardian/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UUsernameRoute = UUsernameRouteImport.update({
+  id: '/u/$username',
+  path: '/u/$username',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VerifyCertIdRoute = VerifyCertIdRouteImport.update({
+  id: '/verify/$certId',
+  path: '/verify/$certId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppTestsIndexRoute = AppTestsIndexRouteImport.update({
+  id: '/tests/',
+  path: '/tests/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTestsTestNoRoute = AppTestsTestNoRouteImport.update({
+  id: '/tests/$testNo',
+  path: '/tests/$testNo',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppWorkspaceIndexRoute = AppWorkspaceIndexRouteImport.update({
+  id: '/workspace/',
+  path: '/workspace/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppWorkspaceTaskTaskIdRoute = AppWorkspaceTaskTaskIdRouteImport.update({
+  id: '/workspace/task/$taskId',
+  path: '/workspace/task/$taskId',
+  getParentRoute: () => AppRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/assessments': typeof AssessmentsRoute
   '/auth': typeof AuthRoute
   '/callback': typeof CallbackRoute
-  '/dashboard': typeof DashboardRoute
-  '/onboarding': typeof OnboardingRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/setup': typeof SetupRoute
+  '/begin': typeof AppBeginRoute
+  '/billing': typeof AppBillingRoute
+  '/certificate': typeof AppCertificateRoute
+  '/dashboard': typeof AppDashboardRoute
+  '/offers': typeof AppOffersRoute
+  '/results': typeof AppResultsRoute
+  '/settings': typeof AppSettingsRoute
+  '/admin/login': typeof AdminLoginRoute
+  '/billing/callback': typeof BillingCallbackRoute
+  '/guardian/$token': typeof GuardianTokenRoute
+  '/u/$username': typeof UUsernameRoute
+  '/verify/$certId': typeof VerifyCertIdRoute
+  '/admin/': typeof AdminIndexRoute
+  '/tests/$testNo': typeof AppTestsTestNoRoute
+  '/tests/': typeof AppTestsIndexRoute
+  '/workspace/': typeof AppWorkspaceIndexRoute
+  '/workspace/task/$taskId': typeof AppWorkspaceTaskTaskIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/assessments': typeof AssessmentsRoute
   '/auth': typeof AuthRoute
   '/callback': typeof CallbackRoute
-  '/dashboard': typeof DashboardRoute
-  '/onboarding': typeof OnboardingRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/setup': typeof SetupRoute
+  '/begin': typeof AppBeginRoute
+  '/billing': typeof AppBillingRoute
+  '/certificate': typeof AppCertificateRoute
+  '/dashboard': typeof AppDashboardRoute
+  '/offers': typeof AppOffersRoute
+  '/results': typeof AppResultsRoute
+  '/settings': typeof AppSettingsRoute
+  '/admin/login': typeof AdminLoginRoute
+  '/billing/callback': typeof BillingCallbackRoute
+  '/guardian/$token': typeof GuardianTokenRoute
+  '/u/$username': typeof UUsernameRoute
+  '/verify/$certId': typeof VerifyCertIdRoute
+  '/admin': typeof AdminIndexRoute
+  '/tests/$testNo': typeof AppTestsTestNoRoute
+  '/tests': typeof AppTestsIndexRoute
+  '/workspace': typeof AppWorkspaceIndexRoute
+  '/workspace/task/$taskId': typeof AppWorkspaceTaskTaskIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/assessments': typeof AssessmentsRoute
+  '/_app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
   '/callback': typeof CallbackRoute
-  '/dashboard': typeof DashboardRoute
-  '/onboarding': typeof OnboardingRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/setup': typeof SetupRoute
+  '/_app/begin': typeof AppBeginRoute
+  '/_app/billing': typeof AppBillingRoute
+  '/_app/certificate': typeof AppCertificateRoute
+  '/_app/dashboard': typeof AppDashboardRoute
+  '/_app/offers': typeof AppOffersRoute
+  '/_app/results': typeof AppResultsRoute
+  '/_app/settings': typeof AppSettingsRoute
+  '/admin/login': typeof AdminLoginRoute
+  '/billing/callback': typeof BillingCallbackRoute
+  '/guardian/$token': typeof GuardianTokenRoute
+  '/u/$username': typeof UUsernameRoute
+  '/verify/$certId': typeof VerifyCertIdRoute
+  '/admin/': typeof AdminIndexRoute
+  '/_app/tests/$testNo': typeof AppTestsTestNoRoute
+  '/_app/tests/': typeof AppTestsIndexRoute
+  '/_app/workspace/': typeof AppWorkspaceIndexRoute
+  '/_app/workspace/task/$taskId': typeof AppWorkspaceTaskTaskIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/assessments' | '/auth' | '/callback' | '/dashboard' | '/onboarding'
+    | '/'
+    | '/auth'
+    | '/callback'
+    | '/reset-password'
+    | '/setup'
+    | '/begin'
+    | '/billing'
+    | '/certificate'
+    | '/dashboard'
+    | '/offers'
+    | '/results'
+    | '/settings'
+    | '/admin/login'
+    | '/billing/callback'
+    | '/guardian/$token'
+    | '/u/$username'
+    | '/verify/$certId'
+    | '/admin/'
+    | '/tests/$testNo'
+    | '/tests/'
+    | '/workspace/'
+    | '/workspace/task/$taskId'
   fileRoutesByTo: FileRoutesByTo
   to:
-    '/' | '/assessments' | '/auth' | '/callback' | '/dashboard' | '/onboarding'
+    | '/'
+    | '/auth'
+    | '/callback'
+    | '/reset-password'
+    | '/setup'
+    | '/begin'
+    | '/billing'
+    | '/certificate'
+    | '/dashboard'
+    | '/offers'
+    | '/results'
+    | '/settings'
+    | '/admin/login'
+    | '/billing/callback'
+    | '/guardian/$token'
+    | '/u/$username'
+    | '/verify/$certId'
+    | '/admin'
+    | '/tests/$testNo'
+    | '/tests'
+    | '/workspace'
+    | '/workspace/task/$taskId'
   id:
     | '__root__'
     | '/'
-    | '/assessments'
+    | '/_app'
     | '/auth'
     | '/callback'
-    | '/dashboard'
-    | '/onboarding'
+    | '/reset-password'
+    | '/setup'
+    | '/_app/begin'
+    | '/_app/billing'
+    | '/_app/certificate'
+    | '/_app/dashboard'
+    | '/_app/offers'
+    | '/_app/results'
+    | '/_app/settings'
+    | '/admin/login'
+    | '/billing/callback'
+    | '/guardian/$token'
+    | '/u/$username'
+    | '/verify/$certId'
+    | '/admin/'
+    | '/_app/tests/$testNo'
+    | '/_app/tests/'
+    | '/_app/workspace/'
+    | '/_app/workspace/task/$taskId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AssessmentsRoute: typeof AssessmentsRoute
+  AppRoute: typeof AppRouteWithChildren
   AuthRoute: typeof AuthRoute
   CallbackRoute: typeof CallbackRoute
-  DashboardRoute: typeof DashboardRoute
-  OnboardingRoute: typeof OnboardingRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
+  SetupRoute: typeof SetupRoute
+  AdminLoginRoute: typeof AdminLoginRoute
+  BillingCallbackRoute: typeof BillingCallbackRoute
+  GuardianTokenRoute: typeof GuardianTokenRoute
+  UUsernameRoute: typeof UUsernameRoute
+  VerifyCertIdRoute: typeof VerifyCertIdRoute
+  AdminIndexRoute: typeof AdminIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -107,11 +322,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/assessments': {
-      id: '/assessments'
-      path: '/assessments'
-      fullPath: '/assessments'
-      preLoaderRoute: typeof AssessmentsRouteImport
+    '/_app': {
+      id: '/_app'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -128,30 +343,185 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/onboarding': {
-      id: '/onboarding'
-      path: '/onboarding'
-      fullPath: '/onboarding'
-      preLoaderRoute: typeof OnboardingRouteImport
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_app/begin': {
+      id: '/_app/begin'
+      path: '/begin'
+      fullPath: '/begin'
+      preLoaderRoute: typeof AppBeginRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/billing': {
+      id: '/_app/billing'
+      path: '/billing'
+      fullPath: '/billing'
+      preLoaderRoute: typeof AppBillingRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/certificate': {
+      id: '/_app/certificate'
+      path: '/certificate'
+      fullPath: '/certificate'
+      preLoaderRoute: typeof AppCertificateRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/dashboard': {
+      id: '/_app/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AppDashboardRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/offers': {
+      id: '/_app/offers'
+      path: '/offers'
+      fullPath: '/offers'
+      preLoaderRoute: typeof AppOffersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/results': {
+      id: '/_app/results'
+      path: '/results'
+      fullPath: '/results'
+      preLoaderRoute: typeof AppResultsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/settings': {
+      id: '/_app/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/admin/': {
+      id: '/admin/'
+      path: '/admin'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/login': {
+      id: '/admin/login'
+      path: '/admin/login'
+      fullPath: '/admin/login'
+      preLoaderRoute: typeof AdminLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/billing/callback': {
+      id: '/billing/callback'
+      path: '/billing/callback'
+      fullPath: '/billing/callback'
+      preLoaderRoute: typeof BillingCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/guardian/$token': {
+      id: '/guardian/$token'
+      path: '/guardian/$token'
+      fullPath: '/guardian/$token'
+      preLoaderRoute: typeof GuardianTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/u/$username': {
+      id: '/u/$username'
+      path: '/u/$username'
+      fullPath: '/u/$username'
+      preLoaderRoute: typeof UUsernameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/verify/$certId': {
+      id: '/verify/$certId'
+      path: '/verify/$certId'
+      fullPath: '/verify/$certId'
+      preLoaderRoute: typeof VerifyCertIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app/tests/': {
+      id: '/_app/tests/'
+      path: '/tests'
+      fullPath: '/tests/'
+      preLoaderRoute: typeof AppTestsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/tests/$testNo': {
+      id: '/_app/tests/$testNo'
+      path: '/tests/$testNo'
+      fullPath: '/tests/$testNo'
+      preLoaderRoute: typeof AppTestsTestNoRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/workspace/': {
+      id: '/_app/workspace/'
+      path: '/workspace'
+      fullPath: '/workspace/'
+      preLoaderRoute: typeof AppWorkspaceIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/workspace/task/$taskId': {
+      id: '/_app/workspace/task/$taskId'
+      path: '/workspace/task/$taskId'
+      fullPath: '/workspace/task/$taskId'
+      preLoaderRoute: typeof AppWorkspaceTaskTaskIdRouteImport
+      parentRoute: typeof AppRoute
     }
   }
 }
 
+interface AppRouteChildren {
+  AppBeginRoute: typeof AppBeginRoute
+  AppBillingRoute: typeof AppBillingRoute
+  AppCertificateRoute: typeof AppCertificateRoute
+  AppDashboardRoute: typeof AppDashboardRoute
+  AppOffersRoute: typeof AppOffersRoute
+  AppResultsRoute: typeof AppResultsRoute
+  AppSettingsRoute: typeof AppSettingsRoute
+  AppTestsTestNoRoute: typeof AppTestsTestNoRoute
+  AppTestsIndexRoute: typeof AppTestsIndexRoute
+  AppWorkspaceIndexRoute: typeof AppWorkspaceIndexRoute
+  AppWorkspaceTaskTaskIdRoute: typeof AppWorkspaceTaskTaskIdRoute
+}
+
+const AppRouteChildren: AppRouteChildren = {
+  AppBeginRoute: AppBeginRoute,
+  AppBillingRoute: AppBillingRoute,
+  AppCertificateRoute: AppCertificateRoute,
+  AppDashboardRoute: AppDashboardRoute,
+  AppOffersRoute: AppOffersRoute,
+  AppResultsRoute: AppResultsRoute,
+  AppSettingsRoute: AppSettingsRoute,
+  AppTestsTestNoRoute: AppTestsTestNoRoute,
+  AppTestsIndexRoute: AppTestsIndexRoute,
+  AppWorkspaceIndexRoute: AppWorkspaceIndexRoute,
+  AppWorkspaceTaskTaskIdRoute: AppWorkspaceTaskTaskIdRoute,
+}
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AssessmentsRoute: AssessmentsRoute,
+  AppRoute: AppRouteWithChildren,
   AuthRoute: AuthRoute,
   CallbackRoute: CallbackRoute,
-  DashboardRoute: DashboardRoute,
-  OnboardingRoute: OnboardingRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
+  SetupRoute: SetupRoute,
+  AdminLoginRoute: AdminLoginRoute,
+  BillingCallbackRoute: BillingCallbackRoute,
+  GuardianTokenRoute: GuardianTokenRoute,
+  UUsernameRoute: UUsernameRoute,
+  VerifyCertIdRoute: VerifyCertIdRoute,
+  AdminIndexRoute: AdminIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

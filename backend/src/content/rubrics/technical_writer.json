@@ -1,0 +1,35 @@
+{
+  "role_id": "technical_writer",
+  "version": "1.0.0",
+  "guidelines": "A junior Technical Writer. Markdown lint and schema-check results are provided when available. Good docs are accurate, task-oriented, scannable and written for the stated audience.",
+  "rubrics": {
+    "t3": {
+      "title": "README from a code sample",
+      "criteria": [
+        { "id": "accuracy", "name": "Accuracy", "weight": 30, "description": "Matches what the code actually does; no invented features." },
+        { "id": "completeness", "name": "Completeness", "weight": 25, "description": "What it is, install, configure, run, example usage, troubleshooting." },
+        { "id": "audience", "name": "Audience fit", "weight": 20, "description": "Right level of detail for a new developer." },
+        { "id": "structure", "name": "Structure and formatting", "weight": 15, "description": "Headings, code blocks, scannable; use the lint results." },
+        { "id": "style", "name": "Style", "weight": 10, "description": "Concise, active voice, consistent terminology." }
+      ]
+    },
+    "t4": {
+      "title": "API reference from a spec",
+      "criteria": [
+        { "id": "accuracy", "name": "Accuracy vs spec", "weight": 35, "description": "Endpoints, params, types and errors match the spec (use schema-check results)." },
+        { "id": "examples", "name": "Examples", "weight": 25, "description": "Working request/response examples." },
+        { "id": "errors", "name": "Errors and edge cases", "weight": 20, "description": "Documents error codes and limits." },
+        { "id": "structure", "name": "Structure", "weight": 20, "description": "Consistent, navigable reference layout." }
+      ]
+    },
+    "project": {
+      "title": "Docs project deliverable",
+      "criteria": [
+        { "id": "fit", "name": "Delivers the task", "weight": 30, "description": "The requested docs exist and cover the feature." },
+        { "id": "accuracy", "name": "Accuracy", "weight": 30, "description": "Matches the shipped product." },
+        { "id": "usability", "name": "Usability", "weight": 25, "description": "Task-oriented, scannable, right audience." },
+        { "id": "style", "name": "Style", "weight": 15, "description": "Consistent voice and terminology." }
+      ]
+    }
+  }
+}

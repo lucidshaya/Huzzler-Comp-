@@ -1,0 +1,36 @@
+{
+  "role_id": "devops_engineer",
+  "version": "1.0.0",
+  "guidelines": "A junior DevOps Engineer. Linter (hadolint/actionlint) and sandbox build results are provided when available; treat them as ground truth for whether things build and run.",
+  "rubrics": {
+    "t3": {
+      "title": "Write a CI pipeline",
+      "criteria": [
+        { "id": "works", "name": "Runs correctly (from linter/sandbox)", "weight": 35, "description": "Use actionlint and sandbox results; a pipeline that fails to parse scores low here." },
+        { "id": "stages", "name": "Stages", "weight": 20, "description": "Install, lint, test, build in a sensible order with fail-fast behaviour." },
+        { "id": "efficiency", "name": "Caching and efficiency", "weight": 15, "description": "Dependency caching, no redundant work." },
+        { "id": "security", "name": "Secrets and security", "weight": 15, "description": "Secrets from the secret store, least-privilege permissions, pinned actions." },
+        { "id": "readability", "name": "Readability", "weight": 15, "description": "Clear names and structure." }
+      ]
+    },
+    "t4": {
+      "title": "Incident or deployment plan",
+      "criteria": [
+        { "id": "diagnosis", "name": "Diagnosis / readiness", "weight": 25, "description": "Systematic triage or pre-deployment checks." },
+        { "id": "rollout", "name": "Rollout and rollback", "weight": 25, "description": "Safe rollout steps with a tested rollback." },
+        { "id": "observability", "name": "Monitoring", "weight": 20, "description": "What to watch, thresholds, alerts." },
+        { "id": "communication", "name": "Communication", "weight": 15, "description": "Who is told what and when." },
+        { "id": "followup", "name": "Follow-up", "weight": 15, "description": "Post-incident review / prevention." }
+      ]
+    },
+    "project": {
+      "title": "DevOps project deliverable",
+      "criteria": [
+        { "id": "fit", "name": "Delivers the task", "weight": 35, "description": "Pipeline/deploy/monitoring requested is in place; CI results count heavily." },
+        { "id": "reliability", "name": "Reliability and safety", "weight": 25, "description": "Rollback, health checks, secrets handling." },
+        { "id": "docs", "name": "Runbook / docs", "weight": 20, "description": "Teammates can operate it." },
+        { "id": "communication", "name": "Communication", "weight": 20, "description": "Clear summary of what changed." }
+      ]
+    }
+  }
+}

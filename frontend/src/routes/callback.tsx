@@ -1,36 +1,54 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { z } from "zod";
+import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/callback")({
+  validateSearch: z.object({
+    code: z.string().optional(),
+    next: z.string().optional(),
+    error_description: z.string().optional(),
+  }),
+  ssr: false,
   component: CallbackPage,
 });
 
 function CallbackPage() {
   const navigate = useNavigate();
+  const { code, next, error_description } = Route.useSearch();
+  const [error, setError] = useState(error_description ?? "");
 
   useEffect(() => {
-    const hash = window.location.hash;
-    
-    if (hash && hash.includes("access_token")) {
-      const params = new URLSearchParams(hash.replace("#", ""));
-      const accessToken = params.get("access_token");
-      
-      if (accessToken) {
-        localStorage.setItem("huzzler_token", accessToken);
-        window.history.replaceState(null, "", "/dashboard");
-        navigate({ to: "/dashboard", replace: true });
-        return;
+    if (error_description) return;
+    (async () => {
+      const sb = supabase();
+      if (code) {
+        const { error } = await sb.auth.exchangeCodeForSession(code);
+        if (error && !(await sb.auth.getSession()).data.session) {
+          setError(error.message);
+          return;
+        }
       }
-    }
-    
-    navigate({ to: "/dashboard", replace: true });
-  }, [navigate]);
+      navigate({ to: (next as "/dashboard") ?? "/dashboard", replace: true });
+    })();
+  }, [code, next, error_description, navigate]);
 
   return (
-    <div className="min-h-screen bg-charcoal text-white flex items-center justify-center">
-      <div className="flex flex-col items-center gap-4">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-white/20 border-t-primary" />
-        <p className="text-sm font-semibold text-white/60">Completing sign in...</p>
+    <div className="flex min-h-screen items-center justify-center bg-charcoal text-white">
+      <div className="flex flex-col items-center gap-4 px-5 text-center">
+        {error ? (
+          <>
+            <p className="font-semibold text-red-400">{error}</p>
+            <a href="/auth" className="btn-duo">
+              Back to sign in
+            </a>
+          </>
+        ) : (
+          <>
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-white/20 border-t-primary" />
+            <p className="text-sm font-semibold text-white/60">Completing sign in…</p>
+          </>
+        )}
       </div>
     </div>
   );

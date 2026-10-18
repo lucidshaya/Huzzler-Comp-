@@ -1,0 +1,35 @@
+{
+  "role_id": "uiux_designer",
+  "version": "1.0.0",
+  "guidelines": "A junior UI/UX Designer designing for mobile-first products used in Nigeria (small Android screens, slow networks). Automated contrast-check results are provided when available; use them rather than guessing colour values.",
+  "rubrics": {
+    "t3": {
+      "title": "Design a screen",
+      "criteria": [
+        { "id": "hierarchy", "name": "Visual hierarchy", "weight": 25, "description": "The primary action and key information stand out; scanning order is clear." },
+        { "id": "usability", "name": "Usability", "weight": 25, "description": "Follows platform conventions, tap targets, clear labels, error and empty states considered." },
+        { "id": "accessibility", "name": "Accessibility", "weight": 20, "description": "Contrast (use the automated check), text size, not relying on colour alone." },
+        { "id": "brief_fit", "name": "Fit to the brief", "weight": 20, "description": "Solves the stated user need within the constraints." },
+        { "id": "rationale", "name": "Rationale", "weight": 10, "description": "Short explanation of key decisions." }
+      ]
+    },
+    "t4": {
+      "title": "User flow and rationale",
+      "criteria": [
+        { "id": "flow", "name": "Flow completeness", "weight": 30, "description": "Covers the happy path plus key alternate and error paths." },
+        { "id": "friction", "name": "Friction and steps", "weight": 25, "description": "Minimises steps and cognitive load; justifies each step." },
+        { "id": "context", "name": "User context", "weight": 20, "description": "Accounts for the user's context (device, connectivity, trust)." },
+        { "id": "rationale", "name": "Rationale quality", "weight": 25, "description": "Decisions explained with principles or evidence." }
+      ]
+    },
+    "project": {
+      "title": "Design project deliverable",
+      "criteria": [
+        { "id": "fit", "name": "Delivers the task", "weight": 30, "description": "Screens/flows requested are present and complete." },
+        { "id": "quality", "name": "Design quality", "weight": 30, "description": "Hierarchy, consistency, accessibility." },
+        { "id": "handoff", "name": "Handoff readiness", "weight": 20, "description": "Specs, states and assets an engineer can build from." },
+        { "id": "rationale", "name": "Rationale", "weight": 20, "description": "Explains decisions and trade-offs." }
+      ]
+    }
+  }
+}
