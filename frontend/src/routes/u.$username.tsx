@@ -16,8 +16,9 @@ type Portfolio = {
 
 export const Route = createFileRoute("/u/$username")({
   loader: async ({ params }) => {
-    const res = await fetch(`${API_URL}/api/portfolio/${encodeURIComponent(params.username)}`);
-    return { p: res.ok ? ((await res.json()) as Portfolio) : null };
+    // An unreachable API renders the "not found" state instead of crashing the page.
+    const res = await fetch(`${API_URL}/api/portfolio/${encodeURIComponent(params.username)}`).catch(() => null);
+    return { p: res?.ok ? ((await res.json()) as Portfolio) : null };
   },
   head: ({ loaderData }) => {
     const p = loaderData?.p;

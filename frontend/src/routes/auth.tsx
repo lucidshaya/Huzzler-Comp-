@@ -95,7 +95,13 @@ function AuthPage() {
         setInfo("If that email has an account, we've sent a reset link.");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      const message = err instanceof Error ? err.message : "Something went wrong";
+      // Browsers word network failures differently ("Failed to fetch", "Load failed", "NetworkError...").
+      setError(
+        /fetch|network|load failed/i.test(message)
+          ? "Can't reach the sign-in service. Check your connection (or turn off any blocker for this site) and try again."
+          : message,
+      );
     } finally {
       setLoading(false);
     }

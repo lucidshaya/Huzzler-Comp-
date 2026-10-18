@@ -14,8 +14,9 @@ type Cert = {
 // Server-rendered so link previews and search engines see the real certificate.
 export const Route = createFileRoute("/verify/$certId")({
   loader: async ({ params }) => {
-    const res = await fetch(`${API_URL}/api/verify/${encodeURIComponent(params.certId)}`);
-    return { cert: res.ok ? ((await res.json()) as Cert) : null };
+    // An unreachable API renders the "not found" state instead of crashing the page.
+    const res = await fetch(`${API_URL}/api/verify/${encodeURIComponent(params.certId)}`).catch(() => null);
+    return { cert: res?.ok ? ((await res.json()) as Cert) : null };
   },
   head: ({ loaderData }) => {
     const c = loaderData?.cert;
