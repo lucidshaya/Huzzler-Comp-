@@ -24,6 +24,8 @@ import { Route as AppResultsRouteImport } from './routes/_app/results'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminLoginRouteImport } from './routes/admin/login'
+import { Route as AipmIndexRouteImport } from './routes/aipm/index'
+import { Route as AipmLoginRouteImport } from './routes/aipm/login'
 import { Route as BillingCallbackRouteImport } from './routes/billing.callback'
 import { Route as GuardianTokenRouteImport } from './routes/guardian.$token'
 import { Route as UUsernameRouteImport } from './routes/u.$username'
@@ -107,6 +109,16 @@ const AdminLoginRoute = AdminLoginRouteImport.update({
   path: '/admin/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AipmIndexRoute = AipmIndexRouteImport.update({
+  id: '/aipm/',
+  path: '/aipm/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AipmLoginRoute = AipmLoginRouteImport.update({
+  id: '/aipm/login',
+  path: '/aipm/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BillingCallbackRoute = BillingCallbackRouteImport.update({
   id: '/billing/callback',
   path: '/billing/callback',
@@ -162,11 +174,13 @@ export interface FileRoutesByFullPath {
   '/results': typeof AppResultsRoute
   '/settings': typeof AppSettingsRoute
   '/admin/login': typeof AdminLoginRoute
+  '/aipm/login': typeof AipmLoginRoute
   '/billing/callback': typeof BillingCallbackRoute
   '/guardian/$token': typeof GuardianTokenRoute
   '/u/$username': typeof UUsernameRoute
   '/verify/$certId': typeof VerifyCertIdRoute
   '/admin/': typeof AdminIndexRoute
+  '/aipm/': typeof AipmIndexRoute
   '/tests/$testNo': typeof AppTestsTestNoRoute
   '/tests/': typeof AppTestsIndexRoute
   '/workspace/': typeof AppWorkspaceIndexRoute
@@ -186,11 +200,13 @@ export interface FileRoutesByTo {
   '/results': typeof AppResultsRoute
   '/settings': typeof AppSettingsRoute
   '/admin/login': typeof AdminLoginRoute
+  '/aipm/login': typeof AipmLoginRoute
   '/billing/callback': typeof BillingCallbackRoute
   '/guardian/$token': typeof GuardianTokenRoute
   '/u/$username': typeof UUsernameRoute
   '/verify/$certId': typeof VerifyCertIdRoute
   '/admin': typeof AdminIndexRoute
+  '/aipm': typeof AipmIndexRoute
   '/tests/$testNo': typeof AppTestsTestNoRoute
   '/tests': typeof AppTestsIndexRoute
   '/workspace': typeof AppWorkspaceIndexRoute
@@ -212,11 +228,13 @@ export interface FileRoutesById {
   '/_app/results': typeof AppResultsRoute
   '/_app/settings': typeof AppSettingsRoute
   '/admin/login': typeof AdminLoginRoute
+  '/aipm/login': typeof AipmLoginRoute
   '/billing/callback': typeof BillingCallbackRoute
   '/guardian/$token': typeof GuardianTokenRoute
   '/u/$username': typeof UUsernameRoute
   '/verify/$certId': typeof VerifyCertIdRoute
   '/admin/': typeof AdminIndexRoute
+  '/aipm/': typeof AipmIndexRoute
   '/_app/tests/$testNo': typeof AppTestsTestNoRoute
   '/_app/tests/': typeof AppTestsIndexRoute
   '/_app/workspace/': typeof AppWorkspaceIndexRoute
@@ -238,11 +256,13 @@ export interface FileRouteTypes {
     | '/results'
     | '/settings'
     | '/admin/login'
+    | '/aipm/login'
     | '/billing/callback'
     | '/guardian/$token'
     | '/u/$username'
     | '/verify/$certId'
     | '/admin/'
+    | '/aipm/'
     | '/tests/$testNo'
     | '/tests/'
     | '/workspace/'
@@ -262,11 +282,13 @@ export interface FileRouteTypes {
     | '/results'
     | '/settings'
     | '/admin/login'
+    | '/aipm/login'
     | '/billing/callback'
     | '/guardian/$token'
     | '/u/$username'
     | '/verify/$certId'
     | '/admin'
+    | '/aipm'
     | '/tests/$testNo'
     | '/tests'
     | '/workspace'
@@ -287,11 +309,13 @@ export interface FileRouteTypes {
     | '/_app/results'
     | '/_app/settings'
     | '/admin/login'
+    | '/aipm/login'
     | '/billing/callback'
     | '/guardian/$token'
     | '/u/$username'
     | '/verify/$certId'
     | '/admin/'
+    | '/aipm/'
     | '/_app/tests/$testNo'
     | '/_app/tests/'
     | '/_app/workspace/'
@@ -306,11 +330,13 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   SetupRoute: typeof SetupRoute
   AdminLoginRoute: typeof AdminLoginRoute
+  AipmLoginRoute: typeof AipmLoginRoute
   BillingCallbackRoute: typeof BillingCallbackRoute
   GuardianTokenRoute: typeof GuardianTokenRoute
   UUsernameRoute: typeof UUsernameRoute
   VerifyCertIdRoute: typeof VerifyCertIdRoute
   AdminIndexRoute: typeof AdminIndexRoute
+  AipmIndexRoute: typeof AipmIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -420,6 +446,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/aipm/': {
+      id: '/aipm/'
+      path: '/aipm'
+      fullPath: '/aipm/'
+      preLoaderRoute: typeof AipmIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/aipm/login': {
+      id: '/aipm/login'
+      path: '/aipm/login'
+      fullPath: '/aipm/login'
+      preLoaderRoute: typeof AipmLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/billing/callback': {
       id: '/billing/callback'
       path: '/billing/callback'
@@ -517,11 +557,13 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   SetupRoute: SetupRoute,
   AdminLoginRoute: AdminLoginRoute,
+  AipmLoginRoute: AipmLoginRoute,
   BillingCallbackRoute: BillingCallbackRoute,
   GuardianTokenRoute: GuardianTokenRoute,
   UUsernameRoute: UUsernameRoute,
   VerifyCertIdRoute: VerifyCertIdRoute,
   AdminIndexRoute: AdminIndexRoute,
+  AipmIndexRoute: AipmIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

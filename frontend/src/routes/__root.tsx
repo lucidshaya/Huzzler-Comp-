@@ -13,6 +13,8 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { SessionExpiredDialog, resolveError, goToSignIn } from "../components/app/Feedback";
+import { HzToaster } from "../components/app/Toast";
+import { DialogHost } from "../components/app/Dialogs";
 
 function NotFoundComponent() {
   return (
@@ -145,6 +147,8 @@ function RootComponent() {
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
       <SessionExpiredDialog />
+      <DialogHost />
+      <HzToaster />
     </QueryClientProvider>
   );
 }

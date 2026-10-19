@@ -6,6 +6,7 @@ import { api, ApiError } from "@/lib/api";
 import { ROLES, useMe, useRefreshMe, hasPaid } from "@/lib/journey";
 import { ErrorNote, Field, inputCls, Notice, Spinner } from "@/components/app/ui";
 import { ThemeToggle } from "@/lib/theme";
+import { HzSelect } from "@/components/app/HzSelect";
 
 export const Route = createFileRoute("/setup")({
   ssr: false,
@@ -181,13 +182,13 @@ function ProfileStep({ onDone }: { onDone: () => void }) {
           <input className={inputCls} value={form.timezone} onChange={set("timezone")} required />
         </Field>
         <Field label="Hours you can give per week">
-          <select className={inputCls} value={form.hours_per_week} onChange={set("hours_per_week")}>
-            {[5, 8, 10, 15, 20, 25, 30].map((h) => (
-              <option key={h} value={h}>
-                {h} hours
-              </option>
-            ))}
-          </select>
+          <HzSelect
+            size="lg"
+            label="Hours you can give per week"
+            value={String(form.hours_per_week)}
+            onChange={(v) => setForm({ ...form, hours_per_week: Number(v) })}
+            options={[5, 8, 10, 15, 20, 25, 30].map((h) => ({ value: String(h), label: `${h} hours`, hint: h >= 15 ? "Faster progress through projects" : undefined }))}
+          />
         </Field>
       </div>
       {age === 17 && (

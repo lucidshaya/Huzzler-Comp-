@@ -13,6 +13,7 @@ import {
   SeededIssues,
   WrittenAnswer,
 } from "@/components/app/TestInputs";
+import { hzConfirm } from "@/components/app/Dialogs";
 
 export const Route = createFileRoute("/_app/tests/$testNo")({
   head: () => ({ meta: [{ title: "Test · Huzzler" }] }),
@@ -236,8 +237,15 @@ function TestRunner() {
           <div className="flex flex-col items-end gap-1">
             <ErrorNote error={submit.error} />
             <button
-              onClick={() => {
-                if (confirm("Submit this test? You can't change your answers afterwards."))
+              onClick={async () => {
+                if (
+                  await hzConfirm({
+                    title: "Submit this test?",
+                    body: "You can't change your answers after you submit.",
+                    confirmLabel: "Submit test",
+                    cancelLabel: "Keep working",
+                  })
+                )
                   submit.mutate();
               }}
               disabled={submit.isPending || (test.requires_declaration && !declared)}

@@ -9,7 +9,7 @@ import { TEAM_WELCOME, STANDIN_REPLIES } from "../content/templates.js";
 import { getJourney, transition } from "./journey.js";
 import { startProject } from "./projects.js";
 
-async function roleNames(): Promise<Map<string, string>> {
+export async function roleNames(): Promise<Map<string, string>> {
   const { data } = await db.from("roles").select("id, name");
   return new Map((data ?? []).map((r) => [r.id, r.name]));
 }
@@ -19,7 +19,7 @@ export async function postSystemMessage(teamId: string, body: string, kind: "sys
 }
 
 /** Candidates: accepted an offer, still OFFER_PENDING, not on an active team. */
-async function loadPool(): Promise<Candidate[]> {
+export async function loadPool(): Promise<Candidate[]> {
   const { data: offers } = await db.from("offers").select("user_id, archetype_id, role_id, responded_at").eq("status", "accepted");
   if (!offers?.length) return [];
   const ids = offers.map((o) => o.user_id);
@@ -70,7 +70,7 @@ export async function runMatching() {
   return formed;
 }
 
-async function createTeam(archetypeId: string, members: Candidate[], missingRoles: string[], names: Map<string, string>) {
+export async function createTeam(archetypeId: string, members: Candidate[], missingRoles: string[], names: Map<string, string>) {
   const { data: offer } = await db.from("offers").select("persona_id, cohort_id").eq("user_id", members[0].userId).eq("status", "accepted").single();
   const { data: persona } = await db.from("company_personas").select("name, mission").eq("id", offer!.persona_id).single();
   const band = members.reduce((s, m) => s + m.scoreBand, 0) / members.length;
@@ -102,6 +102,7 @@ async function createTeam(archetypeId: string, members: Candidate[], missingRole
   );
   for (const m of members) await notify(m.userId, "team.placed", "You've been placed on a team", `Welcome to ${team.name}. Project 1 has started.`);
   logger.info({ teamId: team.id, size: members.length, standins: missingRoles.length }, "team formed");
+  return team as { id: string; name: string };
 }
 
 /** Replace stand-ins with real people from the same archetype and nearby score band. */

@@ -16,12 +16,18 @@ import {
   ScoreBadge,
   Spinner,
 } from "@/components/app/ui";
+import { HzSelect } from "@/components/app/HzSelect";
+import { HzSwitch } from "@/components/app/HzSwitch";
+import { hzForm, hzPrompt } from "@/components/app/Dialogs";
+import { hzToast } from "@/components/app/Toast";
 
 const useInvalidate = () => {
   const qc = useQueryClient();
   return () => qc.invalidateQueries({ queryKey: ["admin"] });
 };
-const ask = (msg: string) => window.prompt(msg)?.trim() || null;
+/** Asks for the audit-log reason every sensitive admin action needs. */
+const askReason = (title: string, confirmLabel = "Confirm") =>
+  hzPrompt({ title, label: "Reason (saved to the audit log)", type: "textarea", minLength: 3, maxLength: 500, confirmLabel });
 
 function Table({ head, children }: { head: string[]; children: React.ReactNode }) {
   return (
@@ -86,20 +92,18 @@ export function UsersTab() {
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
-        <select
-          aria-label="Filter by status"
-          className="rounded-xl border border-border bg-background px-3 text-sm"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-        >
-          <option value="">All statuses</option>
-          {Object.entries(STATUS_LABEL).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v}
-            </option>
-          ))}
-        </select>
+        <div className="w-full sm:w-56">
+          <HzSelect
+            label="Filter by status"
+            value={status}
+            onChange={setStatus}
+            options={[{ value: "", label: "All statuses" }, ...Object.entries(STATUS_LABEL).map(([k, v]) => ({ value: k, label: v }))]}
+          />
+        </div>
       </div>
+      <p className="text-xs text-muted-foreground">
+        Learners only. Huzzler staff are managed in the Team tab.
+      </p>
       {isLoading ? (
         <Spinner />
       ) : (
@@ -111,7 +115,6 @@ export function UsersTab() {
                 <div className="text-xs text-muted-foreground">
                   @{u.username ?? "—"}
                   {u.is_minor ? " · 17" : ""}
-                  {u.app_role !== "user" ? ` · ${u.app_role}` : ""}
                 </div>
               </Td>
               <Td>{roleName(u.role_id)}</Td>
@@ -141,16 +144,20 @@ function UserDrawer({ id, onClose }: { id: string; onClose: () => void }) {
     queryFn: () => api<any>(`/admin/users/${id}`),
   });
   const act = useMutation({
-    mutationFn: ({ path, body }: { path: string; body: unknown }) => api(path, { body }),
-    onSuccess: inv,
+    mutationFn: ({ path, body }: { path: string; body: unknown; done: string }) => api(path, { body }),
+    onSuccess: (_d, v) => {
+      inv();
+      hzToast.success(v.done);
+    },
+    onError: hzToast.fromError,
   });
-  const run = (path: string, body: Record<string, unknown>, prompt?: string) => {
+  const run = async (path: string, body: Record<string, unknown>, done: string, prompt?: string) => {
     if (prompt) {
-      const reason = ask(prompt);
+      const reason = await askReason(prompt);
       if (!reason) return;
       body.reason = reason;
     }
-    act.mutate({ path, body });
+    act.mutate({ path, body, done });
   };
   return (
     <>
@@ -217,9 +224,11 @@ function UserDrawer({ id, onClose }: { id: string; onClose: () => void }) {
             <div className="flex flex-wrap gap-2">
               <SmallBtn
                 onClick={() =>
-                  run(`/admin/users/${id}/verify-identity`, {
-                    verified: !data.profile.identity_verified,
-                  })
+                  run(
+                    `/admin/users/${id}/verify-identity`,
+                    { verified: !data.profile.identity_verified },
+                    data.profile.identity_verified ? "Identity marked unverified" : "Identity verified",
+                  )
                 }
               >
                 {data.profile.identity_verified ? "Unverify ID" : "Verify ID"}
@@ -227,11 +236,7 @@ function UserDrawer({ id, onClose }: { id: string; onClose: () => void }) {
               {data.journey.status === "SUSPENDED" ? (
                 <SmallBtn
                   onClick={() =>
-                    run(
-                      `/admin/users/${id}/status`,
-                      { to: "RESUME" },
-                      "Reason for lifting suspension",
-                    )
+                    run(`/admin/users/${id}/status`, { to: "RESUME" }, "Suspension lifted", "Lift the suspension")
                   }
                 >
                   Lift suspension
@@ -240,7 +245,7 @@ function UserDrawer({ id, onClose }: { id: string; onClose: () => void }) {
                 <SmallBtn
                   danger
                   onClick={() =>
-                    run(`/admin/users/${id}/status`, { to: "SUSPENDED" }, "Reason for suspension")
+                    run(`/admin/users/${id}/status`, { to: "SUSPENDED" }, "Account suspended", "Suspend this account")
                   }
                 >
                   Suspend
@@ -248,54 +253,26 @@ function UserDrawer({ id, onClose }: { id: string; onClose: () => void }) {
               )}
               <SmallBtn
                 onClick={() =>
-                  run(`/admin/users/${id}/reset-attempts`, {}, "Reason for resetting attempts")
+                  run(`/admin/users/${id}/reset-attempts`, {}, "Test attempts reset", "Reset their test attempts")
                 }
               >
                 Reset attempts
               </SmallBtn>
-              <select
-                aria-label="Change field"
-                className="rounded-lg border border-border bg-background px-2 text-xs"
-                defaultValue=""
-                onChange={(e) =>
-                  e.target.value &&
-                  run(
-                    `/admin/users/${id}/role`,
-                    { role_id: e.target.value },
-                    "Reason for changing field",
-                  )
-                }
-              >
-                <option value="">Change field…</option>
-                {ROLES.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                aria-label="Staff role"
-                className="rounded-lg border border-border bg-background px-2 text-xs"
-                defaultValue=""
-                onChange={(e) =>
-                  e.target.value &&
-                  run(
-                    `/admin/users/${id}/role`,
-                    { app_role: e.target.value },
-                    "Reason for staff role change",
-                  )
-                }
-              >
-                <option value="">Staff role…</option>
-                {["user", "moderator", "content_reviewer", "partnerships", "admin"].map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
+              <div className="w-44">
+                <HzSelect
+                  size="sm"
+                  label="Change field"
+                  placeholder="Change field…"
+                  value=""
+                  onChange={(v) =>
+                    v && run(`/admin/users/${id}/role`, { role_id: v }, `Field changed to ${roleName(v)}`, `Change their field to ${roleName(v)}`)
+                  }
+                  options={ROLES.filter((r) => r.id !== data.profile.role_id).map((r) => ({ value: r.id, label: r.name }))}
+                />
+              </div>
               <SmallBtn
                 onClick={() =>
-                  act.mutate({ path: `/admin/users/${id}/issue-certificate`, body: {} })
+                  act.mutate({ path: `/admin/users/${id}/issue-certificate`, body: {}, done: "Certificate check queued" })
                 }
               >
                 Issue certificate
@@ -349,7 +326,11 @@ export function PaymentsTab() {
   const refund = useMutation({
     mutationFn: ({ id, reason, override }: { id: string; reason: string; override: boolean }) =>
       api(`/admin/payments/${id}/refund`, { body: { reason, override } }),
-    onSuccess: inv,
+    onSuccess: () => {
+      inv();
+      hzToast.success("Refund started", "Paystack will return the money to the original payment method.");
+    },
+    onError: hzToast.fromError,
   });
   if (isLoading) return <Spinner />;
   return (
@@ -379,16 +360,18 @@ export function PaymentsTab() {
                 {p.status === "success" && (
                   <SmallBtn
                     danger
-                    onClick={() => {
-                      const reason = ask("Refund reason");
-                      if (reason)
-                        refund.mutate({
-                          id: p.id,
-                          reason,
-                          override: confirm(
-                            "Override the refund policy if this is outside it? (Cancel = enforce policy)",
-                          ),
-                        });
+                    onClick={async () => {
+                      const v = await hzForm({
+                        title: `Refund ${naira(p.amount_kobo)}?`,
+                        body: `${p.profile?.full_name ?? "This user"} · ${p.reference}`,
+                        danger: true,
+                        confirmLabel: "Refund payment",
+                        fields: [
+                          { name: "reason", label: "Reason (saved to the audit log)", type: "textarea", required: true, minLength: 3, maxLength: 500 },
+                          { name: "override", label: "Override the refund policy", type: "checkbox", hint: "Only if this is outside the 48-hour, no-test-started rule." },
+                        ],
+                      });
+                      if (v) refund.mutate({ id: p.id, reason: String(v.reason).trim(), override: Boolean(v.override) });
                     }}
                   >
                     Refund
@@ -441,7 +424,11 @@ export function ContentTab() {
   const set = useMutation({
     mutationFn: ({ id, s }: { id: string; s: string }) =>
       api(`/admin/content/${kind}/${id}/status`, { body: { status: s } }),
-    onSuccess: inv,
+    onSuccess: (_d, v) => {
+      inv();
+      hzToast.success(v.s === "approved" ? "Approved" : "Retired", v.s === "approved" ? "Learners will see it from now on." : "It's hidden from learners.");
+    },
+    onError: hzToast.fromError,
   });
   return (
     <div className="flex flex-col gap-4">
@@ -455,16 +442,18 @@ export function ContentTab() {
             {k}
           </button>
         ))}
-        <select
-          aria-label="Status"
-          className="ml-auto rounded-xl border border-border bg-background px-3 text-sm"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-        >
-          {["draft", "approved", "retired"].map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
+        <div className="ml-auto w-40">
+          <HzSelect
+            label="Status"
+            value={status}
+            onChange={setStatus}
+            options={[
+              { value: "draft", label: "Draft" },
+              { value: "approved", label: "Approved" },
+              { value: "retired", label: "Retired" },
+            ]}
+          />
+        </div>
       </div>
       <p className="text-xs text-muted-foreground">
         AI-generated (Batch API) content arrives as draft and must be approved before users see it.
@@ -556,7 +545,11 @@ export function GradingTab() {
       feedback?: string;
       user_id?: string;
     }) => api(`/admin/grading/${type}/${id}/resolve`, { body: { score, feedback, user_id } }),
-    onSuccess: inv,
+    onSuccess: () => {
+      inv();
+      hzToast.success("Grade saved", "The learner can see it now.");
+    },
+    onError: hzToast.fromError,
   });
   const answer = useMutation({
     mutationFn: ({
@@ -568,18 +561,36 @@ export function GradingTab() {
       response: string;
       new_score?: number;
     }) => api(`/admin/appeals/${id}`, { body: b }),
-    onSuccess: inv,
+    onSuccess: () => {
+      inv();
+      hzToast.success("Appeal answered", "The learner has been notified.");
+    },
+    onError: hzToast.fromError,
   });
-  const grade = (type: string, id: string, user_id?: string) => {
-    const s = ask("Final score (0-100)");
-    if (s === null || Number.isNaN(Number(s))) return;
-    resolve.mutate({
-      type,
-      id,
-      score: Number(s),
-      feedback: ask("Feedback for the user (optional)") ?? undefined,
-      user_id,
+  const grade = async (type: string, id: string, user_id?: string) => {
+    const v = await hzForm({
+      title: "Record the final grade",
+      confirmLabel: "Save grade",
+      fields: [
+        { name: "score", label: "Final score (0–100)", type: "number", required: true, min: 0, max: 100 },
+        { name: "feedback", label: "Feedback for the learner (optional)", type: "textarea", maxLength: 4000 },
+      ],
     });
+    if (!v) return;
+    resolve.mutate({ type, id, score: Number(v.score), feedback: String(v.feedback).trim() || undefined, user_id });
+  };
+  const respond = async (id: string, adjust: boolean) => {
+    const v = await hzForm({
+      title: adjust ? "Adjust the score" : "Uphold the grade",
+      body: "Your response is sent to the learner.",
+      confirmLabel: adjust ? "Adjust score" : "Uphold grade",
+      fields: [
+        ...(adjust ? [{ name: "score", label: "New score (0–100)", type: "number" as const, required: true, min: 0, max: 100 }] : []),
+        { name: "response", label: "Response to the learner", type: "textarea", required: true, minLength: 10, maxLength: 4000 },
+      ],
+    });
+    if (!v) return;
+    answer.mutate({ id, status: adjust ? "adjusted" : "upheld", response: String(v.response).trim(), ...(adjust ? { new_score: Number(v.score) } : {}) });
   };
   if (review.isLoading) return <Spinner />;
   const r = review.data ?? { test_submissions: [], deliverables: [], flagged_grades: [] };
@@ -666,29 +677,8 @@ export function GradingTab() {
               <p className="mt-1 text-muted-foreground">{a.reason}</p>
               {a.status === "open" && (
                 <div className="mt-2 flex gap-2">
-                  <SmallBtn
-                    onClick={() => {
-                      const response = ask("Response to the user (10+ chars)");
-                      if (response) answer.mutate({ id: a.id, status: "upheld", response });
-                    }}
-                  >
-                    Uphold grade
-                  </SmallBtn>
-                  <SmallBtn
-                    onClick={() => {
-                      const s = ask("New score (0-100)");
-                      const response = s && ask("Response to the user");
-                      if (s && response)
-                        answer.mutate({
-                          id: a.id,
-                          status: "adjusted",
-                          response,
-                          new_score: Number(s),
-                        });
-                    }}
-                  >
-                    Adjust score
-                  </SmallBtn>
+                  <SmallBtn onClick={() => respond(a.id, false)}>Uphold grade</SmallBtn>
+                  <SmallBtn onClick={() => respond(a.id, true)}>Adjust score</SmallBtn>
                 </div>
               )}
             </div>
@@ -717,58 +707,174 @@ export function GradingTab() {
 }
 
 // ---------------------------------------------------------------------------
-export function TeamsTab() {
+// Team: the people who work at Huzzler and what each role can do.
+// ---------------------------------------------------------------------------
+export const STAFF_ROLES = [
+  { value: "admin", label: "Admin", hint: "Everything, including payments, settings and the team" },
+  { value: "moderator", label: "Moderator", hint: "Users, grading & appeals, integrity" },
+  { value: "content_reviewer", label: "Content reviewer", hint: "Approves tests, projects and personas" },
+  { value: "partnerships", label: "Partnerships", hint: "Company requests and opportunities" },
+  { value: "project_manager", label: "Project manager", hint: "AI PM portal: briefs, squads, sprint board, reports" },
+];
+const staffRoleLabel = (r: string) => STAFF_ROLES.find((s) => s.value === r)?.label ?? r;
+
+export function StaffTab() {
   const inv = useInvalidate();
-  const { data, isLoading } = useQuery({
-    queryKey: ["admin", "teams"],
-    queryFn: () => api<any>("/admin/teams"),
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["admin", "staff"],
+    queryFn: () => api<any[]>("/admin/staff"),
   });
-  const match = useMutation({
-    mutationFn: () => api<{ formed: number }>("/admin/teams/run-matching", { method: "POST" }),
-    onSuccess: inv,
+  const me = useQuery({ queryKey: ["admin", "whoami"], queryFn: () => api<{ id: string }>("/admin/whoami") });
+  const [form, setForm] = useState({ identifier: "", app_role: "moderator", staff_title: "" });
+  const add = useMutation({
+    mutationFn: () => api("/admin/staff", { body: { ...form, staff_title: form.staff_title || undefined } }),
+    onSuccess: () => {
+      inv();
+      hzToast.success("Added to the team", `${form.identifier} is now a ${staffRoleLabel(form.app_role).toLowerCase()}.`);
+      setForm({ identifier: "", app_role: form.app_role, staff_title: "" });
+    },
+    onError: hzToast.fromError,
   });
-  if (isLoading) return <Spinner />;
+  const update = useMutation({
+    mutationFn: ({ id, ...body }: { id: string; app_role?: string; staff_title?: string | null; reason: string; done: string }) =>
+      api(`/admin/staff/${id}`, { method: "PATCH", body }),
+    onSuccess: (_d, v) => {
+      inv();
+      hzToast.success(v.done);
+    },
+    onError: hzToast.fromError,
+  });
+  const remove = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string; name: string }) => api(`/admin/staff/${id}`, { method: "DELETE", body: { reason } }),
+    onSuccess: (_d, v) => {
+      inv();
+      hzToast.success("Removed from the team", `${v.name} is now a regular account.`);
+    },
+    onError: hzToast.fromError,
+  });
+
+  const changeRole = async (s: any, role: string) => {
+    if (role === s.app_role) return;
+    const reason = await askReason(`Make ${s.full_name ?? "them"} a ${staffRoleLabel(role).toLowerCase()}?`, "Change role");
+    if (reason) update.mutate({ id: s.id, app_role: role, reason, done: `${s.full_name ?? "Role"} is now ${staffRoleLabel(role).toLowerCase()}` });
+  };
+  const editTitle = async (s: any) => {
+    const v = await hzForm({
+      title: `Job title for ${s.full_name ?? "this person"}`,
+      confirmLabel: "Save title",
+      fields: [
+        { name: "title", label: "Job title (shown inside staff tools)", placeholder: "e.g. Head of Content", defaultValue: s.staff_title ?? "", maxLength: 80 },
+        { name: "reason", label: "Reason (saved to the audit log)", required: true, minLength: 3, maxLength: 500, defaultValue: "Title update" },
+      ],
+    });
+    if (v) update.mutate({ id: s.id, staff_title: String(v.title).trim() || null, reason: String(v.reason).trim(), done: "Job title saved" });
+  };
+  const removeStaff = async (s: any) => {
+    const reason = await hzPrompt({
+      title: `Remove ${s.full_name ?? "this person"} from the team?`,
+      body: "They keep their account but lose all staff access straight away.",
+      label: "Reason (saved to the audit log)",
+      type: "textarea",
+      minLength: 3,
+      maxLength: 500,
+      danger: true,
+      confirmLabel: "Remove access",
+    });
+    if (reason) remove.mutate({ id: s.id, reason, name: s.full_name ?? "They" });
+  };
+
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          onClick={() => match.mutate()}
-          disabled={match.isPending}
-          className="btn-duo !py-2 !px-4 text-sm"
-        >
-          {match.isPending ? "Matching…" : "Run squad matching now"}
-        </button>
-        {match.data && <span className="text-sm">Formed {match.data.formed} team(s).</span>}
-        <span className="text-sm text-muted-foreground">
-          {data.waiting.length} accepted candidates waiting for a team
-        </span>
+    <div className="flex flex-col gap-5">
+      <div className="grid gap-4 lg:grid-cols-5">
+        <Card className="lg:col-span-3">
+          <CardTitle>Add a team member</CardTitle>
+          <p className="mb-3 text-xs text-muted-foreground">
+            They need a Huzzler account first. Staff sign in at /admin/login (project managers at /aipm/login) with their username.
+          </p>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              add.mutate();
+            }}
+            className="grid gap-2 sm:grid-cols-2"
+          >
+            <input
+              className={`${inputCls} !py-2 text-sm sm:col-span-2`}
+              placeholder="Username or email"
+              aria-label="Username or email"
+              required
+              minLength={3}
+              value={form.identifier}
+              onChange={(e) => setForm({ ...form, identifier: e.target.value })}
+            />
+            <HzSelect label="Role" value={form.app_role} onChange={(v) => setForm({ ...form, app_role: v })} options={STAFF_ROLES} />
+            <input
+              className={`${inputCls} !py-2 text-sm`}
+              placeholder="Job title (optional)"
+              aria-label="Job title"
+              maxLength={80}
+              value={form.staff_title}
+              onChange={(e) => setForm({ ...form, staff_title: e.target.value })}
+            />
+            <button disabled={add.isPending} className="btn-duo !py-2 text-sm sm:col-span-2">
+              {add.isPending ? "Adding…" : "Add to the team"}
+            </button>
+          </form>
+        </Card>
+        <Card className="lg:col-span-2">
+          <CardTitle>What each role can do</CardTitle>
+          <ul className="flex flex-col gap-2 text-sm">
+            {STAFF_ROLES.map((r) => (
+              <li key={r.value} className="flex flex-col rounded-xl border border-border bg-muted/30 px-3 py-2">
+                <span className="font-display font-bold">{r.label}</span>
+                <span className="text-xs text-muted-foreground">{r.hint}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
       </div>
-      <ErrorNote error={match.error} />
-      <Table head={["Team", "Archetype", "Status", "Level", "Members", "Created"]}>
-        {data.teams.map((t: any) => (
-          <tr key={t.id}>
-            <Td className="font-semibold">{t.name}</Td>
-            <Td>{t.archetype_id}</Td>
-            <Td>
-              <Pill>{t.status}</Pill>
-            </Td>
-            <Td>P{t.current_level}</Td>
-            <Td>
-              <div className="flex flex-wrap gap-1">
-                {t.members
-                  .filter((m: any) => m.status === "active")
-                  .map((m: any) => (
-                    <Pill key={m.id} tone={m.is_standin ? "gold" : "primary"}>
-                      {m.is_standin ? "stand-in" : m.profile?.full_name?.split(" ")[0]} ·{" "}
-                      {roleName(m.role_id).split(" ")[0]}
-                    </Pill>
-                  ))}
-              </div>
-            </Td>
-            <Td>{fmtDate(t.created_at)}</Td>
-          </tr>
-        ))}
-      </Table>
+
+      <ErrorNote error={error} />
+      {isLoading ? (
+        <Spinner />
+      ) : (
+        <Table head={["Team member", "Role", "Job title", "Two-factor", "Last sign-in", ""]}>
+          {(data ?? []).map((s) => {
+            const self = s.id === me.data?.id;
+            return (
+              <tr key={s.id}>
+                <Td>
+                  <div className="font-semibold">
+                    {s.full_name ?? "—"} {self && <Pill tone="primary">you</Pill>}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    @{s.username ?? "—"} · {s.email ?? "no email"}
+                  </div>
+                </Td>
+                <Td>
+                  <div className="w-48">
+                    <HzSelect size="sm" label={`Role for ${s.full_name ?? "staff member"}`} value={s.app_role} onChange={(v) => changeRole(s, v)} options={STAFF_ROLES} disabled={update.isPending} />
+                  </div>
+                </Td>
+                <Td>
+                  <button onClick={() => editTitle(s)} className="text-left text-sm font-semibold hover:text-primary">
+                    {s.staff_title ?? <span className="text-muted-foreground">Add title</span>}
+                  </button>
+                </Td>
+                <Td>{s.mfa ? <Pill tone="green">on</Pill> : <Pill tone="gold">not set up</Pill>}</Td>
+                <Td className="whitespace-nowrap text-xs">{fmtDateTime(s.last_sign_in_at)}</Td>
+                <Td>
+                  {!self && (
+                    <SmallBtn danger onClick={() => removeStaff(s)} disabled={remove.isPending}>
+                      Remove
+                    </SmallBtn>
+                  )}
+                </Td>
+              </tr>
+            );
+          })}
+        </Table>
+      )}
     </div>
   );
 }
@@ -783,12 +889,20 @@ export function IntegrityTab() {
   const set = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       api(`/admin/integrity/${id}`, { body: { status } }),
-    onSuccess: inv,
+    onSuccess: () => {
+      inv();
+      hzToast.success("Integrity flag updated");
+    },
+    onError: hzToast.fromError,
   });
   const rep = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       api(`/admin/reports/${id}`, { body: { status } }),
-    onSuccess: inv,
+    onSuccess: () => {
+      inv();
+      hzToast.success("Report updated");
+    },
+    onError: hzToast.fromError,
   });
   if (isLoading) return <Spinner />;
   return (
@@ -880,21 +994,37 @@ export function OpportunitiesTab() {
       api("/admin/opportunities", {
         body: Object.fromEntries(Object.entries(f).filter(([, v]) => v)),
       }),
-    onSuccess: inv,
+    onSuccess: () => {
+      inv();
+      hzToast.success("Company request logged");
+    },
+    onError: hzToast.fromError,
   });
   const shortlist = useMutation({
     mutationFn: (id: string) => api(`/admin/opportunities/${id}/shortlist`, { method: "POST" }),
-    onSuccess: inv,
+    onSuccess: () => {
+      inv();
+      hzToast.success("Candidates ranked");
+    },
+    onError: hzToast.fromError,
   });
   const consent = useMutation({
     mutationFn: ({ id, fit_note }: { id: string; fit_note: string }) =>
       api(`/admin/candidates/${id}/request-consent`, { body: { fit_note } }),
-    onSuccess: inv,
+    onSuccess: () => {
+      inv();
+      hzToast.success("Consent requested", "We emailed the candidate to ask if we can share their profile.");
+    },
+    onError: hzToast.fromError,
   });
   const outcome = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       api(`/admin/candidates/${id}/outcome`, { body: { status } }),
-    onSuccess: inv,
+    onSuccess: () => {
+      inv();
+      hzToast.success("Candidate updated");
+    },
+    onError: hzToast.fromError,
   });
   return (
     <div className="flex flex-col gap-4">
@@ -914,17 +1044,7 @@ export function OpportunitiesTab() {
             value={f.company_name}
             onChange={(e) => setF({ ...f, company_name: e.target.value })}
           />
-          <select
-            className={`${inputCls} !py-2`}
-            value={f.role_id}
-            onChange={(e) => setF({ ...f, role_id: e.target.value })}
-          >
-            {ROLES.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
+          <HzSelect label="Role" size="lg" value={f.role_id} onChange={(v) => setF({ ...f, role_id: v })} options={ROLES.map((r) => ({ value: r.id, label: r.name }))} />
           <input
             className={`${inputCls} !py-2`}
             placeholder="Level"
@@ -971,11 +1091,16 @@ export function OpportunitiesTab() {
                   <div className="mt-1 flex flex-wrap gap-1.5">
                     {c.status === "proposed" && (
                       <SmallBtn
-                        onClick={() => {
-                          const note = window.prompt(
-                            "Edit the fit note, then ask for consent",
-                            c.fit_note,
-                          );
+                        onClick={async () => {
+                          const note = await hzPrompt({
+                            title: `Ask ${c.profile?.full_name ?? "the candidate"} for consent`,
+                            body: "They'll see this note explaining why they're a fit before agreeing to share their profile.",
+                            label: "Fit note",
+                            type: "textarea",
+                            defaultValue: c.fit_note ?? "",
+                            maxLength: 2000,
+                            confirmLabel: "Send request",
+                          });
                           if (note) consent.mutate({ id: c.id, fit_note: note });
                         }}
                       >
@@ -1017,7 +1142,11 @@ export function SystemTab() {
   const save = useMutation({
     mutationFn: ({ key, enabled, value }: { key: string; enabled: boolean; value: unknown }) =>
       api(`/admin/flags/${key}`, { method: "PUT", body: { enabled, value } }),
-    onSuccess: inv,
+    onSuccess: () => {
+      inv();
+      hzToast.success("Setting saved");
+    },
+    onError: hzToast.fromError,
   });
   return (
     <div className="flex flex-col gap-4">
@@ -1034,29 +1163,35 @@ export function SystemTab() {
             className="flex flex-wrap items-center gap-2 border-b border-border py-2 text-sm"
           >
             <b className="w-48">{f.key}</b>
-            <label className="flex items-center gap-1 text-xs">
-              <input
-                type="checkbox"
+            <span className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+              <HzSwitch
+                label={`${f.key} enabled`}
                 checked={f.enabled}
-                onChange={(e) =>
-                  save.mutate({ key: f.key, enabled: e.target.checked, value: f.value })
-                }
-              />{" "}
-              enabled
-            </label>
+                onChange={(on) => save.mutate({ key: f.key, enabled: on, value: f.value })}
+              />
+              {f.enabled ? "On" : "Off"}
+            </span>
             <code className="flex-1 truncate text-xs text-muted-foreground">
               {JSON.stringify(f.value)}
             </code>
             <SmallBtn
-              onClick={() => {
-                const v = window.prompt("JSON value", JSON.stringify(f.value));
-                if (v !== null) {
-                  try {
-                    save.mutate({ key: f.key, enabled: f.enabled, value: JSON.parse(v) });
-                  } catch {
-                    alert("Invalid JSON");
-                  }
-                }
+              onClick={async () => {
+                const v = await hzPrompt({
+                  title: `Edit ${f.key}`,
+                  label: "Value (JSON)",
+                  type: "textarea",
+                  defaultValue: JSON.stringify(f.value, null, 2),
+                  confirmLabel: "Save",
+                  validate: (s) => {
+                    try {
+                      JSON.parse(s);
+                      return null;
+                    } catch {
+                      return "That isn't valid JSON. Check quotes, commas and brackets.";
+                    }
+                  },
+                });
+                if (v !== null) save.mutate({ key: f.key, enabled: f.enabled, value: JSON.parse(v) });
               }}
             >
               Edit
@@ -1064,8 +1199,14 @@ export function SystemTab() {
           </div>
         ))}
         <SmallBtn
-          onClick={() => {
-            const key = ask("New flag key (e.g. ai_models)");
+          onClick={async () => {
+            const key = await hzPrompt({
+              title: "Add a feature flag",
+              label: "Flag key",
+              placeholder: "e.g. ai_models",
+              confirmLabel: "Add flag",
+              validate: (s) => (/^[a-z0-9_]{2,60}$/.test(s) ? null : "Use lowercase letters, numbers and underscores."),
+            });
             if (key) save.mutate({ key, enabled: true, value: {} });
           }}
         >

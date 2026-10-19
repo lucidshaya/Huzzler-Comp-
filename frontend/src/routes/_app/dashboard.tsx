@@ -13,6 +13,10 @@ import {
   Target,
   Users,
   CheckCircle2,
+  AlertTriangle,
+  Megaphone,
+  Rocket,
+  type LucideIcon,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import {
@@ -300,6 +304,8 @@ function RealDashboard({ me }: { me: Me }) {
         />
       </div>
 
+      {team && ws.data?.project && <DailyQuests checkedIn={ws.data.checkedInToday} tasks={myTasks} />}
+
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardTitle icon={ClipboardCheck}>Onboarding tests</CardTitle>
@@ -384,6 +390,43 @@ function RealDashboard({ me }: { me: Me }) {
         </Card>
       </div>
     </div>
+  );
+}
+
+/** Today's habits that keep a squad healthy, from live workspace data. */
+function DailyQuests({ checkedIn, tasks }: { checkedIn: boolean; tasks: Array<{ status: string }> }) {
+  const moving = tasks.filter((t) => t.status !== "todo" && t.status !== "blocked").length;
+  const blocked = tasks.filter((t) => t.status === "blocked").length;
+  const quests: Array<{ icon: LucideIcon; title: string; detail: string; progress: number; total: number }> = [
+    { icon: Megaphone, title: "Post today's stand-up", detail: checkedIn ? "Your squad knows what you're on." : "Yesterday, today and any blockers. Two minutes.", progress: checkedIn ? 1 : 0, total: 1 },
+    { icon: Rocket, title: "Keep your tasks moving", detail: tasks.length ? `${moving} of ${tasks.length} started, in review or done.` : "No tasks assigned to you yet.", progress: moving, total: Math.max(1, tasks.length) },
+    { icon: AlertTriangle, title: blocked ? `Clear ${blocked} blocked task${blocked === 1 ? "" : "s"}` : "Stay unblocked", detail: blocked ? "Say what you need in chat or ask the mentor; your PM can reassign." : "Nothing is blocking you.", progress: blocked ? 0 : 1, total: 1 },
+  ];
+  const done = quests.filter((q) => q.progress >= q.total).length;
+  return (
+    <Card>
+      <CardTitle icon={Sparkles} aside={<Pill tone={done === quests.length ? "green" : "primary"}>{done}/{quests.length} done</Pill>}>
+        Daily quests
+      </CardTitle>
+      <ul className="grid gap-3 md:grid-cols-3">
+        {quests.map((q) => {
+          const complete = q.progress >= q.total;
+          const Icon = complete ? CheckCircle2 : q.icon;
+          return (
+            <li key={q.title}>
+              <Link to="/workspace" className={`flex h-full flex-col gap-2 rounded-xl border p-3 transition-colors hover:border-primary/50 ${complete ? "border-[color:var(--brand-green)]/40 bg-[color:var(--brand-green)]/5" : "border-border bg-muted/30"}`}>
+                <span className="flex items-center gap-2 font-display text-sm font-bold">
+                  <Icon className={`h-4 w-4 shrink-0 ${complete ? "text-[color:var(--brand-green-deep)] dark:text-[color:var(--brand-green)]" : "text-primary"}`} />
+                  {q.title}
+                </span>
+                <span className="text-xs text-muted-foreground">{q.detail}</span>
+                <Progress value={(Math.min(q.progress, q.total) / q.total) * 100} className="mt-auto" />
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
   );
 }
 

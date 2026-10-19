@@ -2,6 +2,7 @@ import { ArrowDown, ArrowUp, Flag, ImagePlus, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { uploadFile } from "@/lib/api";
 import { inputCls } from "./ui";
+import { HzSelect } from "@/components/app/HzSelect";
 
 // Answer editors for each test kind. Each takes the test `content` and a draft value.
 
@@ -162,18 +163,15 @@ export function SeededIssues({
                 className={`h-4 w-4 ${cat ? "text-[color:var(--fire)]" : "text-muted-foreground"}`}
               />
               <span className="sr-only">Problem category for {it.id}</span>
-              <select
-                value={cat}
-                onChange={(e) => set(it.id, e.target.value)}
-                className="rounded-lg border border-border bg-background px-2 py-2 text-sm"
-              >
-                <option value="">No problem</option>
-                {content.categories.map((c) => (
-                  <option key={c} value={c}>
-                    {c.replace(/_/g, " ")}
-                  </option>
-                ))}
-              </select>
+              <div className="w-48">
+                <HzSelect
+                  size="sm"
+                  label={`Problem category for ${it.id}`}
+                  value={cat}
+                  onChange={(v) => set(it.id, v)}
+                  options={[{ value: "", label: "No problem" }, ...content.categories.map((c) => ({ value: c, label: c.replace(/_/g, " ") }))]}
+                />
+              </div>
             </label>
           </li>
         );

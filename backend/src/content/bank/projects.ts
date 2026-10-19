@@ -125,6 +125,22 @@ export function buildProjectTemplates() {
   return out;
 }
 
+/**
+ * Work breakdown for a partner brief without AI: the level's milestones (stretched to the brief's
+ * timeline) and the role task library filled with the brief's wording, limited to `roles`.
+ */
+export function wbsFromLibrary(level: number, roles: string[], ctx: { product: string; feature: string; legacy: string; slice: string; capstone: string }, days: number) {
+  const L = LEVELS[level];
+  const scale = days / L.days;
+  const milestones = L.milestones.map((m) => ({ ...m, day_offset: Math.max(1, Math.round(m.day_offset * scale)) }));
+  const role_tasks = roles.flatMap((role_id) =>
+    (LIB[role_id]?.[level] ?? []).map((t) => ({ ...t, role_id, title: fill(t.title, ctx), description: fill(t.description, ctx), standin_deliverable: fill(t.standin_deliverable, ctx), hints: t.hints.map((h) => fill(h, ctx)) })),
+  );
+  const keys = new Set(role_tasks.map((t) => t.key));
+  for (const t of role_tasks) t.depends_on = (t.depends_on ?? []).filter((k) => keys.has(k));
+  return { title: fill(L.title, ctx), brief: fill(L.brief, ctx), milestones, role_tasks };
+}
+
 export const FAQ: Array<{ role_id: string | null; question: string; answer: string }> = [
   { role_id: null, question: "How is my project score calculated?", answer: "Your own deliverables are 50%, the team's automated acceptance tests 25%, peer reviews 15% and reliability (deadlines and check-ins) 10%. You need 70% to pass each project." },
   { role_id: null, question: "What happens if I miss a deadline?", answer: "Tell your PM as early as you can and propose a smaller scope or new date. Missed deadlines lower your reliability score, but staying silent is worse — after 5 inactive days you get a warning and after 10 your role is reassigned." },

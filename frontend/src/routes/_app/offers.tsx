@@ -15,6 +15,7 @@ import {
   Pill,
   Spinner,
 } from "@/components/app/ui";
+import { hzConfirm } from "@/components/app/Dialogs";
 
 export const Route = createFileRoute("/_app/offers")({
   head: () => ({ meta: [{ title: "Offers · Huzzler" }] }),
@@ -149,11 +150,15 @@ function Offers() {
                 Accept
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (
-                    confirm(
-                      `Decline ${o.persona.name}? Declining twice moves you to the next cohort.`,
-                    )
+                    await hzConfirm({
+                      title: `Decline ${o.persona.name}?`,
+                      body: "If you decline two offers, you'll be moved to the next cohort's offers.",
+                      confirmLabel: "Decline offer",
+                      cancelLabel: "Keep it",
+                      danger: true,
+                    })
                   )
                     respond.mutate({ id: o.id, accept: false });
                 }}

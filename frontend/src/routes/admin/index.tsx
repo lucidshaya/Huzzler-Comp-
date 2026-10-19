@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   BarChart3,
@@ -10,6 +10,7 @@ import {
   Settings2,
   ShieldAlert,
   Handshake,
+  Kanban,
   Users,
   UsersRound,
 } from "lucide-react";
@@ -23,7 +24,7 @@ import {
   PaymentsTab,
   ContentTab,
   GradingTab,
-  TeamsTab,
+  StaffTab,
   IntegrityTab,
   OpportunitiesTab,
   SystemTab,
@@ -66,13 +67,8 @@ const TABS = [
     roles: ["admin", "moderator"],
     el: GradingTab,
   },
-  {
-    key: "teams",
-    label: "Teams",
-    icon: UsersRound,
-    roles: ["admin", "moderator", "content_reviewer", "partnerships"],
-    el: TeamsTab,
-  },
+  // Huzzler staff and their roles. Learner squads live in the AI PM portal (/aipm).
+  { key: "team", label: "Team", icon: UsersRound, roles: ["admin"], el: StaffTab },
   {
     key: "integrity",
     label: "Integrity",
@@ -131,6 +127,14 @@ function Admin() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {who.data.role === "admin" && (
+              <Link
+                to="/aipm"
+                className="hidden items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-bold text-primary transition-colors hover:bg-primary/15 sm:inline-flex"
+              >
+                <Kanban className="h-4 w-4" /> AI PM portal
+              </Link>
+            )}
             <ThemeToggle />
             <button
               onClick={async () => {

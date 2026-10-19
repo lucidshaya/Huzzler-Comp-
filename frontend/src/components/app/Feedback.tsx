@@ -63,8 +63,8 @@ export async function goToSignIn(currentPath = typeof window !== "undefined" ? w
   } catch {
     // already signed out
   }
-  const admin = currentPath.startsWith("/admin");
-  window.location.href = admin ? "/admin/login" : `/auth?mode=login&reason=expired&next=${encodeURIComponent(currentPath)}`;
+  const staffLogin = currentPath.startsWith("/aipm") ? "/aipm/login" : currentPath.startsWith("/admin") ? "/admin/login" : null;
+  window.location.href = staffLogin ?? `/auth?mode=login&reason=expired&next=${encodeURIComponent(currentPath)}`;
 }
 
 function ActionButton({ action, onRetry, primary = true }: { action: Action; onRetry?: () => void; primary?: boolean }) {
@@ -165,7 +165,7 @@ export function ConfirmButton({
 // ---------------------------------------------------------------------------
 // Global "session expired" dialog: any API 401 or unexpected sign-out opens it.
 // ---------------------------------------------------------------------------
-const PUBLIC_PREFIXES = ["/auth", "/admin/login", "/callback", "/reset-password", "/guardian", "/verify", "/u/"];
+const PUBLIC_PREFIXES = ["/auth", "/admin/login", "/aipm/login", "/callback", "/reset-password", "/guardian", "/verify", "/u/"];
 
 export function SessionExpiredDialog() {
   const [open, setOpen] = useState(false);

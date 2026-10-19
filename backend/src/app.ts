@@ -12,6 +12,7 @@ import { billingRouter } from "./routes/billing.js";
 import { onboardingRouter } from "./routes/onboarding.js";
 import { teamRouter } from "./routes/team.js";
 import { adminRouter, adminAuthRouter } from "./routes/admin.js";
+import { aipmRouter } from "./routes/aipm.js";
 import { requireAuth } from "./middleware/auth.js";
 
 export function createApp() {
@@ -40,6 +41,7 @@ export function createApp() {
   app.use("/api/billing", billingRouter);
   app.use("/api/onboarding", onboardingRouter);
   app.use("/api/admin", adminRouter);
+  app.use("/api/aipm", aipmRouter);
   app.use("/api", teamRouter);
 
   app.use((_req, res) => res.status(404).json({ error: "Not found" }));

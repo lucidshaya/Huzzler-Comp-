@@ -18,6 +18,7 @@ import {
   Spinner,
 } from "@/components/app/ui";
 import { Appeal } from "@/components/app/Appeal";
+import { HzSelect } from "@/components/app/HzSelect";
 
 export const Route = createFileRoute("/_app/workspace/task/$taskId")({
   head: () => ({ meta: [{ title: "Task · Huzzler" }] }),
@@ -101,18 +102,15 @@ function TaskPage() {
         body={task.due_at ? `Due ${fmtDate(task.due_at)}` : undefined}
         actions={
           mine && !readOnly && task.status !== "done" && task.status !== "review" ? (
-            <select
-              aria-label="Task status"
-              value={task.status}
-              onChange={(e) => setStatus.mutate(e.target.value)}
-              className="rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold"
-            >
-              {STATUS_OPTIONS.map((o) => (
-                <option key={o.v} value={o.v}>
-                  {o.l}
-                </option>
-              ))}
-            </select>
+            <div className="w-44">
+              <HzSelect
+                label="Task status"
+                value={task.status}
+                onChange={(v) => setStatus.mutate(v)}
+                disabled={setStatus.isPending}
+                options={STATUS_OPTIONS.map((o) => ({ value: o.v, label: o.l }))}
+              />
+            </div>
           ) : (
             <Pill tone={task.status === "done" ? "green" : "primary"}>
               {task.status.replace("_", " ")}

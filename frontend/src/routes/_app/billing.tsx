@@ -14,6 +14,7 @@ import {
   Pill,
   Spinner,
 } from "@/components/app/ui";
+import { hzConfirm } from "@/components/app/Dialogs";
 
 export const Route = createFileRoute("/_app/billing")({
   head: () => ({ meta: [{ title: "Billing · Huzzler" }] }),
@@ -140,11 +141,15 @@ function Billing() {
                   Upgrade to one-time ({naira(500000)})
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     if (
-                      confirm(
-                        "Cancel your subscription? You keep access until the end of the paid period.",
-                      )
+                      await hzConfirm({
+                        title: "Cancel your subscription?",
+                        body: "You keep full access until the end of the period you've paid for. You can subscribe again any time.",
+                        confirmLabel: "Cancel subscription",
+                        cancelLabel: "Keep my plan",
+                        danger: true,
+                      })
                     )
                       cancel.mutate();
                   }}

@@ -21,6 +21,7 @@ import {
   Notice,
   PageHeader,
 } from "@/components/app/ui";
+import { HzSelect } from "@/components/app/HzSelect";
 
 export const Route = createFileRoute("/_app/begin")({
   head: () => ({ meta: [{ title: "Begin onboarding · Huzzler" }] }),
@@ -325,15 +326,13 @@ function GuardianStep() {
           />
         </Field>
         <Field label="Relationship">
-          <select
-            className={inputCls}
+          <HzSelect
+            size="lg"
+            label="Relationship"
             value={form.relationship}
-            onChange={(e) => setForm({ ...form, relationship: e.target.value })}
-          >
-            {["Parent", "Guardian", "Other relative"].map((r) => (
-              <option key={r}>{r}</option>
-            ))}
-          </select>
+            onChange={(v) => setForm({ ...form, relationship: v })}
+            options={["Parent", "Guardian", "Other relative"].map((r) => ({ value: r, label: r }))}
+          />
         </Field>
         <Field label="Guardian's email">
           <input

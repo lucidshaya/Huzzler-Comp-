@@ -125,7 +125,7 @@ adminRouter.get(
   h(async (req) => {
     const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
     const status = typeof req.query.status === "string" ? req.query.status : "";
-    let query = db.from("profiles").select("id, full_name, username, role_id, app_role, is_minor, identity_verified, created_at, journey:user_journey(status, plan_id, attempts_used)").is("deleted_at", null).order("created_at", { ascending: false }).limit(100);
+    let query = db.from("profiles").select("id, full_name, username, role_id, app_role, is_minor, identity_verified, created_at, journey:user_journey(status, plan_id, attempts_used)").is("deleted_at", null).eq("app_role", "user").order("created_at", { ascending: false }).limit(100);
     if (q) query = query.or(`full_name.ilike.%${q.replace(/[%,()]/g, "")}%,username.ilike.%${q.replace(/[%,()]/g, "")}%`);
     const { data } = await query;
     return (data ?? []).filter((u: any) => !status || u.journey?.status === status);
@@ -183,11 +183,86 @@ adminRouter.post(
   "/users/:id/role",
   adminOnly,
   h(async (req) => {
-    const b = parse(z.object({ role_id: z.enum(ROLE_IDS).optional(), app_role: z.enum(["user", "admin", "moderator", "content_reviewer", "partnerships"]).optional(), reason: z.string().min(3) }), req.body);
-    await db.from("profiles").update({ ...(b.role_id ? { role_id: b.role_id } : {}), ...(b.app_role ? { app_role: b.app_role } : {}) }).eq("id", req.params.id);
+    // Field (learner role) only; staff roles are managed under /staff.
+    const b = parse(z.object({ role_id: z.enum(ROLE_IDS), reason: z.string().min(3) }), req.body);
+    await db.from("profiles").update({ role_id: b.role_id }).eq("id", req.params.id);
     await audit(uid(req), "user.change_role", "profile", req.params.id, b, req.ip);
   }),
 );
+
+// ---------------------------------------------------------------------------
+// Staff (the Huzzler team): who works here and what each person can do
+// ---------------------------------------------------------------------------
+const STAFF_ROLES = ["admin", "moderator", "content_reviewer", "partnerships", "project_manager"] as const;
+
+adminRouter.get(
+  "/staff",
+  adminOnly,
+  h(async () => {
+    const { data } = await db.from("profiles").select("id, full_name, username, app_role, staff_title, created_at, updated_at").neq("app_role", "user").is("deleted_at", null).order("app_role").order("full_name");
+    return Promise.all(
+      (data ?? []).map(async (p) => {
+        const { data: u } = await db.auth.admin.getUserById(p.id);
+        return { ...p, email: u.user?.email ?? null, last_sign_in_at: u.user?.last_sign_in_at ?? null, mfa: (u.user?.factors ?? []).some((f) => f.status === "verified") };
+      }),
+    );
+  }),
+);
+
+/** Adds an existing account (found by username or email) to the staff. */
+adminRouter.post(
+  "/staff",
+  adminOnly,
+  h(async (req) => {
+    const b = parse(z.object({ identifier: z.string().trim().min(3).max(200), app_role: z.enum(STAFF_ROLES), staff_title: z.string().trim().max(80).optional() }), req.body);
+    let id: string | null = null;
+    if (b.identifier.includes("@")) {
+      const { data } = await db.rpc("user_id_by_email", { p_email: b.identifier.toLowerCase() });
+      id = (data as string | null) ?? null;
+    } else {
+      const { data } = await db.from("profiles").select("id").ilike("username", b.identifier.replace(/^@/, "")).maybeSingle();
+      id = data?.id ?? null;
+    }
+    if (!id) throw notFound("No account with that username or email. Ask them to sign up first.");
+    const { data: p } = await db.from("profiles").select("app_role").eq("id", id).single();
+    if (p && p.app_role !== "user") throw badRequest("That person is already on the staff. Edit their role instead.");
+    await db.from("profiles").update({ app_role: b.app_role, staff_title: b.staff_title || null }).eq("id", id);
+    await audit(uid(req), "staff.added", "profile", id, { app_role: b.app_role, staff_title: b.staff_title ?? null }, req.ip);
+    return { id };
+  }),
+);
+
+adminRouter.patch(
+  "/staff/:id",
+  adminOnly,
+  h(async (req) => {
+    const b = parse(z.object({ app_role: z.enum(STAFF_ROLES).optional(), staff_title: z.string().trim().max(80).nullable().optional(), reason: z.string().trim().min(3).max(500) }), req.body);
+    const { data: p } = await db.from("profiles").select("app_role").eq("id", req.params.id).single();
+    if (!p || p.app_role === "user") throw notFound("Staff member not found");
+    if (b.app_role && b.app_role !== "admin" && p.app_role === "admin") await assertAnotherAdmin(req.params.id);
+    await db.from("profiles").update({ ...(b.app_role ? { app_role: b.app_role } : {}), ...(b.staff_title !== undefined ? { staff_title: b.staff_title || null } : {}) }).eq("id", req.params.id);
+    await audit(uid(req), "staff.updated", "profile", req.params.id, { from: p.app_role, ...b }, req.ip);
+  }),
+);
+
+adminRouter.delete(
+  "/staff/:id",
+  adminOnly,
+  h(async (req) => {
+    const { reason } = parse(z.object({ reason: z.string().trim().min(3).max(500) }), req.body);
+    if (req.params.id === uid(req)) throw badRequest("You can't remove yourself from the staff.");
+    const { data: p } = await db.from("profiles").select("app_role").eq("id", req.params.id).single();
+    if (!p || p.app_role === "user") throw notFound("Staff member not found");
+    if (p.app_role === "admin") await assertAnotherAdmin(req.params.id);
+    await db.from("profiles").update({ app_role: "user", staff_title: null }).eq("id", req.params.id);
+    await audit(uid(req), "staff.removed", "profile", req.params.id, { from: p.app_role, reason }, req.ip);
+  }),
+);
+
+async function assertAnotherAdmin(exceptId: string) {
+  const { count } = await db.from("profiles").select("id", { count: "exact", head: true }).eq("app_role", "admin").neq("id", exceptId).is("deleted_at", null);
+  if (!count) throw badRequest("Huzzler needs at least one admin. Make someone else an admin first.");
+}
 
 adminRouter.post(
   "/users/:id/verify-identity",

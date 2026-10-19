@@ -5,6 +5,7 @@ export const PROMPT_VERSIONS = {
   grading: "grading@1.0.0",
   mentor: "mentor@1.0.0",
   integrity: "integrity@1.0.0",
+  wbs: "wbs@1.0.0",
 } as const;
 
 export const GRADING_RULES = `You grade work submitted on Huzzler, a platform where early-career African tech talent proves their skills on simulated internships.
