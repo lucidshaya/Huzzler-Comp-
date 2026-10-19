@@ -2,6 +2,8 @@ import { supabase } from "./supabase";
 
 /** Fired on any 401 so the app can show the "session expired" dialog. */
 export const SESSION_EXPIRED_EVENT = "huzzler:session-expired";
+/** Fired when the API answers 503 MAINTENANCE, so the maintenance gate re-checks right away. */
+export const MAINTENANCE_EVENT = "huzzler:maintenance";
 
 export const API_URL: string = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
@@ -42,6 +44,8 @@ export async function api<T = unknown>(
   }
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({}));
+  if (res.status === 503 && (data as { code?: string }).code === "MAINTENANCE" && typeof window !== "undefined")
+    window.dispatchEvent(new Event(MAINTENANCE_EVENT));
   if (!res.ok)
     throw new ApiError(
       res.status,

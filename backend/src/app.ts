@@ -14,6 +14,7 @@ import { teamRouter } from "./routes/team.js";
 import { adminRouter, adminAuthRouter } from "./routes/admin.js";
 import { aipmRouter } from "./routes/aipm.js";
 import { requireAuth } from "./middleware/auth.js";
+import { maintenanceGate } from "./lib/maintenance.js";
 
 export function createApp() {
   const app = express();
@@ -37,6 +38,7 @@ export function createApp() {
   app.use("/api", publicRouter);
   app.use("/api/admin/auth", adminAuthRouter);
   app.use("/api", requireAuth);
+  app.use("/api", maintenanceGate);
   app.use("/api/me", meRouter);
   app.use("/api/billing", billingRouter);
   app.use("/api/onboarding", onboardingRouter);

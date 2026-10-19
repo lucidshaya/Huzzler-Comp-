@@ -11,14 +11,18 @@ import {
   ShieldAlert,
   Handshake,
   Kanban,
+  Mail,
   Users,
   UsersRound,
 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { signOut, supabase } from "@/lib/supabase";
+import { markStaffBrowser } from "@/lib/siteStatus";
 import { ThemeToggle } from "@/lib/theme";
 import { Spinner } from "@/components/app/ui";
 import { OverviewTab } from "@/components/admin/Overview";
+import { MaintenanceToggle } from "@/components/admin/MaintenanceToggle";
+import { EmailsTab } from "@/components/admin/Emails";
 import {
   UsersTab,
   PaymentsTab,
@@ -83,6 +87,7 @@ const TABS = [
     roles: ["admin", "partnerships"],
     el: OpportunitiesTab,
   },
+  { key: "emails", label: "Emails", icon: Mail, roles: ["admin"], el: EmailsTab },
   { key: "system", label: "Flags & audit", icon: Settings2, roles: ["admin"], el: SystemTab },
 ];
 
@@ -98,6 +103,9 @@ function Admin() {
   useEffect(() => {
     if (who.error) navigate({ to: "/admin/login" });
   }, [who.error, navigate]);
+  useEffect(() => {
+    if (who.data) markStaffBrowser();
+  }, [who.data]);
   useEffect(() => {
     supabase()
       .auth.getSession()
@@ -127,6 +135,7 @@ function Admin() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {who.data.role === "admin" && <MaintenanceToggle />}
             {who.data.role === "admin" && (
               <Link
                 to="/aipm"

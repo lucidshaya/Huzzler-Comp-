@@ -16,7 +16,8 @@ export type JobName =
   | "retry_awaiting_ai"
   | "generate_offers"
   | "compute_project_results"
-  | "issue_certificate";
+  | "issue_certificate"
+  | "send_campaign";
 
 const BACKOFF_MS = 10_000;
 

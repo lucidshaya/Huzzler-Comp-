@@ -4,6 +4,7 @@ import { KeyRound, Lock, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { api, ApiError } from "@/lib/api";
 import { ErrorNote, inputCls } from "@/components/app/ui";
+import { markStaffBrowser } from "@/lib/siteStatus";
 
 export type StaffPortal = "admin" | "aipm";
 
@@ -27,6 +28,7 @@ export function StaffLogin({ portal }: { portal: StaffPortal }) {
   const afterSession = async () => {
     try {
       await api(p.whoami);
+      markStaffBrowser();
       navigate({ to: p.home });
     } catch (err) {
       if (err instanceof ApiError && err.code === "MFA_REQUIRED") await startMfa();

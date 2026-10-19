@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Activity, ChevronLeft, ChevronRight, FileText, Kanban, LayoutDashboard, LogOut, Menu, Users, X, type LucideIcon } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { signOut, supabase } from "@/lib/supabase";
+import { markStaffBrowser } from "@/lib/siteStatus";
 import { ThemeToggle } from "@/lib/theme";
 import { Spinner } from "@/components/app/ui";
 import { AgentMark } from "@/components/app/AgentMark";
@@ -38,6 +39,9 @@ function AipmPortal() {
   useEffect(() => {
     if (who.error) navigate({ to: "/aipm/login" });
   }, [who.error, navigate]);
+  useEffect(() => {
+    if (who.data) markStaffBrowser();
+  }, [who.data]);
   useEffect(() => {
     supabase()
       .auth.getSession()

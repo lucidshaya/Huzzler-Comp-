@@ -8,6 +8,7 @@ import { processWebhookEvent, runLapseCheck } from "../services/payments.js";
 import { runMatching } from "../services/teams.js";
 import { generateOffers, expireOffers } from "../services/offers.js";
 import { issueCertificate } from "../services/certification.js";
+import { processCampaign } from "../services/emailCampaigns.js";
 
 type Processor = (data: any) => Promise<unknown>;
 
@@ -21,6 +22,7 @@ export const processors: Record<JobName, Processor> = {
   generate_offers: ({ userId }) => generateOffers(userId),
   compute_project_results: ({ instanceId, onlyIfComplete }) => computeProjectResults(instanceId, Boolean(onlyIfComplete)),
   issue_certificate: ({ userId }) => issueCertificate(userId),
+  send_campaign: ({ campaignId }) => processCampaign(campaignId),
   nudges: async () => {
     await sendNudges();
     await compileStandups();

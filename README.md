@@ -67,6 +67,16 @@ Failed jobs stay in `jobs` with `last_error`; `npm run jobs:drain` runs due jobs
 
 **After the first deploy:** add `https://huzzlerr.vercel.app` as the Supabase Auth Site URL and `https://huzzlerr.vercel.app/callback` as a redirect URL, and set the Paystack webhook to `https://huzzlerr-api.vercel.app/api/webhooks/paystack`.
 
+## Maintenance mode
+
+Admin → header switch **Site live / Maintenance**. While it's on, learner and public pages show a maintenance screen and learner API calls return `503 MAINTENANCE`; `/admin`, `/aipm`, staff accounts, Paystack webhooks and background jobs keep working. Browsers that have signed in to a staff portal can still browse the site (with a banner) to test changes.
+
+## Bulk email (announcements)
+
+Admin → **Emails**: pick an audience (journey stage and field), write the message (`{{first_name}}`, `**bold**`, `- ` lists, links), preview it, send yourself a test, then send. Delivery runs as a background job in batches of 100 through Resend; progress and failures show in the list, and a send can be cancelled. Every announcement has a one-click unsubscribe link (`/api/email/unsubscribe`); opted-out, suspended and staff accounts are always excluded.
+
+One-time setup: create a Resend account, verify your sending domain (DNS records), create an API key, then set `RESEND_API_KEY` and `EMAIL_FROM` (e.g. `Huzzler <hello@yourdomain.com>`, on the verified domain) on the **huzzler-api** Vercel project and redeploy.
+
 ## Admin
 
 Sign in at `/admin/login` with the username/password in `backend/.env` (`ADMIN_USERNAME`, `ADMIN_PASSWORD`; created by `npm run seed`). Set `ADMIN_REQUIRE_MFA=true` (default in production) to require an authenticator app on staff sessions.

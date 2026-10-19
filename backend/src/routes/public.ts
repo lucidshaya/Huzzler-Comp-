@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { Router } from "express";
+import express, { Router } from "express";
 import { z } from "zod";
 import { db } from "../lib/supabase.js";
 import { logger } from "../lib/logger.js";
@@ -9,6 +9,8 @@ import { verifySignature } from "../services/paystack.js";
 import { recordWebhook } from "../services/payments.js";
 import { enqueue, kickDrain } from "../jobs/queue.js";
 import { env } from "../config/env.js";
+import { getMaintenance } from "../lib/maintenance.js";
+import { unsubscribe } from "../services/emailCampaigns.js";
 import { getGuardianRequest, respondGuardian } from "../services/profile.js";
 import { verifyCertificate, publicPortfolio } from "../services/certification.js";
 import { recordCiResult } from "../services/projects.js";
@@ -27,6 +29,44 @@ publicRouter.get(
     return { roles: roles.data, archetypes: archetypes.data, compatibility: compat.data, plans: plans.data };
   }),
 );
+
+// Site status for the web app (maintenance screen). Public and cheap: cached for 15s.
+publicRouter.get(
+  "/status",
+  h(async () => {
+    const m = await getMaintenance();
+    return { maintenance: { enabled: m.enabled, message: m.message, eta: m.eta } };
+  }),
+);
+
+// Unsubscribe from announcements. GET shows a confirm button (link scanners prefetch GETs);
+// POST does it, which is also what mail apps' one-click "Unsubscribe" sends (RFC 8058).
+const unsubPage = (title: string, body: string, form = "") =>
+  `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · Huzzler</title></head><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#1f2933;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#fff"><main style="max-width:420px;padding:32px;text-align:center"><div style="font-size:22px;font-weight:800;margin-bottom:18px">Huzzler</div><h1 style="font-size:20px;margin:0 0 8px">${title}</h1><p style="color:#cbd2d9;line-height:1.6;margin:0 0 20px">${body}</p>${form}</main></body></html>`;
+
+publicRouter.get("/email/unsubscribe", (req, res) => {
+  const u = String(req.query.u ?? "");
+  const t = String(req.query.t ?? "");
+  if (!/^[0-9a-f-]{36}$/.test(u) || !/^[0-9a-f]{32}$/.test(t)) return res.status(400).type("html").send(unsubPage("Link not valid", "This unsubscribe link is incomplete. Use the link from the latest email."));
+  res.type("html").send(
+    unsubPage(
+      "Unsubscribe from announcements?",
+      "You'll stop getting Huzzler announcement emails. Important account emails (payments, guardian consent) still reach you.",
+      `<form method="post"><input type="hidden" name="u" value="${u}"><input type="hidden" name="t" value="${t}"><button style="background:#1cb0f6;color:#fff;border:0;border-radius:14px;padding:12px 22px;font-weight:800;font-size:15px;cursor:pointer">Unsubscribe</button></form>`,
+    ),
+  );
+});
+publicRouter.post("/email/unsubscribe", express.urlencoded({ extended: false }), async (req, res, next) => {
+  try {
+    const u = String(req.body?.u ?? req.query.u ?? "");
+    const t = String(req.body?.t ?? req.query.t ?? "");
+    const ok = /^[0-9a-f-]{36}$/.test(u) && /^[0-9a-f]{32}$/.test(t) && (await unsubscribe(u, t));
+    if (!ok) return res.status(400).type("html").send(unsubPage("Link not valid", "We couldn't verify this unsubscribe link. Use the link from the latest email."));
+    res.type("html").send(unsubPage("You're unsubscribed", "You won't get Huzzler announcement emails any more. You can close this page."));
+  } catch (err) {
+    next(err);
+  }
+});
 
 // pg_cron pings this every minute (see migration 20261018000003_jobs.sql). Ack fast, drain in the background.
 publicRouter.post("/jobs/drain", (req, res) => {

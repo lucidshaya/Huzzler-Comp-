@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Moon, Sun } from "lucide-react";
 
 const KEY = "huzzler-theme";
-const getSavedTheme = () => (typeof window !== "undefined" && (localStorage.getItem(KEY) as "dark" | "light" | null)) || "dark";
+const getSavedTheme = () => (typeof window !== "undefined" && (localStorage.getItem(KEY) as "dark" | "light" | null)) || "light";
 let globalTheme = getSavedTheme();
 const listeners = new Set<(t: "dark" | "light") => void>();
 
@@ -22,7 +22,7 @@ if (typeof window !== "undefined") {
   else root.classList.remove("dark");
 }
 
-export function useTheme(defaultTheme: "dark" | "light" = "dark") {
+export function useTheme(defaultTheme: "dark" | "light" = "light") {
   const [theme, setThemeState] = useState<"dark" | "light">(globalTheme);
 
   useEffect(() => {
@@ -42,7 +42,7 @@ export function useTheme(defaultTheme: "dark" | "light" = "dark") {
 }
 
 export function ThemeToggle({ className = "" }: { className?: string }) {
-  const { theme, toggle } = useTheme("dark");
+  const { theme, toggle } = useTheme();
   return (
     <button
       onClick={toggle}

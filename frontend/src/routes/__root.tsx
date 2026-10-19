@@ -15,6 +15,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { SessionExpiredDialog, resolveError, goToSignIn } from "../components/app/Feedback";
 import { HzToaster } from "../components/app/Toast";
 import { DialogHost } from "../components/app/Dialogs";
+import { MaintenanceGate } from "../components/app/Maintenance";
 
 function NotFoundComponent() {
   return (
@@ -145,7 +146,9 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      <MaintenanceGate>
+        <Outlet />
+      </MaintenanceGate>
       <SessionExpiredDialog />
       <DialogHost />
       <HzToaster />

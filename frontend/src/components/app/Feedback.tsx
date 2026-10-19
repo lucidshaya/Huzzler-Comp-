@@ -38,6 +38,9 @@ export function resolveError(error: unknown): Resolved {
     if (error.status === 0) {
       return { title: "You're offline", message: "We can't reach Huzzler right now. Check your data or Wi-Fi connection.", icon: WifiOff, action: { label: "Try again", run: "retry" } };
     }
+    if (error.code === "MAINTENANCE") {
+      return { title: "Huzzler is under maintenance", message: error.message, icon: Clock, action: { label: "Try again", run: "retry" } };
+    }
     if (error.status === 429) {
       return { title: "Slow down a little", message: error.message, icon: Clock, action: { label: "Try again", run: "retry" } };
     }

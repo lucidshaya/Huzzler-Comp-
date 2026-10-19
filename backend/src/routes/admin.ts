@@ -17,6 +17,8 @@ import { computeProjectResults } from "../services/projects.js";
 import { issueCertificate } from "../services/certification.js";
 import { shortlist, requestConsent, updateCandidateOutcome } from "../services/opportunities.js";
 import { enqueue } from "../jobs/queue.js";
+import { getMaintenance, setMaintenance } from "../lib/maintenance.js";
+import { Audience, audienceCount, CampaignInput, cancelSend, createCampaign, deleteCampaign, listCampaigns, previewHtml, sendTest, startSend, updateCampaign } from "../services/emailCampaigns.js";
 
 // ---------------------------------------------------------------------------
 // Staff sign-in by username. The username -> email mapping stays server-side.
@@ -539,3 +541,38 @@ adminRouter.post("/users/:id/issue-certificate", adminOnly, h(async (req) => {
   await audit(uid(req), "cert.issue", "profile", req.params.id, { issued: Boolean(r) }, req.ip);
   return r ?? { issued: false, reason: "not eligible" };
 }));
+
+// ---------------------------------------------------------------------------
+// Maintenance mode: takes the learner site offline while staff keep working
+// ---------------------------------------------------------------------------
+adminRouter.get("/maintenance", adminOnly, h(async () => getMaintenance()));
+adminRouter.put(
+  "/maintenance",
+  adminOnly,
+  h(async (req) => {
+    const b = parse(z.object({ enabled: z.boolean(), message: z.string().trim().max(500).nullable().optional(), eta: z.string().datetime({ offset: true }).nullable().optional() }), req.body);
+    const m = await setMaintenance(b.enabled, b.message ?? null, b.eta ?? null);
+    await audit(uid(req), b.enabled ? "maintenance.on" : "maintenance.off", null, null, { message: b.message ?? null, eta: b.eta ?? null }, req.ip);
+    return m;
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Bulk email (announcements)
+// ---------------------------------------------------------------------------
+adminRouter.get("/emails", adminOnly, h(async () => listCampaigns()));
+adminRouter.get(
+  "/emails/audience",
+  adminOnly,
+  h(async (req) => audienceCount(parse(Audience, { segment: req.query.segment ?? "all", role_id: typeof req.query.role_id === "string" && req.query.role_id ? req.query.role_id : null }))),
+);
+adminRouter.post("/emails/preview", adminOnly, h(async (req) => {
+  const b = parse(z.object({ subject: z.string().max(150), body: z.string().max(20000) }), req.body);
+  return { html: previewHtml(b.subject || "(no subject)", b.body || "Your message will appear here.") };
+}));
+adminRouter.post("/emails", adminOnly, h(async (req) => createCampaign(uid(req), parse(CampaignInput, req.body))));
+adminRouter.put("/emails/:id", adminOnly, h(async (req) => updateCampaign(req.params.id, parse(CampaignInput, req.body))));
+adminRouter.delete("/emails/:id", adminOnly, h(async (req) => deleteCampaign(uid(req), req.params.id)));
+adminRouter.post("/emails/:id/test", adminOnly, h(async (req) => sendTest(uid(req), req.params.id)));
+adminRouter.post("/emails/:id/send", adminOnly, h(async (req) => startSend(uid(req), req.params.id)));
+adminRouter.post("/emails/:id/cancel", adminOnly, h(async (req) => cancelSend(uid(req), req.params.id)));
