@@ -2,13 +2,19 @@ import { useEffect, useState, useCallback } from "react";
 import { Moon, Sun } from "lucide-react";
 
 const KEY = "huzzler-theme";
-const getSavedTheme = () => (typeof window !== "undefined" && (localStorage.getItem(KEY) as "dark" | "light" | null)) || "light";
+const getSavedTheme = () =>
+  (typeof window !== "undefined" && (localStorage.getItem(KEY) as "dark" | "light" | null)) ||
+  "light";
 let globalTheme = getSavedTheme();
 const listeners = new Set<(t: "dark" | "light") => void>();
 
 function setGlobalTheme(t: "dark" | "light") {
   globalTheme = t;
-  try { localStorage.setItem(KEY, t); } catch {}
+  try {
+    localStorage.setItem(KEY, t);
+  } catch {
+    // storage blocked (private mode): theme still applies for this page
+  }
   const root = document.documentElement;
   if (t === "dark") root.classList.add("dark");
   else root.classList.remove("dark");
@@ -29,13 +35,18 @@ export function useTheme(defaultTheme: "dark" | "light" = "light") {
     const handler = (newTheme: "dark" | "light") => setThemeState(newTheme);
     listeners.add(handler);
     handler(globalTheme); // Sync on mount
-    return () => { listeners.delete(handler); };
+    return () => {
+      listeners.delete(handler);
+    };
   }, []);
 
-  const setTheme = useCallback((t: "dark" | "light" | ((prev: "dark" | "light") => "dark" | "light")) => {
-    const newTheme = typeof t === "function" ? t(globalTheme) : t;
-    setGlobalTheme(newTheme);
-  }, []);
+  const setTheme = useCallback(
+    (t: "dark" | "light" | ((prev: "dark" | "light") => "dark" | "light")) => {
+      const newTheme = typeof t === "function" ? t(globalTheme) : t;
+      setGlobalTheme(newTheme);
+    },
+    [],
+  );
 
   const toggle = useCallback(() => setTheme((t) => (t === "dark" ? "light" : "dark")), [setTheme]);
   return { theme, toggle, setTheme };

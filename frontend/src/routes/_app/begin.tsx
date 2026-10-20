@@ -160,7 +160,7 @@ function BeginSteps({ status, minor }: { status: string; minor: boolean }) {
             {x.done ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
           </span>
           <span
-            className={`hidden text-sm font-semibold sm:inline ${i === current ? "text-foreground" : "text-muted-foreground"}`}
+            className={`text-xs font-semibold sm:text-sm ${i === current ? "text-foreground" : "text-muted-foreground"}`}
           >
             {x.label}
           </span>
@@ -201,8 +201,8 @@ function RulesCard() {
           no test below 50%.
         </li>
         <li className="flex gap-2">
-          <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" /> 3 attempts included.
-          Retake the tests under 70% right away, then once more after 7 days.
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" /> 3 attempts included. Retake the
+          tests under 70% right away, then once more after 7 days.
         </li>
         <li className="flex gap-2">
           <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" /> Tests are timed and save drafts

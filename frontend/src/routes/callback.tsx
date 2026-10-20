@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
+import { safeNext } from "@/lib/api";
 
 export const Route = createFileRoute("/callback")({
   validateSearch: z.object({
@@ -29,7 +30,7 @@ function CallbackPage() {
           return;
         }
       }
-      navigate({ to: (next as "/dashboard") ?? "/dashboard", replace: true });
+      window.location.replace(safeNext(next));
     })();
   }, [code, next, error_description, navigate]);
 

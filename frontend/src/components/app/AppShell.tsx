@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -17,52 +17,83 @@ import {
   Lock,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  LifeBuoy,
   type LucideIcon,
 } from "lucide-react";
 import { ThemeToggle } from "@/lib/theme";
-import { signOut } from "@/lib/supabase";
+import { signOut as doSignOut } from "@/lib/supabase";
 import { api } from "@/lib/api";
 import { hasPaid, onTeam, roleName, STATUS_LABEL, type Me } from "@/lib/journey";
+import { HuzzlerLoader } from "./Loader";
+import { HelpWidget } from "./Support";
 import { fmtDateTime } from "./ui";
 
-type NavItem = { to: string; label: string; icon: LucideIcon; locked?: boolean };
+type NavItem = { to: string; label: string; short: string; icon: LucideIcon; locked?: boolean };
+
+const VERIFIED = [
+  "TESTS_PASSED",
+  "OFFER_PENDING",
+  "PLACED",
+  "PROJECT_1",
+  "PROJECT_2",
+  "PROJECT_3",
+  "PROJECT_4",
+  "PROJECT_5",
+  "CERTIFIED",
+];
 
 function navFor(me: Me): NavItem[] {
   const s = me.journey.status;
   const paid = hasPaid(s) || s === "LAPSED";
-  const verified = [
-    "TESTS_PASSED",
-    "OFFER_PENDING",
-    "PLACED",
-    "PROJECT_1",
-    "PROJECT_2",
-    "PROJECT_3",
-    "PROJECT_4",
-    "PROJECT_5",
-    "CERTIFIED",
-  ].includes(s);
   return [
-    { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
-    ...(!paid ? [{ to: "/begin", label: "Begin onboarding", icon: Rocket }] : []),
-    { to: "/tests", label: "Onboarding tests", icon: ClipboardCheck, locked: !paid },
-    { to: "/offers", label: "Offers", icon: Briefcase, locked: !verified },
+    { to: "/dashboard", label: "Overview", short: "Home", icon: LayoutDashboard },
+    ...(!paid ? [{ to: "/begin", label: "Begin onboarding", short: "Begin", icon: Rocket }] : []),
+    {
+      to: "/tests",
+      label: "Onboarding tests",
+      short: "Tests",
+      icon: ClipboardCheck,
+      locked: !paid,
+    },
+    {
+      to: "/offers",
+      label: "Offers",
+      short: "Offers",
+      icon: Briefcase,
+      locked: !VERIFIED.includes(s),
+    },
     {
       to: "/workspace",
       label: "Team workspace",
+      short: "Team",
       icon: Users,
       locked: !(onTeam(s) || s === "CERTIFIED" || s === "LAPSED"),
     },
-    { to: "/certificate", label: "Certificate", icon: Award, locked: !paid },
-    { to: "/billing", label: "Billing", icon: Wallet },
-    { to: "/settings", label: "Settings", icon: Settings },
+    { to: "/certificate", label: "Certificate", short: "Certificate", icon: Award, locked: !paid },
+    { to: "/billing", label: "Billing", short: "Billing", icon: Wallet },
+    { to: "/support", label: "Help & support", short: "Help", icon: LifeBuoy },
+    { to: "/settings", label: "Settings", short: "Settings", icon: Settings },
   ];
 }
+
+const initials = (me: Me) =>
+  (me.profile.full_name ?? me.user.email ?? "?")
+    .split(/[\s@]/)
+    .filter(Boolean)
+    .map((p) => p[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
 export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const nav = navFor(me);
+  const isActive = (to: string) =>
+    pathname === to || (to !== "/dashboard" && pathname.startsWith(to));
 
   useEffect(() => setMobileOpen(false), [pathname]);
   useEffect(() => {
@@ -70,35 +101,46 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
     return () => document.body.classList.remove("overflow-hidden");
   }, [mobileOpen]);
 
-  const signOut = async () => {
-    await signOut();
-    window.location.href = "/auth?mode=login";
+  const signOut = () => {
+    setSigningOut(true);
+    void doSignOut("/auth?mode=login");
   };
+
+  if (signingOut) return <HuzzlerLoader fullScreen label="Signing you out…" />;
 
   const NavList = ({ compact }: { compact?: boolean }) => (
     <nav className="flex flex-col gap-1" aria-label="Main">
       {nav.map((n) => {
-        const active = pathname === n.to || (n.to !== "/dashboard" && pathname.startsWith(n.to));
+        const active = isActive(n.to);
         const Icon = n.icon;
         return (
           <Link
             key={n.to}
             to={n.locked ? "/begin" : n.to}
             title={compact ? n.label : undefined}
-            className={`flex items-center gap-3 rounded-lg border py-2.5 font-display text-sm font-bold tracking-tight transition-colors ${compact ? "justify-center px-2" : "px-3"} ${
+            aria-current={active ? "page" : undefined}
+            className={`group flex min-h-11 items-center gap-3 rounded-xl py-2.5 font-display text-[15px] font-semibold tracking-tight transition-all ${compact ? "justify-center px-2" : "px-3"} ${
               active
-                ? "border-primary/40 bg-primary/10 text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            } ${n.locked ? "opacity-60" : ""}`}
+                ? "bg-primary text-primary-foreground shadow-[0_6px_20px_-8px_var(--primary)]"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            } ${n.locked ? "opacity-55" : ""}`}
           >
             <Icon className="h-5 w-5 shrink-0" />
-            {!compact && <span className="flex-1">{n.label}</span>}
-            {!compact && n.locked && <Lock className="h-3.5 w-3.5" />}
+            {!compact && <span className="flex-1 truncate">{n.label}</span>}
+            {!compact && n.locked && <Lock className="h-3.5 w-3.5" aria-label="Locked" />}
           </Link>
         );
       })}
     </nav>
   );
+
+  // Phones: the four most-used sections in a bottom bar; everything else in the drawer.
+  const tabs = [
+    nav[0],
+    nav.find((n) => n.to === "/begin") ?? nav.find((n) => n.to === "/tests")!,
+    nav.find((n) => n.to === "/workspace")!,
+    nav.find((n) => n.to === "/settings")!,
+  ];
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -108,14 +150,14 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
       >
         Skip to content
       </a>
-      <div className="mx-auto flex min-h-screen max-w-[1400px]">
+      <div className="mx-auto flex min-h-screen max-w-[1440px]">
         <aside
-          className={`hidden shrink-0 flex-col border-r border-border py-6 md:sticky md:top-0 md:flex md:h-screen md:overflow-y-auto transition-[width] duration-300 ${collapsed ? "w-20 px-2" : "w-64 px-4"}`}
+          className={`hidden shrink-0 flex-col border-r border-border bg-card/40 py-6 transition-[width] duration-300 md:sticky md:top-0 md:flex md:h-screen md:overflow-y-auto ${collapsed ? "w-[84px] px-3" : "w-64 px-4"}`}
         >
           <div
-            className={`mb-8 flex items-center ${collapsed ? "flex-col gap-3" : "justify-between"}`}
+            className={`mb-8 flex items-center ${collapsed ? "flex-col gap-3" : "justify-between px-1"}`}
           >
-            <Link to="/" className="flex items-center px-2" aria-label="Huzzler home">
+            <Link to="/dashboard" className="flex items-center" aria-label="Huzzler dashboard">
               {collapsed ? (
                 <img src="/huzzler-mark.svg" alt="" className="h-9 w-9" />
               ) : (
@@ -132,7 +174,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
             <button
               onClick={() => setCollapsed((v) => !v)}
               aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              className="grid h-7 w-7 place-items-center rounded-full border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+              className="grid h-8 w-8 place-items-center rounded-full border border-border text-muted-foreground hover:border-primary hover:text-primary"
             >
               {collapsed ? (
                 <ChevronRight className="h-4 w-4" />
@@ -142,71 +184,99 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
             </button>
           </div>
           <NavList compact={collapsed} />
-          {!collapsed && (
-            <div className="mt-auto rounded-xl border border-border bg-muted/40 p-3">
-              <div className="truncate font-display text-sm font-bold">
-                {me.profile.full_name ?? me.user.email}
-              </div>
-              <div className="truncate text-xs text-muted-foreground">
-                {roleName(me.profile.role_id)} · {STATUS_LABEL[me.journey.status]}
-              </div>
-              <button
-                onClick={signOut}
-                className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-red-500"
-              >
-                <LogOut className="h-3.5 w-3.5" /> Sign out
-              </button>
-            </div>
-          )}
+          <button
+            onClick={signOut}
+            title={collapsed ? "Sign out" : undefined}
+            className={`mt-auto flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-semibold text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-500 ${collapsed ? "justify-center px-2" : ""}`}
+          >
+            <LogOut className="h-5 w-5" /> {!collapsed && "Sign out"}
+          </button>
         </aside>
 
-        <div className="min-w-0 flex-1">
-          <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur md:px-8">
-            <div className="flex items-center gap-3 md:hidden">
-              <button
-                onClick={() => setMobileOpen(true)}
-                aria-label="Open menu"
-                className="grid h-10 w-10 place-items-center rounded-full border border-border bg-muted"
-              >
-                <Menu className="h-5 w-5" />
-              </button>
-              <img src="/huzzler-mark.svg" alt="Huzzler" className="h-8 w-8" />
-            </div>
-            <div className="hidden md:block">
-              <div className="text-xs font-semibold text-muted-foreground">
-                Welcome back{me.profile.full_name ? `, ${me.profile.full_name.split(" ")[0]}` : ""}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md">
+            <div className="flex h-16 items-center justify-between gap-3 px-4 md:px-8">
+              <div className="flex items-center gap-3 md:hidden">
+                <button
+                  onClick={() => setMobileOpen(true)}
+                  aria-label="Open menu"
+                  className="grid h-11 w-11 place-items-center rounded-full border border-border bg-card"
+                >
+                  <Menu className="h-5 w-5" />
+                </button>
+                <img src="/huzzler-mark.svg" alt="Huzzler" className="h-8 w-8" />
               </div>
-              <div className="font-display text-base font-bold tracking-tight">
-                Let's ship something today.
+              <div className="hidden min-w-0 md:block">
+                <div className="text-xs font-semibold text-muted-foreground">
+                  Welcome back
+                  {me.profile.full_name ? `, ${me.profile.full_name.split(" ")[0]}` : ""} 👋
+                </div>
+                <div className="truncate font-display text-lg font-bold tracking-tight">
+                  Let's ship something today.
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Notifications unread={me.unread_notifications} />
+                <ThemeToggle />
+                <AccountMenu me={me} onSignOut={signOut} />
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Notifications unread={me.unread_notifications} />
-              <ThemeToggle />
-            </div>
-          </div>
+          </header>
           {me.journey.status === "LAPSED" && (
-            <div className="border-b border-[color:var(--gold)]/40 bg-[color:var(--gold)]/10 px-4 py-2 text-center text-sm font-semibold md:px-8">
+            <Banner>
               Your plan has lapsed — your work is saved and read-only.{" "}
-              <Link to="/billing" className="text-primary underline">
-                Renew
+              <Link to="/billing" className="font-bold text-primary underline">
+                Renew now
               </Link>
-            </div>
+            </Banner>
           )}
           {me.journey.grace_until && me.journey.status !== "LAPSED" && (
-            <div className="border-b border-[color:var(--gold)]/40 bg-[color:var(--gold)]/10 px-4 py-2 text-center text-sm font-semibold md:px-8">
+            <Banner>
               Your last payment didn't go through. Renew by {fmtDateTime(me.journey.grace_until)} to
               keep your place.{" "}
-              <Link to="/billing" className="text-primary underline">
+              <Link to="/billing" className="font-bold text-primary underline">
                 Billing
               </Link>
-            </div>
+            </Banner>
           )}
-          <main id="main" className="mx-auto w-full max-w-6xl px-4 py-6 md:px-8 md:py-10">
+          <main
+            id="main"
+            className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-6 md:px-8 md:pb-12 md:pt-10"
+          >
             {children}
           </main>
         </div>
       </div>
+
+      <HelpWidget />
+
+      {/* Mobile bottom tab bar */}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
+        aria-label="Quick navigation"
+      >
+        <div className="grid grid-cols-4">
+          {tabs.map((n) => {
+            const Icon = n.icon;
+            const active = isActive(n.to);
+            return (
+              <Link
+                key={n.to}
+                to={n.locked ? "/begin" : n.to}
+                aria-current={active ? "page" : undefined}
+                className={`flex min-h-[60px] flex-col items-center justify-center gap-1 text-[11px] font-bold ${active ? "text-primary" : "text-muted-foreground"}`}
+              >
+                <span
+                  className={`grid h-8 w-12 place-items-center rounded-full transition-colors ${active ? "bg-primary/15" : ""}`}
+                >
+                  <Icon className="h-5 w-5" />
+                </span>
+                {n.short}
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
 
       {mobileOpen && (
         <>
@@ -216,26 +286,40 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
             aria-hidden="true"
           />
           <div
-            className="fixed left-0 top-0 z-50 flex h-full w-[280px] max-w-[85vw] flex-col border-r border-border bg-background p-5 md:hidden"
+            className="hz-fade-up fixed left-0 top-0 z-50 flex h-full w-[300px] max-w-[86vw] flex-col border-r border-border bg-background p-5 md:hidden"
             role="dialog"
+            aria-modal="true"
             aria-label="Menu"
           >
             <div className="mb-6 flex items-center justify-between">
-              <img src="/huzzler-mark.svg" alt="Huzzler" className="h-8 w-8" />
+              <img src="/huzzler-mark.svg" alt="Huzzler" className="h-9 w-9" />
               <button
                 onClick={() => setMobileOpen(false)}
                 aria-label="Close menu"
-                className="grid h-9 w-9 place-items-center rounded-full border border-border"
+                className="grid h-11 w-11 place-items-center rounded-full border border-border"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </button>
+            </div>
+            <div className="mb-5 flex items-center gap-3 rounded-2xl bg-muted/60 p-3">
+              <span className="grid h-11 w-11 place-items-center rounded-full bg-primary font-display font-bold text-primary-foreground">
+                {initials(me)}
+              </span>
+              <div className="min-w-0">
+                <div className="truncate font-display font-bold">
+                  {me.profile.full_name ?? me.user.email}
+                </div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {roleName(me.profile.role_id)} · {STATUS_LABEL[me.journey.status]}
+                </div>
+              </div>
             </div>
             <NavList />
             <button
               onClick={signOut}
-              className="mt-auto inline-flex items-center gap-2 rounded-lg px-3 py-3 text-sm font-bold text-muted-foreground hover:text-red-500"
+              className="mt-auto flex min-h-12 items-center gap-2 rounded-xl px-3 text-[15px] font-bold text-red-500 hover:bg-red-500/10"
             >
-              <LogOut className="h-4 w-4" /> Sign out
+              <LogOut className="h-5 w-5" /> Sign out
             </button>
           </div>
         </>
@@ -244,10 +328,92 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
   );
 }
 
+function Banner({ children }: { children: ReactNode }) {
+  return (
+    <div className="border-b border-[color:var(--gold)]/40 bg-[color:var(--gold)]/10 px-4 py-2.5 text-center text-sm font-semibold md:px-8">
+      {children}
+    </div>
+  );
+}
+
+function useClickOutside(open: boolean, close: () => void) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) =>
+      ref.current && !ref.current.contains(e.target as Node) && close();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, close]);
+  return ref;
+}
+
+function AccountMenu({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useClickOutside(open, () => setOpen(false));
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-label="Account menu"
+        className="flex h-11 items-center gap-1.5 rounded-full border border-border bg-card pl-1 pr-2 hover:border-primary"
+      >
+        <span className="grid h-9 w-9 place-items-center rounded-full bg-primary font-display text-sm font-bold text-primary-foreground">
+          {initials(me)}
+        </span>
+        <ChevronDown
+          className={`hidden h-4 w-4 text-muted-foreground transition-transform sm:block ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && (
+        <div role="menu" className="hz-fade-up card-duo absolute right-0 top-14 z-40 w-64 p-2">
+          <div className="border-b border-border px-3 pb-3 pt-2">
+            <div className="truncate font-display font-bold">
+              {me.profile.full_name ?? "Your account"}
+            </div>
+            <div className="truncate text-xs text-muted-foreground">{me.user.email}</div>
+          </div>
+          <Link
+            role="menuitem"
+            to="/settings"
+            onClick={() => setOpen(false)}
+            className="mt-1 flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-semibold hover:bg-muted"
+          >
+            <Settings className="h-4 w-4" /> Settings & privacy
+          </Link>
+          <Link
+            role="menuitem"
+            to="/billing"
+            onClick={() => setOpen(false)}
+            className="flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-semibold hover:bg-muted"
+          >
+            <Wallet className="h-4 w-4" /> Billing
+          </Link>
+          <button
+            role="menuitem"
+            onClick={onSignOut}
+            className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-sm font-bold text-red-500 hover:bg-red-500/10"
+          >
+            <LogOut className="h-4 w-4" /> Sign out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Notifications({ unread }: { unread: number }) {
   const [open, setOpen] = useState(false);
   const qc = useQueryClient();
-  const { data } = useQuery({
+  const ref = useClickOutside(open, () => setOpen(false));
+  const { data, isLoading } = useQuery({
     queryKey: ["notifications"],
     queryFn: () =>
       api<
@@ -264,16 +430,17 @@ function Notifications({ unread }: { unread: number }) {
   const toggle = async () => {
     setOpen((v) => !v);
     if (!open && unread > 0) {
-      await api("/me/notifications/read", { method: "POST" });
+      await api("/me/notifications/read", { method: "POST" }).catch(() => {});
       qc.invalidateQueries({ queryKey: ["me"] });
     }
   };
   return (
-    <div className="relative">
+    <div className="relative" ref={ref}>
       <button
         onClick={toggle}
+        aria-expanded={open}
         aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`}
-        className="relative grid h-10 w-10 place-items-center rounded-full border border-border bg-muted hover:text-primary"
+        className="relative grid h-11 w-11 place-items-center rounded-full border border-border bg-card hover:border-primary hover:text-primary"
       >
         <Bell className="h-5 w-5" />
         {unread > 0 && (
@@ -283,17 +450,25 @@ function Notifications({ unread }: { unread: number }) {
         )}
       </button>
       {open && (
-        <div className="card-duo absolute right-0 top-12 z-30 max-h-[70vh] w-[320px] max-w-[90vw] overflow-y-auto p-2">
-          {(data ?? []).length === 0 && (
-            <div className="p-4 text-center text-sm text-muted-foreground">
-              No notifications yet.
+        <div className="hz-fade-up card-duo fixed inset-x-3 top-[4.5rem] z-40 max-h-[70vh] overflow-y-auto p-2 sm:absolute sm:inset-x-auto sm:right-0 sm:top-14 sm:w-[340px]">
+          <div className="px-3 pb-2 pt-1 font-display text-sm font-bold">Notifications</div>
+          {isLoading && (
+            <div className="space-y-2 p-2">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="skeleton h-12" />
+              ))}
+            </div>
+          )}
+          {!isLoading && (data ?? []).length === 0 && (
+            <div className="p-6 text-center text-sm text-muted-foreground">
+              You're all caught up ✨
             </div>
           )}
           {(data ?? []).map((n) => (
-            <div key={n.id} className="rounded-lg p-3 hover:bg-muted">
+            <div key={n.id} className="rounded-xl p-3 hover:bg-muted">
               <div className="font-display text-sm font-bold">{n.title}</div>
-              <div className="text-xs text-muted-foreground">{n.body}</div>
-              <div className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+              <div className="text-sm text-muted-foreground">{n.body}</div>
+              <div className="mt-1 text-[11px] uppercase tracking-wider text-muted-foreground">
                 {fmtDateTime(n.created_at)}
               </div>
             </div>

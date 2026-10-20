@@ -5,8 +5,9 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Bricolage Grotesque", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -79,18 +80,53 @@
   }
   html {
     scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
   }
   body {
     font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.6;
     background-color: var(--color-background);
     color: var(--color-foreground);
     -webkit-font-smoothing: antialiased;
-    font-weight: 500;
+    -moz-osx-font-smoothing: grayscale;
+    font-weight: 400;
+    font-feature-settings: "cv11", "ss01", "ss03";
   }
-  h1, h2, h3, h4 {
+  h1,
+  h2,
+  h3,
+  h4 {
     font-family: var(--font-display);
-    letter-spacing: -0.03em;
+    letter-spacing: -0.025em;
     font-weight: 700;
+    line-height: 1.15;
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: var(--font-mono);
+    font-feature-settings: "calt", "liga";
+  }
+  /* Comfortable tap targets and no iOS zoom-on-focus (inputs must be >= 16px). */
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--primary) 30%, transparent);
   }
 }
 
@@ -126,9 +162,15 @@
     padding: 0.9rem 1.6rem;
     border-radius: 1.5rem;
     color: white;
-    background: linear-gradient(180deg, color-mix(in oklab, var(--primary) 92%, white) 0%, var(--primary) 100%);
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--primary) 92%, white) 0%,
+      var(--primary) 100%
+    );
     border: 2px solid var(--primary-shadow);
-    transition: transform 120ms cubic-bezier(0.34, 1.56, 0.64, 1), filter 120ms ease;
+    transition:
+      transform 120ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      filter 120ms ease;
     cursor: pointer;
     position: relative;
     overflow: hidden;
@@ -141,7 +183,10 @@
     box-shadow: inset 0 1px 0 0 color-mix(in oklab, white 35%, transparent);
     pointer-events: none;
   }
-  .btn-duo:hover { filter: brightness(1.06); transform: translateY(-2px) scale(1.02); }
+  .btn-duo:hover {
+    filter: brightness(1.06);
+    transform: translateY(-2px) scale(1.02);
+  }
   .btn-duo:active {
     transform: translateY(2px) scale(0.98);
   }
@@ -160,7 +205,10 @@
     color: var(--foreground);
     background: var(--card);
     border: 2px solid var(--border);
-    transition: transform 120ms cubic-bezier(0.34, 1.56, 0.64, 1), border-color 120ms ease, color 120ms ease;
+    transition:
+      transform 120ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      border-color 120ms ease,
+      color 120ms ease;
     cursor: pointer;
     position: relative;
     overflow: hidden;
@@ -173,8 +221,14 @@
     box-shadow: inset 0 1px 0 0 color-mix(in oklab, white 20%, transparent);
     pointer-events: none;
   }
-  .btn-duo-outline:hover { border-color: var(--primary); color: var(--primary); transform: translateY(-2px) scale(1.02); }
-  .btn-duo-outline:active { transform: translateY(2px) scale(0.98); }
+  .btn-duo-outline:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    transform: translateY(-2px) scale(1.02);
+  }
+  .btn-duo-outline:active {
+    transform: translateY(2px) scale(0.98);
+  }
 
   .chip {
     display: inline-flex;
@@ -196,99 +250,221 @@
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 0.75rem;
-    box-shadow: 0 1px 0 0 var(--border), 0 20px 40px -24px oklch(0.1 0.02 250 / 0.35);
+    box-shadow:
+      0 1px 0 0 var(--border),
+      0 20px 40px -24px oklch(0.1 0.02 250 / 0.35);
   }
-
 }
 
 @keyframes float-y {
-  0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(-12px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
 }
-.animate-float { animation: float-y 5s ease-in-out infinite; }
+.animate-float {
+  animation: float-y 5s ease-in-out infinite;
+}
 
 @keyframes pulse-ring {
-  0%   { box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 50%, transparent); }
-  70%  { box-shadow: 0 0 0 18px color-mix(in oklab, var(--primary) 0%, transparent); }
-  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 0%, transparent); }
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 50%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 18px color-mix(in oklab, var(--primary) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 0%, transparent);
+  }
 }
-.animate-pulse-ring { animation: pulse-ring 2.2s ease-out infinite; }
+.animate-pulse-ring {
+  animation: pulse-ring 2.2s ease-out infinite;
+}
 
 @keyframes marquee-x {
-  0%   { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
 }
-.marquee-track { animation: marquee-x 32s linear infinite; }
-.marquee-track-reverse { animation: marquee-x 32s linear infinite reverse; }
+.marquee-track {
+  animation: marquee-x 32s linear infinite;
+}
+.marquee-track-reverse {
+  animation: marquee-x 32s linear infinite reverse;
+}
 
 @keyframes breathe {
-  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 transparent); }
-  50%      { transform: scale(1.06); filter: drop-shadow(0 0 18px color-mix(in oklab, var(--primary) 55%, transparent)); }
+  0%,
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  50% {
+    transform: scale(1.06);
+    filter: drop-shadow(0 0 18px color-mix(in oklab, var(--primary) 55%, transparent));
+  }
 }
-.animate-breathe { animation: breathe 3.4s ease-in-out infinite; transform-origin: center; }
+.animate-breathe {
+  animation: breathe 3.4s ease-in-out infinite;
+  transform-origin: center;
+}
 
 @keyframes spin-slow {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
-.animate-spin-slow { animation: spin-slow 18s linear infinite; transform-origin: center; }
+.animate-spin-slow {
+  animation: spin-slow 18s linear infinite;
+  transform-origin: center;
+}
 
 @keyframes sparkle-pop {
-  0%, 100% { transform: scale(0.4) rotate(0deg); opacity: 0; }
-  40%      { transform: scale(1) rotate(20deg); opacity: 1; }
-  70%      { transform: scale(0.8) rotate(-10deg); opacity: 0.8; }
+  0%,
+  100% {
+    transform: scale(0.4) rotate(0deg);
+    opacity: 0;
+  }
+  40% {
+    transform: scale(1) rotate(20deg);
+    opacity: 1;
+  }
+  70% {
+    transform: scale(0.8) rotate(-10deg);
+    opacity: 0.8;
+  }
 }
-.animate-sparkle { animation: sparkle-pop 2.6s ease-in-out infinite; transform-origin: center; }
-.animate-sparkle-delay { animation: sparkle-pop 2.6s ease-in-out infinite; animation-delay: 1.3s; transform-origin: center; }
+.animate-sparkle {
+  animation: sparkle-pop 2.6s ease-in-out infinite;
+  transform-origin: center;
+}
+.animate-sparkle-delay {
+  animation: sparkle-pop 2.6s ease-in-out infinite;
+  animation-delay: 1.3s;
+  transform-origin: center;
+}
 
 @keyframes slide-in-right {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
-.animate-slide-in-right { animation: slide-in-right 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
-
+.animate-slide-in-right {
+  animation: slide-in-right 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
 
 /* ---------------------------------------------------------------------------
    Huzzler loader + skeletons
    --------------------------------------------------------------------------- */
 @keyframes hz-squish {
-  0%, 100% { transform: scale(1, 1); }
-  30% { transform: scale(1.06, 0.94); }
-  55% { transform: scale(0.97, 1.04); }
-  75% { transform: scale(1.02, 0.99); }
+  0%,
+  100% {
+    transform: scale(1, 1);
+  }
+  30% {
+    transform: scale(1.06, 0.94);
+  }
+  55% {
+    transform: scale(0.97, 1.04);
+  }
+  75% {
+    transform: scale(1.02, 0.99);
+  }
 }
 @keyframes hz-draw {
-  0% { stroke-dashoffset: 260; fill-opacity: 0; }
-  55% { stroke-dashoffset: 0; fill-opacity: 0; }
-  75%, 100% { stroke-dashoffset: 0; fill-opacity: 1; }
+  0% {
+    stroke-dashoffset: 260;
+    fill-opacity: 0;
+  }
+  55% {
+    stroke-dashoffset: 0;
+    fill-opacity: 0;
+  }
+  75%,
+  100% {
+    stroke-dashoffset: 0;
+    fill-opacity: 1;
+  }
 }
 @keyframes hz-orbit {
-  from { transform: rotate(0deg) translateX(var(--hz-orbit, 62px)) rotate(0deg); }
-  to { transform: rotate(360deg) translateX(var(--hz-orbit, 62px)) rotate(-360deg); }
+  from {
+    transform: rotate(0deg) translateX(var(--hz-orbit, 62px)) rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg) translateX(var(--hz-orbit, 62px)) rotate(-360deg);
+  }
 }
 @keyframes hz-halo {
-  0% { transform: scale(0.85); opacity: 0.55; }
-  100% { transform: scale(1.6); opacity: 0; }
+  0% {
+    transform: scale(0.85);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
 }
 @keyframes hz-indeterminate {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(250%); }
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
 }
 @keyframes hz-fade-up {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 @keyframes hz-shimmer {
-  100% { transform: translateX(100%); }
+  100% {
+    transform: translateX(100%);
+  }
 }
 
-.hz-squish { animation: hz-squish 1.8s cubic-bezier(0.45, 0, 0.25, 1) infinite; transform-origin: 50% 60%; }
-.hz-draw { stroke-dasharray: 260; animation: hz-draw 1.8s ease-in-out infinite alternate; }
-.hz-orbit { animation: hz-orbit 2.4s linear infinite; }
-.hz-orbit-slow { animation: hz-orbit 3.6s linear infinite reverse; }
-.hz-halo { animation: hz-halo 1.8s ease-out infinite; }
-.hz-indeterminate { animation: hz-indeterminate 1.4s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
-.hz-fade-up { animation: hz-fade-up 360ms ease-out both; }
+.hz-squish {
+  animation: hz-squish 1.8s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+  transform-origin: 50% 60%;
+}
+.hz-draw {
+  stroke-dasharray: 260;
+  animation: hz-draw 1.8s ease-in-out infinite alternate;
+}
+.hz-orbit {
+  animation: hz-orbit 2.4s linear infinite;
+}
+.hz-orbit-slow {
+  animation: hz-orbit 3.6s linear infinite reverse;
+}
+.hz-halo {
+  animation: hz-halo 1.8s ease-out infinite;
+}
+.hz-indeterminate {
+  animation: hz-indeterminate 1.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+.hz-fade-up {
+  animation: hz-fade-up 360ms ease-out both;
+}
 
 /* Static (skeleton) loading: a soft placeholder with a slow sheen. */
 .skeleton {
@@ -302,11 +478,27 @@
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--background) 55%, transparent), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--background) 55%, transparent),
+    transparent
+  );
   animation: hz-shimmer 1.6s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hz-squish, .hz-orbit, .hz-orbit-slow, .hz-halo, .hz-indeterminate, .skeleton::after { animation: none; }
-  .hz-draw { animation: none; stroke-dashoffset: 0; fill-opacity: 1; }
+  .hz-squish,
+  .hz-orbit,
+  .hz-orbit-slow,
+  .hz-halo,
+  .hz-indeterminate,
+  .skeleton::after {
+    animation: none;
+  }
+  .hz-draw {
+    animation: none;
+    stroke-dashoffset: 0;
+    fill-opacity: 1;
+  }
 }

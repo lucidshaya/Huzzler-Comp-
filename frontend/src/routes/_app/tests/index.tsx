@@ -13,6 +13,7 @@ import {
   ScoreBadge,
   Spinner,
 } from "@/components/app/ui";
+import { ListPageSkeleton } from "@/components/app/Skeleton";
 
 export const Route = createFileRoute("/_app/tests/")({
   head: () => ({ meta: [{ title: "Onboarding tests · Huzzler" }] }),
@@ -58,7 +59,7 @@ function TestsOverview() {
       refresh();
     },
   });
-  if (isLoading || !me) return <Spinner />;
+  if (isLoading || !me) return <ListPageSkeleton rows={5} label="Loading your tests" />;
   const j = me.journey;
   const retakeOpen =
     j.status === "TESTS_FAILED" &&

@@ -20,6 +20,7 @@ import { HzSelect } from "@/components/app/HzSelect";
 import { HzSwitch } from "@/components/app/HzSwitch";
 import { hzForm, hzPrompt } from "@/components/app/Dialogs";
 import { hzToast } from "@/components/app/Toast";
+import { TableSkeleton } from "@/components/app/Skeleton";
 
 const useInvalidate = () => {
   const qc = useQueryClient();
@@ -27,7 +28,14 @@ const useInvalidate = () => {
 };
 /** Asks for the audit-log reason every sensitive admin action needs. */
 const askReason = (title: string, confirmLabel = "Confirm") =>
-  hzPrompt({ title, label: "Reason (saved to the audit log)", type: "textarea", minLength: 3, maxLength: 500, confirmLabel });
+  hzPrompt({
+    title,
+    label: "Reason (saved to the audit log)",
+    type: "textarea",
+    minLength: 3,
+    maxLength: 500,
+    confirmLabel,
+  });
 
 function Table({ head, children }: { head: string[]; children: React.ReactNode }) {
   return (
@@ -97,7 +105,10 @@ export function UsersTab() {
             label="Filter by status"
             value={status}
             onChange={setStatus}
-            options={[{ value: "", label: "All statuses" }, ...Object.entries(STATUS_LABEL).map(([k, v]) => ({ value: k, label: v }))]}
+            options={[
+              { value: "", label: "All statuses" },
+              ...Object.entries(STATUS_LABEL).map(([k, v]) => ({ value: k, label: v })),
+            ]}
           />
         </div>
       </div>
@@ -105,7 +116,7 @@ export function UsersTab() {
         Learners only. Huzzler staff are managed in the Team tab.
       </p>
       {isLoading ? (
-        <Spinner />
+        <TableSkeleton />
       ) : (
         <Table head={["Name", "Field", "Status", "Plan", "Joined", ""]}>
           {(data ?? []).map((u) => (
@@ -144,14 +155,20 @@ function UserDrawer({ id, onClose }: { id: string; onClose: () => void }) {
     queryFn: () => api<any>(`/admin/users/${id}`),
   });
   const act = useMutation({
-    mutationFn: ({ path, body }: { path: string; body: unknown; done: string }) => api(path, { body }),
+    mutationFn: ({ path, body }: { path: string; body: unknown; done: string }) =>
+      api(path, { body }),
     onSuccess: (_d, v) => {
       inv();
       hzToast.success(v.done);
     },
     onError: hzToast.fromError,
   });
-  const run = async (path: string, body: Record<string, unknown>, done: string, prompt?: string) => {
+  const run = async (
+    path: string,
+    body: Record<string, unknown>,
+    done: string,
+    prompt?: string,
+  ) => {
     if (prompt) {
       const reason = await askReason(prompt);
       if (!reason) return;
@@ -175,7 +192,7 @@ function UserDrawer({ id, onClose }: { id: string; onClose: () => void }) {
         </div>
         <ErrorNote error={error ?? act.error} />
         {!data ? (
-          <Spinner />
+          <TableSkeleton />
         ) : (
           <>
             <div className="grid grid-cols-2 gap-2 text-sm">
@@ -221,22 +238,35 @@ function UserDrawer({ id, onClose }: { id: string; onClose: () => void }) {
                 View uploaded ID (expires in 5 min)
               </a>
             )}
+            {data.profile.is_protected && (
+              <div className="rounded-xl border border-primary/40 bg-primary/10 p-3 text-sm">
+                <b>Protected admin account.</b> It always keeps the admin role and can't be
+                suspended or deleted — enforced by the database.
+              </div>
+            )}
             <div className="flex flex-wrap gap-2">
               <SmallBtn
                 onClick={() =>
                   run(
                     `/admin/users/${id}/verify-identity`,
                     { verified: !data.profile.identity_verified },
-                    data.profile.identity_verified ? "Identity marked unverified" : "Identity verified",
+                    data.profile.identity_verified
+                      ? "Identity marked unverified"
+                      : "Identity verified",
                   )
                 }
               >
                 {data.profile.identity_verified ? "Unverify ID" : "Verify ID"}
               </SmallBtn>
-              {data.journey.status === "SUSPENDED" ? (
+              {data.profile.is_protected ? null : data.journey.status === "SUSPENDED" ? (
                 <SmallBtn
                   onClick={() =>
-                    run(`/admin/users/${id}/status`, { to: "RESUME" }, "Suspension lifted", "Lift the suspension")
+                    run(
+                      `/admin/users/${id}/status`,
+                      { to: "RESUME" },
+                      "Suspension lifted",
+                      "Lift the suspension",
+                    )
                   }
                 >
                   Lift suspension
@@ -245,7 +275,12 @@ function UserDrawer({ id, onClose }: { id: string; onClose: () => void }) {
                 <SmallBtn
                   danger
                   onClick={() =>
-                    run(`/admin/users/${id}/status`, { to: "SUSPENDED" }, "Account suspended", "Suspend this account")
+                    run(
+                      `/admin/users/${id}/status`,
+                      { to: "SUSPENDED" },
+                      "Account suspended",
+                      "Suspend this account",
+                    )
                   }
                 >
                   Suspend
@@ -253,7 +288,12 @@ function UserDrawer({ id, onClose }: { id: string; onClose: () => void }) {
               )}
               <SmallBtn
                 onClick={() =>
-                  run(`/admin/users/${id}/reset-attempts`, {}, "Test attempts reset", "Reset their test attempts")
+                  run(
+                    `/admin/users/${id}/reset-attempts`,
+                    {},
+                    "Test attempts reset",
+                    "Reset their test attempts",
+                  )
                 }
               >
                 Reset attempts
@@ -265,14 +305,27 @@ function UserDrawer({ id, onClose }: { id: string; onClose: () => void }) {
                   placeholder="Change field…"
                   value=""
                   onChange={(v) =>
-                    v && run(`/admin/users/${id}/role`, { role_id: v }, `Field changed to ${roleName(v)}`, `Change their field to ${roleName(v)}`)
+                    v &&
+                    run(
+                      `/admin/users/${id}/role`,
+                      { role_id: v },
+                      `Field changed to ${roleName(v)}`,
+                      `Change their field to ${roleName(v)}`,
+                    )
                   }
-                  options={ROLES.filter((r) => r.id !== data.profile.role_id).map((r) => ({ value: r.id, label: r.name }))}
+                  options={ROLES.filter((r) => r.id !== data.profile.role_id).map((r) => ({
+                    value: r.id,
+                    label: r.name,
+                  }))}
                 />
               </div>
               <SmallBtn
                 onClick={() =>
-                  act.mutate({ path: `/admin/users/${id}/issue-certificate`, body: {}, done: "Certificate check queued" })
+                  act.mutate({
+                    path: `/admin/users/${id}/issue-certificate`,
+                    body: {},
+                    done: "Certificate check queued",
+                  })
                 }
               >
                 Issue certificate
@@ -328,11 +381,14 @@ export function PaymentsTab() {
       api(`/admin/payments/${id}/refund`, { body: { reason, override } }),
     onSuccess: () => {
       inv();
-      hzToast.success("Refund started", "Paystack will return the money to the original payment method.");
+      hzToast.success(
+        "Refund started",
+        "Paystack will return the money to the original payment method.",
+      );
     },
     onError: hzToast.fromError,
   });
-  if (isLoading) return <Spinner />;
+  if (isLoading) return <TableSkeleton />;
   return (
     <div className="flex flex-col gap-4">
       <ErrorNote error={error ?? refund.error} />
@@ -367,11 +423,28 @@ export function PaymentsTab() {
                         danger: true,
                         confirmLabel: "Refund payment",
                         fields: [
-                          { name: "reason", label: "Reason (saved to the audit log)", type: "textarea", required: true, minLength: 3, maxLength: 500 },
-                          { name: "override", label: "Override the refund policy", type: "checkbox", hint: "Only if this is outside the 48-hour, no-test-started rule." },
+                          {
+                            name: "reason",
+                            label: "Reason (saved to the audit log)",
+                            type: "textarea",
+                            required: true,
+                            minLength: 3,
+                            maxLength: 500,
+                          },
+                          {
+                            name: "override",
+                            label: "Override the refund policy",
+                            type: "checkbox",
+                            hint: "Only if this is outside the 48-hour, no-test-started rule.",
+                          },
                         ],
                       });
-                      if (v) refund.mutate({ id: p.id, reason: String(v.reason).trim(), override: Boolean(v.override) });
+                      if (v)
+                        refund.mutate({
+                          id: p.id,
+                          reason: String(v.reason).trim(),
+                          override: Boolean(v.override),
+                        });
                     }}
                   >
                     Refund
@@ -426,7 +499,10 @@ export function ContentTab() {
       api(`/admin/content/${kind}/${id}/status`, { body: { status: s } }),
     onSuccess: (_d, v) => {
       inv();
-      hzToast.success(v.s === "approved" ? "Approved" : "Retired", v.s === "approved" ? "Learners will see it from now on." : "It's hidden from learners.");
+      hzToast.success(
+        v.s === "approved" ? "Approved" : "Retired",
+        v.s === "approved" ? "Learners will see it from now on." : "It's hidden from learners.",
+      );
     },
     onError: hzToast.fromError,
   });
@@ -461,7 +537,7 @@ export function ContentTab() {
       </p>
       <ErrorNote error={set.error} />
       {isLoading ? (
-        <Spinner />
+        <TableSkeleton />
       ) : (data ?? []).length === 0 ? (
         <EmptyState icon={Search} title={`No ${status} ${kind}`} />
       ) : (
@@ -572,12 +648,30 @@ export function GradingTab() {
       title: "Record the final grade",
       confirmLabel: "Save grade",
       fields: [
-        { name: "score", label: "Final score (0–100)", type: "number", required: true, min: 0, max: 100 },
-        { name: "feedback", label: "Feedback for the learner (optional)", type: "textarea", maxLength: 4000 },
+        {
+          name: "score",
+          label: "Final score (0–100)",
+          type: "number",
+          required: true,
+          min: 0,
+          max: 100,
+        },
+        {
+          name: "feedback",
+          label: "Feedback for the learner (optional)",
+          type: "textarea",
+          maxLength: 4000,
+        },
       ],
     });
     if (!v) return;
-    resolve.mutate({ type, id, score: Number(v.score), feedback: String(v.feedback).trim() || undefined, user_id });
+    resolve.mutate({
+      type,
+      id,
+      score: Number(v.score),
+      feedback: String(v.feedback).trim() || undefined,
+      user_id,
+    });
   };
   const respond = async (id: string, adjust: boolean) => {
     const v = await hzForm({
@@ -585,14 +679,37 @@ export function GradingTab() {
       body: "Your response is sent to the learner.",
       confirmLabel: adjust ? "Adjust score" : "Uphold grade",
       fields: [
-        ...(adjust ? [{ name: "score", label: "New score (0–100)", type: "number" as const, required: true, min: 0, max: 100 }] : []),
-        { name: "response", label: "Response to the learner", type: "textarea", required: true, minLength: 10, maxLength: 4000 },
+        ...(adjust
+          ? [
+              {
+                name: "score",
+                label: "New score (0–100)",
+                type: "number" as const,
+                required: true,
+                min: 0,
+                max: 100,
+              },
+            ]
+          : []),
+        {
+          name: "response",
+          label: "Response to the learner",
+          type: "textarea",
+          required: true,
+          minLength: 10,
+          maxLength: 4000,
+        },
       ],
     });
     if (!v) return;
-    answer.mutate({ id, status: adjust ? "adjusted" : "upheld", response: String(v.response).trim(), ...(adjust ? { new_score: Number(v.score) } : {}) });
+    answer.mutate({
+      id,
+      status: adjust ? "adjusted" : "upheld",
+      response: String(v.response).trim(),
+      ...(adjust ? { new_score: Number(v.score) } : {}),
+    });
   };
-  if (review.isLoading) return <Spinner />;
+  if (review.isLoading) return <TableSkeleton />;
   const r = review.data ?? { test_submissions: [], deliverables: [], flagged_grades: [] };
   return (
     <div className="flex flex-col gap-4">
@@ -712,9 +829,17 @@ export function GradingTab() {
 export const STAFF_ROLES = [
   { value: "admin", label: "Admin", hint: "Everything, including payments, settings and the team" },
   { value: "moderator", label: "Moderator", hint: "Users, grading & appeals, integrity" },
-  { value: "content_reviewer", label: "Content reviewer", hint: "Approves tests, projects and personas" },
+  {
+    value: "content_reviewer",
+    label: "Content reviewer",
+    hint: "Approves tests, projects and personas",
+  },
   { value: "partnerships", label: "Partnerships", hint: "Company requests and opportunities" },
-  { value: "project_manager", label: "Project manager", hint: "AI PM portal: briefs, squads, sprint board, reports" },
+  {
+    value: "project_manager",
+    label: "Project manager",
+    hint: "AI PM portal: briefs, squads, sprint board, reports",
+  },
 ];
 const staffRoleLabel = (r: string) => STAFF_ROLES.find((s) => s.value === r)?.label ?? r;
 
@@ -724,20 +849,35 @@ export function StaffTab() {
     queryKey: ["admin", "staff"],
     queryFn: () => api<any[]>("/admin/staff"),
   });
-  const me = useQuery({ queryKey: ["admin", "whoami"], queryFn: () => api<{ id: string }>("/admin/whoami") });
+  const me = useQuery({
+    queryKey: ["admin", "whoami"],
+    queryFn: () => api<{ id: string }>("/admin/whoami"),
+  });
   const [form, setForm] = useState({ identifier: "", app_role: "moderator", staff_title: "" });
   const add = useMutation({
-    mutationFn: () => api("/admin/staff", { body: { ...form, staff_title: form.staff_title || undefined } }),
+    mutationFn: () =>
+      api("/admin/staff", { body: { ...form, staff_title: form.staff_title || undefined } }),
     onSuccess: () => {
       inv();
-      hzToast.success("Added to the team", `${form.identifier} is now a ${staffRoleLabel(form.app_role).toLowerCase()}.`);
+      hzToast.success(
+        "Added to the team",
+        `${form.identifier} is now a ${staffRoleLabel(form.app_role).toLowerCase()}.`,
+      );
       setForm({ identifier: "", app_role: form.app_role, staff_title: "" });
     },
     onError: hzToast.fromError,
   });
   const update = useMutation({
-    mutationFn: ({ id, ...body }: { id: string; app_role?: string; staff_title?: string | null; reason: string; done: string }) =>
-      api(`/admin/staff/${id}`, { method: "PATCH", body }),
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: string;
+      app_role?: string;
+      staff_title?: string | null;
+      reason: string;
+      done: string;
+    }) => api(`/admin/staff/${id}`, { method: "PATCH", body }),
     onSuccess: (_d, v) => {
       inv();
       hzToast.success(v.done);
@@ -745,7 +885,8 @@ export function StaffTab() {
     onError: hzToast.fromError,
   });
   const remove = useMutation({
-    mutationFn: ({ id, reason }: { id: string; reason: string; name: string }) => api(`/admin/staff/${id}`, { method: "DELETE", body: { reason } }),
+    mutationFn: ({ id, reason }: { id: string; reason: string; name: string }) =>
+      api(`/admin/staff/${id}`, { method: "DELETE", body: { reason } }),
     onSuccess: (_d, v) => {
       inv();
       hzToast.success("Removed from the team", `${v.name} is now a regular account.`);
@@ -755,19 +896,47 @@ export function StaffTab() {
 
   const changeRole = async (s: any, role: string) => {
     if (role === s.app_role) return;
-    const reason = await askReason(`Make ${s.full_name ?? "them"} a ${staffRoleLabel(role).toLowerCase()}?`, "Change role");
-    if (reason) update.mutate({ id: s.id, app_role: role, reason, done: `${s.full_name ?? "Role"} is now ${staffRoleLabel(role).toLowerCase()}` });
+    const reason = await askReason(
+      `Make ${s.full_name ?? "them"} a ${staffRoleLabel(role).toLowerCase()}?`,
+      "Change role",
+    );
+    if (reason)
+      update.mutate({
+        id: s.id,
+        app_role: role,
+        reason,
+        done: `${s.full_name ?? "Role"} is now ${staffRoleLabel(role).toLowerCase()}`,
+      });
   };
   const editTitle = async (s: any) => {
     const v = await hzForm({
       title: `Job title for ${s.full_name ?? "this person"}`,
       confirmLabel: "Save title",
       fields: [
-        { name: "title", label: "Job title (shown inside staff tools)", placeholder: "e.g. Head of Content", defaultValue: s.staff_title ?? "", maxLength: 80 },
-        { name: "reason", label: "Reason (saved to the audit log)", required: true, minLength: 3, maxLength: 500, defaultValue: "Title update" },
+        {
+          name: "title",
+          label: "Job title (shown inside staff tools)",
+          placeholder: "e.g. Head of Content",
+          defaultValue: s.staff_title ?? "",
+          maxLength: 80,
+        },
+        {
+          name: "reason",
+          label: "Reason (saved to the audit log)",
+          required: true,
+          minLength: 3,
+          maxLength: 500,
+          defaultValue: "Title update",
+        },
       ],
     });
-    if (v) update.mutate({ id: s.id, staff_title: String(v.title).trim() || null, reason: String(v.reason).trim(), done: "Job title saved" });
+    if (v)
+      update.mutate({
+        id: s.id,
+        staff_title: String(v.title).trim() || null,
+        reason: String(v.reason).trim(),
+        done: "Job title saved",
+      });
   };
   const removeStaff = async (s: any) => {
     const reason = await hzPrompt({
@@ -789,7 +958,8 @@ export function StaffTab() {
         <Card className="lg:col-span-3">
           <CardTitle>Add a team member</CardTitle>
           <p className="mb-3 text-xs text-muted-foreground">
-            They need a Huzzler account first. Staff sign in at /admin/login (project managers at /aipm/login) with their username.
+            They need a Huzzler account first. Staff sign in at /admin/login (project managers at
+            /aipm/login) with their username.
           </p>
           <form
             onSubmit={(e) => {
@@ -807,7 +977,12 @@ export function StaffTab() {
               value={form.identifier}
               onChange={(e) => setForm({ ...form, identifier: e.target.value })}
             />
-            <HzSelect label="Role" value={form.app_role} onChange={(v) => setForm({ ...form, app_role: v })} options={STAFF_ROLES} />
+            <HzSelect
+              label="Role"
+              value={form.app_role}
+              onChange={(v) => setForm({ ...form, app_role: v })}
+              options={STAFF_ROLES}
+            />
             <input
               className={`${inputCls} !py-2 text-sm`}
               placeholder="Job title (optional)"
@@ -825,7 +1000,10 @@ export function StaffTab() {
           <CardTitle>What each role can do</CardTitle>
           <ul className="flex flex-col gap-2 text-sm">
             {STAFF_ROLES.map((r) => (
-              <li key={r.value} className="flex flex-col rounded-xl border border-border bg-muted/30 px-3 py-2">
+              <li
+                key={r.value}
+                className="flex flex-col rounded-xl border border-border bg-muted/30 px-3 py-2"
+              >
                 <span className="font-display font-bold">{r.label}</span>
                 <span className="text-xs text-muted-foreground">{r.hint}</span>
               </li>
@@ -836,7 +1014,7 @@ export function StaffTab() {
 
       <ErrorNote error={error} />
       {isLoading ? (
-        <Spinner />
+        <TableSkeleton />
       ) : (
         <Table head={["Team member", "Role", "Job title", "Two-factor", "Last sign-in", ""]}>
           {(data ?? []).map((s) => {
@@ -845,7 +1023,8 @@ export function StaffTab() {
               <tr key={s.id}>
                 <Td>
                   <div className="font-semibold">
-                    {s.full_name ?? "—"} {self && <Pill tone="primary">you</Pill>}
+                    {s.full_name ?? "—"} {self && <Pill tone="primary">you</Pill>}{" "}
+                    {s.is_protected && <Pill tone="gold">protected</Pill>}
                   </div>
                   <div className="text-xs text-muted-foreground">
                     @{s.username ?? "—"} · {s.email ?? "no email"}
@@ -853,18 +1032,30 @@ export function StaffTab() {
                 </Td>
                 <Td>
                   <div className="w-48">
-                    <HzSelect size="sm" label={`Role for ${s.full_name ?? "staff member"}`} value={s.app_role} onChange={(v) => changeRole(s, v)} options={STAFF_ROLES} disabled={update.isPending} />
+                    <HzSelect
+                      size="sm"
+                      label={`Role for ${s.full_name ?? "staff member"}`}
+                      value={s.app_role}
+                      onChange={(v) => changeRole(s, v)}
+                      options={STAFF_ROLES}
+                      disabled={update.isPending || s.is_protected || self}
+                    />
                   </div>
                 </Td>
                 <Td>
-                  <button onClick={() => editTitle(s)} className="text-left text-sm font-semibold hover:text-primary">
+                  <button
+                    onClick={() => editTitle(s)}
+                    className="text-left text-sm font-semibold hover:text-primary"
+                  >
                     {s.staff_title ?? <span className="text-muted-foreground">Add title</span>}
                   </button>
                 </Td>
-                <Td>{s.mfa ? <Pill tone="green">on</Pill> : <Pill tone="gold">not set up</Pill>}</Td>
+                <Td>
+                  {s.mfa ? <Pill tone="green">on</Pill> : <Pill tone="gold">not set up</Pill>}
+                </Td>
                 <Td className="whitespace-nowrap text-xs">{fmtDateTime(s.last_sign_in_at)}</Td>
                 <Td>
-                  {!self && (
+                  {!self && !s.is_protected && (
                     <SmallBtn danger onClick={() => removeStaff(s)} disabled={remove.isPending}>
                       Remove
                     </SmallBtn>
@@ -904,7 +1095,7 @@ export function IntegrityTab() {
     },
     onError: hzToast.fromError,
   });
-  if (isLoading) return <Spinner />;
+  if (isLoading) return <TableSkeleton />;
   return (
     <div className="flex flex-col gap-4">
       <Card>
@@ -1013,7 +1204,10 @@ export function OpportunitiesTab() {
       api(`/admin/candidates/${id}/request-consent`, { body: { fit_note } }),
     onSuccess: () => {
       inv();
-      hzToast.success("Consent requested", "We emailed the candidate to ask if we can share their profile.");
+      hzToast.success(
+        "Consent requested",
+        "We emailed the candidate to ask if we can share their profile.",
+      );
     },
     onError: hzToast.fromError,
   });
@@ -1044,7 +1238,13 @@ export function OpportunitiesTab() {
             value={f.company_name}
             onChange={(e) => setF({ ...f, company_name: e.target.value })}
           />
-          <HzSelect label="Role" size="lg" value={f.role_id} onChange={(v) => setF({ ...f, role_id: v })} options={ROLES.map((r) => ({ value: r.id, label: r.name }))} />
+          <HzSelect
+            label="Role"
+            size="lg"
+            value={f.role_id}
+            onChange={(v) => setF({ ...f, role_id: v })}
+            options={ROLES.map((r) => ({ value: r.id, label: r.name }))}
+          />
           <input
             className={`${inputCls} !py-2`}
             placeholder="Level"
@@ -1068,7 +1268,7 @@ export function OpportunitiesTab() {
         <ErrorNote error={create.error ?? shortlist.error ?? consent.error ?? outcome.error} />
       </Card>
       {isLoading ? (
-        <Spinner />
+        <TableSkeleton />
       ) : (
         (data ?? []).map((o) => (
           <Card key={o.id}>
@@ -1191,7 +1391,8 @@ export function SystemTab() {
                     }
                   },
                 });
-                if (v !== null) save.mutate({ key: f.key, enabled: f.enabled, value: JSON.parse(v) });
+                if (v !== null)
+                  save.mutate({ key: f.key, enabled: f.enabled, value: JSON.parse(v) });
               }}
             >
               Edit
@@ -1205,7 +1406,10 @@ export function SystemTab() {
               label: "Flag key",
               placeholder: "e.g. ai_models",
               confirmLabel: "Add flag",
-              validate: (s) => (/^[a-z0-9_]{2,60}$/.test(s) ? null : "Use lowercase letters, numbers and underscores."),
+              validate: (s) =>
+                /^[a-z0-9_]{2,60}$/.test(s)
+                  ? null
+                  : "Use lowercase letters, numbers and underscores.",
             });
             if (key) save.mutate({ key, enabled: true, value: {} });
           }}

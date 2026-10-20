@@ -10,16 +10,37 @@ const DEFAULT_MESSAGES = [
 /** The Huzzler mark, animated: the blob squishes, the H draws itself, a spark orbits. */
 export function HuzzlerMark({ size = 96 }: { size?: number }) {
   return (
-    <div className="relative grid place-items-center" style={{ width: size * 1.6, height: size * 1.6 }} aria-hidden>
-      <span className="hz-halo absolute rounded-full bg-primary/25" style={{ width: size, height: size }} />
-      <span className="hz-halo absolute rounded-full bg-primary/15" style={{ width: size, height: size, animationDelay: "0.6s" }} />
-      <span className="absolute left-1/2 top-1/2 -ml-1.5 -mt-1.5 h-3 w-3" style={{ ["--hz-orbit" as string]: `${size * 0.72}px` }}>
+    <div
+      className="relative grid place-items-center"
+      style={{ width: size * 1.6, height: size * 1.6 }}
+      aria-hidden
+    >
+      <span
+        className="hz-halo absolute rounded-full bg-primary/25"
+        style={{ width: size, height: size }}
+      />
+      <span
+        className="hz-halo absolute rounded-full bg-primary/15"
+        style={{ width: size, height: size, animationDelay: "0.6s" }}
+      />
+      <span
+        className="absolute left-1/2 top-1/2 -ml-1.5 -mt-1.5 h-3 w-3"
+        style={{ ["--hz-orbit" as string]: `${size * 0.72}px` }}
+      >
         <span className="hz-orbit block h-3 w-3 rounded-full bg-[color:var(--gold)] shadow-[0_0_12px_var(--gold)]" />
       </span>
-      <span className="absolute left-1/2 top-1/2 -ml-1 -mt-1 h-2 w-2" style={{ ["--hz-orbit" as string]: `${size * 0.6}px` }}>
+      <span
+        className="absolute left-1/2 top-1/2 -ml-1 -mt-1 h-2 w-2"
+        style={{ ["--hz-orbit" as string]: `${size * 0.6}px` }}
+      >
         <span className="hz-orbit-slow block h-2 w-2 rounded-full bg-[color:var(--brand-green)]" />
       </span>
-      <svg width={size} height={(size * 88) / 97} viewBox="0 0 97 88" className="hz-squish relative drop-shadow-[0_12px_24px_rgba(0,191,255,0.35)]">
+      <svg
+        width={size}
+        height={(size * 88) / 97}
+        viewBox="0 0 97 88"
+        className="hz-squish relative drop-shadow-[0_12px_24px_rgba(0,191,255,0.35)]"
+      >
         <path
           d="M0 23C0 10.2975 10.2975 0 23 0C41.7307 5.24201 52.0051 4.9214 70 0C82.7025 0 93 10.2975 93 23C90.3431 40.2497 90.598 49.3691 93 65C93 77.7025 82.7025 88 70 88C52.0056 83.8841 41.729 83.6021 23 88C10.2975 88 0 77.7025 0 65C1.71153 50.8483 2.0134 42.0503 0 23Z"
           fill="#00BFFF"
@@ -41,7 +62,17 @@ export function HuzzlerMark({ size = 96 }: { size?: number }) {
  * Branded loader for full-screen moments (app start, sign-in, route changes).
  * For page content prefer skeletons (static loading) from ./Skeleton.
  */
-export function HuzzlerLoader({ label, messages = DEFAULT_MESSAGES, fullScreen = false, size = 88 }: { label?: string; messages?: string[]; fullScreen?: boolean; size?: number }) {
+export function HuzzlerLoader({
+  label,
+  messages = DEFAULT_MESSAGES,
+  fullScreen = false,
+  size = 88,
+}: {
+  label?: string;
+  messages?: string[];
+  fullScreen?: boolean;
+  size?: number;
+}) {
   const [i, setI] = useState(0);
   useEffect(() => {
     if (label) return;
@@ -51,11 +82,22 @@ export function HuzzlerLoader({ label, messages = DEFAULT_MESSAGES, fullScreen =
   const text = label ?? messages[i];
 
   return (
-    <div role="status" aria-live="polite" className={`flex flex-col items-center justify-center gap-5 text-center ${fullScreen ? "fixed inset-0 z-[60] bg-background" : "py-16"}`}>
-      {fullScreen && <div className="pointer-events-none absolute left-1/2 top-1/3 h-72 w-72 -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" aria-hidden />}
+    <div
+      role="status"
+      aria-live="polite"
+      className={`flex flex-col items-center justify-center gap-5 text-center ${fullScreen ? "fixed inset-0 z-[60] bg-background" : "py-16"}`}
+    >
+      {fullScreen && (
+        <div
+          className="pointer-events-none absolute left-1/2 top-1/3 h-72 w-72 -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
+          aria-hidden
+        />
+      )}
       <HuzzlerMark size={size} />
       <div className="relative flex flex-col items-center gap-3">
-        <p key={text} className="hz-fade-up font-display text-sm font-semibold text-foreground/80">{text}</p>
+        <p key={text} className="hz-fade-up font-display text-sm font-semibold text-foreground/80">
+          {text}
+        </p>
         <div className="h-1 w-40 overflow-hidden rounded-full bg-muted" aria-hidden>
           <div className="hz-indeterminate h-full w-2/5 rounded-full bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
         </div>
@@ -67,5 +109,10 @@ export function HuzzlerLoader({ label, messages = DEFAULT_MESSAGES, fullScreen =
 
 /** Tiny inline spinner for buttons. */
 export function ButtonSpinner() {
-  return <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" aria-hidden />;
+  return (
+    <span
+      className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent"
+      aria-hidden
+    />
+  );
 }

@@ -79,7 +79,9 @@ export function HzSelect({
                 </span>
                 <span className="flex min-w-0 flex-col">
                   <SelectPrimitive.ItemText>{o.label}</SelectPrimitive.ItemText>
-                  {o.hint && <span className="text-xs font-normal text-muted-foreground">{o.hint}</span>}
+                  {o.hint && (
+                    <span className="text-xs font-normal text-muted-foreground">{o.hint}</span>
+                  )}
                 </span>
               </SelectPrimitive.Item>
             ))}

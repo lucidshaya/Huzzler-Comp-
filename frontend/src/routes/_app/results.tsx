@@ -17,6 +17,7 @@ import {
   ScoreBadge,
   Spinner,
 } from "@/components/app/ui";
+import { ListPageSkeleton } from "@/components/app/Skeleton";
 
 export const Route = createFileRoute("/_app/results")({
   head: () => ({ meta: [{ title: "Results · Huzzler" }] }),
@@ -57,12 +58,12 @@ type ResultsData = {
 };
 
 function Results() {
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["results"],
     queryFn: () => api<ResultsData>("/onboarding/results"),
   });
-  if (isLoading) return <Spinner />;
-  if (error || !data) return <ErrorNote error={error} />;
+  if (isLoading) return <ListPageSkeleton rows={5} label="Loading results" />;
+  if (error || !data) return <ErrorNote error={error} onRetry={() => refetch()} />;
   const r = data.result;
   const passed = r?.passed;
   return (

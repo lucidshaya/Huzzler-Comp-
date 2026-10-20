@@ -16,6 +16,7 @@ import {
   Spinner,
 } from "@/components/app/ui";
 import { hzConfirm } from "@/components/app/Dialogs";
+import { CardsPageSkeleton } from "@/components/app/Skeleton";
 
 export const Route = createFileRoute("/_app/offers")({
   head: () => ({ meta: [{ title: "Offers · Huzzler" }] }),
@@ -63,7 +64,7 @@ function Offers() {
     },
   });
   const [openId, setOpenId] = useState<string | null>(null);
-  if (isLoading) return <Spinner />;
+  if (isLoading) return <CardsPageSkeleton cards={2} label="Loading offers" />;
   const offers = data ?? [];
   const pending = offers.filter((o) => o.status === "pending");
   const accepted = offers.find((o) => o.status === "accepted");

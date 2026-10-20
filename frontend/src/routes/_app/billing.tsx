@@ -15,6 +15,7 @@ import {
   Spinner,
 } from "@/components/app/ui";
 import { hzConfirm } from "@/components/app/Dialogs";
+import { ListPageSkeleton } from "@/components/app/Skeleton";
 
 export const Route = createFileRoute("/_app/billing")({
   head: () => ({ meta: [{ title: "Billing · Huzzler" }] }),
@@ -45,7 +46,7 @@ type Summary = {
 function Billing() {
   const { data: me } = useMe();
   const qc = useQueryClient();
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["billing"],
     queryFn: () => api<Summary>("/billing"),
   });
@@ -59,8 +60,8 @@ function Billing() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["billing"] }),
   });
 
-  if (isLoading) return <Spinner />;
-  if (error || !data) return <ErrorNote error={error} />;
+  if (isLoading) return <ListPageSkeleton rows={4} label="Loading billing" />;
+  if (error || !data) return <ErrorNote error={error} onRetry={() => refetch()} />;
   const lapsed = data.status === "LAPSED";
   const monthlyActive =
     data.plan_id === "monthly" &&

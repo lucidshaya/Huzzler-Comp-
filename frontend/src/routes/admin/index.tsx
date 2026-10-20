@@ -13,6 +13,8 @@ import {
   Kanban,
   Mail,
   Users,
+  LifeBuoy,
+  Bot,
   UsersRound,
 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
@@ -23,6 +25,7 @@ import { Spinner } from "@/components/app/ui";
 import { OverviewTab } from "@/components/admin/Overview";
 import { MaintenanceToggle } from "@/components/admin/MaintenanceToggle";
 import { EmailsTab } from "@/components/admin/Emails";
+import { SupportTab, HelpBotTab } from "@/components/admin/SupportTabs";
 import {
   UsersTab,
   PaymentsTab,
@@ -56,6 +59,13 @@ const TABS = [
     roles: ["admin", "moderator", "content_reviewer", "partnerships"],
     el: UsersTab,
   },
+  {
+    key: "support",
+    label: "Support inbox",
+    icon: LifeBuoy,
+    roles: ["admin", "moderator"],
+    el: SupportTab,
+  },
   { key: "payments", label: "Payments", icon: CreditCard, roles: ["admin"], el: PaymentsTab },
   {
     key: "content",
@@ -88,6 +98,13 @@ const TABS = [
     el: OpportunitiesTab,
   },
   { key: "emails", label: "Emails", icon: Mail, roles: ["admin"], el: EmailsTab },
+  {
+    key: "helpbot",
+    label: "Help bot",
+    icon: Bot,
+    roles: ["admin", "content_reviewer"],
+    el: HelpBotTab,
+  },
   { key: "system", label: "Flags & audit", icon: Settings2, roles: ["admin"], el: SystemTab },
 ];
 
@@ -146,10 +163,7 @@ function Admin() {
             )}
             <ThemeToggle />
             <button
-              onClick={async () => {
-                await signOut();
-                navigate({ to: "/admin/login" });
-              }}
+              onClick={() => void signOut("/admin/login")}
               className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-bold text-muted-foreground hover:text-red-500"
             >
               <LogOut className="h-4 w-4" /> Sign out

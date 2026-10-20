@@ -44,7 +44,11 @@ export async function api<T = unknown>(
   }
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({}));
-  if (res.status === 503 && (data as { code?: string }).code === "MAINTENANCE" && typeof window !== "undefined")
+  if (
+    res.status === 503 &&
+    (data as { code?: string }).code === "MAINTENANCE" &&
+    typeof window !== "undefined"
+  )
     window.dispatchEvent(new Event(MAINTENANCE_EVENT));
   if (!res.ok)
     throw new ApiError(
@@ -71,3 +75,11 @@ export async function uploadFile(file: File, signPath = "/uploads/sign"): Promis
 }
 
 export const naira = (kobo: number) => `₦${(kobo / 100).toLocaleString("en-NG")}`;
+
+/** Only same-site, non-auth paths are allowed as post-login destinations (no open redirects). */
+export function safeNext(next?: string | null): string {
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\"))
+    return "/dashboard";
+  if (next.startsWith("/auth") || next.startsWith("/callback")) return "/dashboard";
+  return next;
+}

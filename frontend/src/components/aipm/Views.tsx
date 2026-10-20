@@ -18,7 +18,16 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { roleName } from "@/lib/journey";
-import { Card, EmptyState, ErrorNote, fmtDate, fmtDateTime, inputCls, Pill, Progress } from "@/components/app/ui";
+import {
+  Card,
+  EmptyState,
+  ErrorNote,
+  fmtDate,
+  fmtDateTime,
+  inputCls,
+  Pill,
+  Progress,
+} from "@/components/app/ui";
 import { CardSkeleton } from "@/components/app/Skeleton";
 import { HzSelect } from "@/components/app/HzSelect";
 import { hzConfirm } from "@/components/app/Dialogs";
@@ -30,7 +39,8 @@ export type AipmTab = "briefs" | "talent" | "board" | "reports";
 const useArchetypes = () =>
   useQuery({
     queryKey: ["catalogue"],
-    queryFn: () => api<{ archetypes: Array<{ id: string; name: string }> }>("/catalogue", { auth: false }),
+    queryFn: () =>
+      api<{ archetypes: Array<{ id: string; name: string }> }>("/catalogue", { auth: false }),
     staleTime: 3_600_000,
     select: (d) => d.archetypes ?? [],
   });
@@ -48,7 +58,17 @@ const LEVELS = [
   { value: "5", label: "Level 5 · Capstone", hint: "Discovery to demo day" },
 ];
 
-function ViewHeader({ chip, title, body, actions }: { chip: string; title: string; body: string; actions?: React.ReactNode }) {
+function ViewHeader({
+  chip,
+  title,
+  body,
+  actions,
+}: {
+  chip: string;
+  title: string;
+  body: string;
+  actions?: React.ReactNode;
+}) {
   return (
     <header className="flex flex-wrap items-start justify-between gap-4">
       <div className="flex flex-col gap-2">
@@ -76,19 +96,37 @@ const initials = (name: string) =>
 export function BriefsView({ onNext }: { onNext: () => void }) {
   const refresh = useRefresh();
   const archetypes = useArchetypes();
-  const briefs = useQuery({ queryKey: ["aipm", "briefs"], queryFn: () => api<any[]>("/aipm/briefs") });
+  const briefs = useQuery({
+    queryKey: ["aipm", "briefs"],
+    queryFn: () => api<any[]>("/aipm/briefs"),
+  });
   const [selected, setSelected] = useState<string | null>(null);
-  const [f, setF] = useState({ company: "", title: "", scope: "", timeline_weeks: "4", archetype_id: "", level: "2" });
+  const [f, setF] = useState({
+    company: "",
+    title: "",
+    scope: "",
+    timeline_weeks: "4",
+    archetype_id: "",
+    level: "2",
+  });
 
   const create = useMutation({
     mutationFn: () =>
       api<any>("/aipm/briefs", {
-        body: { ...f, timeline_weeks: Number(f.timeline_weeks), level: Number(f.level), archetype_id: f.archetype_id || archetypes.data?.[0]?.id },
+        body: {
+          ...f,
+          timeline_weeks: Number(f.timeline_weeks),
+          level: Number(f.level),
+          archetype_id: f.archetype_id || archetypes.data?.[0]?.id,
+        },
       }),
     onSuccess: (b) => {
       refresh();
       setSelected(b.id);
-      hzToast.success("Work breakdown ready", `${b.template?.role_tasks?.length ?? 0} tasks planned for ${b.company}. It's waiting for content review.`);
+      hzToast.success(
+        "Work breakdown ready",
+        `${b.template?.role_tasks?.length ?? 0} tasks planned for ${b.company}. It's waiting for content review.`,
+      );
     },
     onError: hzToast.fromError,
   });
@@ -116,18 +154,36 @@ export function BriefsView({ onNext }: { onNext: () => void }) {
             <AgentMark size={40} animated={create.isPending} />
             <div>
               <div className="font-display text-base font-bold">New project brief</div>
-              <div className="text-xs text-muted-foreground">The AI PM plans it; a content reviewer approves it.</div>
+              <div className="text-xs text-muted-foreground">
+                The AI PM plans it; a content reviewer approves it.
+              </div>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-semibold text-muted-foreground">Company</span>
-              <input required minLength={2} maxLength={120} value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} placeholder="e.g. Zowa Pay" className={`${inputCls} !py-2 text-sm`} />
+              <input
+                required
+                minLength={2}
+                maxLength={120}
+                value={f.company}
+                onChange={(e) => setF({ ...f, company: e.target.value })}
+                placeholder="e.g. Zowa Pay"
+                className={`${inputCls} !py-2 text-sm`}
+              />
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-semibold text-muted-foreground">Duration (weeks)</span>
-              <input type="number" required min={1} max={16} value={f.timeline_weeks} onChange={(e) => setF({ ...f, timeline_weeks: e.target.value })} className={`${inputCls} !py-2 text-sm`} />
+              <input
+                type="number"
+                required
+                min={1}
+                max={16}
+                value={f.timeline_weeks}
+                onChange={(e) => setF({ ...f, timeline_weeks: e.target.value })}
+                className={`${inputCls} !py-2 text-sm`}
+              />
             </label>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -143,12 +199,25 @@ export function BriefsView({ onNext }: { onNext: () => void }) {
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-semibold text-muted-foreground">Project level</span>
-              <HzSelect label="Project level" value={f.level} onChange={(v) => setF({ ...f, level: v })} options={LEVELS} />
+              <HzSelect
+                label="Project level"
+                value={f.level}
+                onChange={(v) => setF({ ...f, level: v })}
+                options={LEVELS}
+              />
             </label>
           </div>
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-semibold text-muted-foreground">Project title</span>
-            <input required minLength={3} maxLength={160} value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="e.g. Mobile checkout with USSD fallback" className={`${inputCls} !py-2 text-sm`} />
+            <input
+              required
+              minLength={3}
+              maxLength={160}
+              value={f.title}
+              onChange={(e) => setF({ ...f, title: e.target.value })}
+              placeholder="e.g. Mobile checkout with USSD fallback"
+              className={`${inputCls} !py-2 text-sm`}
+            />
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-semibold text-muted-foreground">Scope & goals</span>
@@ -164,7 +233,11 @@ export function BriefsView({ onNext }: { onNext: () => void }) {
             />
           </label>
           <ErrorNote error={create.error} />
-          <button type="submit" disabled={create.isPending} className="btn-duo !py-2.5 !px-5 text-sm">
+          <button
+            type="submit"
+            disabled={create.isPending}
+            className="btn-duo !py-2.5 !px-5 text-sm"
+          >
             {create.isPending ? (
               <>
                 <Wand2 className="h-4 w-4 animate-pulse" /> Planning the sprint…
@@ -181,7 +254,11 @@ export function BriefsView({ onNext }: { onNext: () => void }) {
           {briefs.isLoading ? (
             <CardSkeleton />
           ) : !active ? (
-            <EmptyState icon={Layers} title="No briefs yet" body="Generate your first sprint plan from a partner brief. It appears here with its milestones and role tasks." />
+            <EmptyState
+              icon={Layers}
+              title="No briefs yet"
+              body="Generate your first sprint plan from a partner brief. It appears here with its milestones and role tasks."
+            />
           ) : (
             <WbsPanel brief={active} onNext={onNext} />
           )}
@@ -199,7 +276,8 @@ export function BriefsView({ onNext }: { onNext: () => void }) {
                 className={`flex w-full flex-wrap items-center justify-between gap-2 py-3 text-left text-sm transition-colors hover:text-primary ${active?.id === b.id ? "text-primary" : ""}`}
               >
                 <span className="min-w-0">
-                  <span className="font-display font-bold">{b.company}</span> <span className="text-muted-foreground">· {b.title}</span>
+                  <span className="font-display font-bold">{b.company}</span>{" "}
+                  <span className="text-muted-foreground">· {b.title}</span>
                 </span>
                 <span className="flex items-center gap-2 text-xs text-muted-foreground">
                   <TemplateStatus status={b.template?.status} /> {fmtDate(b.created_at)}
@@ -229,12 +307,16 @@ function WbsPanel({ brief, onNext }: { brief: any; onNext: () => void }) {
     <>
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
         <div className="min-w-0">
-          <div className="text-xs font-semibold text-primary">Work Breakdown Structure · {brief.company}</div>
+          <div className="text-xs font-semibold text-primary">
+            Work Breakdown Structure · {brief.company}
+          </div>
           <h2 className="mt-1 font-display text-lg font-bold">{t.title ?? brief.title}</h2>
           <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">{t.brief}</p>
         </div>
         <div className="flex flex-col items-end gap-1.5">
-          <span className="rounded-full bg-primary/15 px-3 py-1 text-xs font-bold text-primary">{brief.timeline_weeks} weeks</span>
+          <span className="rounded-full bg-primary/15 px-3 py-1 text-xs font-bold text-primary">
+            {brief.timeline_weeks} weeks
+          </span>
           <TemplateStatus status={t.status} />
         </div>
       </div>
@@ -251,14 +333,21 @@ function WbsPanel({ brief, onNext }: { brief: any; onNext: () => void }) {
         <span>
           Level <b className="text-foreground">{brief.level}</b> v{t.version}
         </span>
-        <span>{brief.generated_by === "ai" ? "Planned by Claude" : "Planned from the Huzzler task library"}</span>
+        <span>
+          {brief.generated_by === "ai"
+            ? "Planned by Claude"
+            : "Planned from the Huzzler task library"}
+        </span>
       </div>
 
       <div>
         <div className="mb-2 text-xs font-semibold text-muted-foreground">Required roles</div>
         <div className="flex flex-wrap gap-2">
           {roles.map((r) => (
-            <span key={r} className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
+            <span
+              key={r}
+              className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-bold text-primary"
+            >
               {roleName(r)}
             </span>
           ))}
@@ -271,20 +360,30 @@ function WbsPanel({ brief, onNext }: { brief: any; onNext: () => void }) {
           return (
             <div key={m.key}>
               <div className="mb-1 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                <CalendarClock className="h-3.5 w-3.5 text-primary" /> {m.title} · day {m.day_offset}
+                <CalendarClock className="h-3.5 w-3.5 text-primary" /> {m.title} · day{" "}
+                {m.day_offset}
               </div>
               <div className="divide-y divide-border rounded-xl border border-border">
                 {mt.length === 0 ? (
-                  <div className="px-3 py-2.5 text-xs text-muted-foreground">No tasks in this milestone.</div>
+                  <div className="px-3 py-2.5 text-xs text-muted-foreground">
+                    No tasks in this milestone.
+                  </div>
                 ) : (
                   mt.map((x) => (
-                    <div key={x.key} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
+                    <div
+                      key={x.key}
+                      className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5"
+                    >
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full bg-muted px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{roleName(x.role_id)}</span>
+                          <span className="rounded-full bg-muted px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                            {roleName(x.role_id)}
+                          </span>
                           <span className="font-display text-sm font-bold">{x.title}</span>
                         </div>
-                        <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">{x.description}</div>
+                        <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                          {x.description}
+                        </div>
                       </div>
                       <span className="text-[11px] font-semibold text-muted-foreground">
                         {x.estimate_hours ? `${x.estimate_hours}h` : ""}
@@ -320,7 +419,10 @@ function WbsPanel({ brief, onNext }: { brief: any; onNext: () => void }) {
 export function TalentView({ onNext }: { onNext: () => void }) {
   const refresh = useRefresh();
   const archetypes = useArchetypes();
-  const { data, isLoading, error } = useQuery({ queryKey: ["aipm", "talent"], queryFn: () => api<any>("/aipm/talent") });
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["aipm", "talent"],
+    queryFn: () => api<any>("/aipm/talent"),
+  });
   const candidates: any[] = data?.candidates ?? [];
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
@@ -333,7 +435,8 @@ export function TalentView({ onNext }: { onNext: () => void }) {
   const [picked, setPicked] = useState<string[]>([]);
   const shown = candidates.filter((c) => c.archetype_id === current);
   const chosen = shown.filter((c) => picked.includes(c.user_id));
-  const tpl = data?.squad_templates?.[current] as { required: Record<string, number>; optional: string[] } | undefined;
+  const tpl = data?.squad_templates?.[current] as
+    { required: Record<string, number>; optional: string[] } | undefined;
   const archName = (id: string) => archetypes.data?.find((a) => a.id === id)?.name ?? id;
 
   const seats = useMemo(() => {
@@ -347,11 +450,15 @@ export function TalentView({ onNext }: { onNext: () => void }) {
   const tooBig = chosen.length + standins > (data?.max_team_size ?? 7);
 
   const draft = useMutation({
-    mutationFn: () => api<any>("/aipm/squads", { body: { archetype_id: current, user_ids: picked } }),
+    mutationFn: () =>
+      api<any>("/aipm/squads", { body: { archetype_id: current, user_ids: picked } }),
     onSuccess: (r) => {
       refresh();
       setPicked([]);
-      hzToast.success(`${r.name} formed`, `${r.members} builder${r.members === 1 ? "" : "s"}${r.standins ? ` and ${r.standins} stand-in${r.standins === 1 ? "" : "s"}` : ""}. Project 1 has started.`);
+      hzToast.success(
+        `${r.name} formed`,
+        `${r.members} builder${r.members === 1 ? "" : "s"}${r.standins ? ` and ${r.standins} stand-in${r.standins === 1 ? "" : "s"}` : ""}. Project 1 has started.`,
+      );
       onNext();
     },
     onError: hzToast.fromError,
@@ -360,13 +467,22 @@ export function TalentView({ onNext }: { onNext: () => void }) {
     mutationFn: () => api<{ formed: number }>("/aipm/matching/run", { method: "POST" }),
     onSuccess: (r) => {
       refresh();
-      if (r.formed) hzToast.success(`Formed ${r.formed} squad${r.formed === 1 ? "" : "s"}`, "Matching grouped people by role, skill level, time zone and hours.");
-      else hzToast.info("No new squads yet", "Not enough compatible people are waiting. Draft one by hand to use stand-ins.");
+      if (r.formed)
+        hzToast.success(
+          `Formed ${r.formed} squad${r.formed === 1 ? "" : "s"}`,
+          "Matching grouped people by role, skill level, time zone and hours.",
+        );
+      else
+        hzToast.info(
+          "No new squads yet",
+          "Not enough compatible people are waiting. Draft one by hand to use stand-ins.",
+        );
     },
     onError: hzToast.fromError,
   });
 
-  const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const toggle = (id: string) =>
+    setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   return (
     <div className="flex flex-col gap-8">
@@ -376,19 +492,34 @@ export function TalentView({ onNext }: { onNext: () => void }) {
         body="Everyone here passed onboarding and accepted an offer. Pick builders from one company type to form a squad; empty required seats get a Huzzler stand-in until a real person joins."
         actions={
           <>
-            <button type="button" onClick={() => auto.mutate()} disabled={auto.isPending} className="btn-duo-outline !py-2 !px-4 text-xs">
-              <Shuffle className="h-3.5 w-3.5" /> {auto.isPending ? "Matching…" : "Run auto-matching"}
+            <button
+              type="button"
+              onClick={() => auto.mutate()}
+              disabled={auto.isPending}
+              className="btn-duo-outline !py-2 !px-4 text-xs"
+            >
+              <Shuffle className="h-3.5 w-3.5" />{" "}
+              {auto.isPending ? "Matching…" : "Run auto-matching"}
             </button>
             <button
               type="button"
               onClick={async () => {
-                if (standins && !(await hzConfirm({ title: `Start with ${standins} stand-in${standins === 1 ? "" : "s"}?`, body: "Stand-ins complete their tasks with pre-written work so the squad isn't blocked, and are replaced as soon as a real person matches.", confirmLabel: "Form squad" }))) return;
+                if (
+                  standins &&
+                  !(await hzConfirm({
+                    title: `Start with ${standins} stand-in${standins === 1 ? "" : "s"}?`,
+                    body: "Stand-ins complete their tasks with pre-written work so the squad isn't blocked, and are replaced as soon as a real person matches.",
+                    confirmLabel: "Form squad",
+                  }))
+                )
+                  return;
                 draft.mutate();
               }}
               disabled={!chosen.length || tooBig || draft.isPending}
               className="btn-duo !py-2 !px-4 text-xs disabled:opacity-50"
             >
-              <Send className="h-3.5 w-3.5" /> {draft.isPending ? "Forming…" : `Draft squad (${chosen.length})`}
+              <Send className="h-3.5 w-3.5" />{" "}
+              {draft.isPending ? "Forming…" : `Draft squad (${chosen.length})`}
             </button>
           </>
         }
@@ -407,21 +538,42 @@ export function TalentView({ onNext }: { onNext: () => void }) {
                 setArchetype(v);
                 setPicked([]);
               }}
-              options={(archetypes.data ?? []).map((a) => ({ value: a.id, label: a.name, hint: `${counts[a.id] ?? 0} waiting` }))}
+              options={(archetypes.data ?? []).map((a) => ({
+                value: a.id,
+                label: a.name,
+                hint: `${counts[a.id] ?? 0} waiting`,
+              }))}
             />
           </label>
           <div className="mt-4 flex flex-col gap-2">
             {seats.map((s) => (
-              <div key={s.role} className="flex items-center justify-between rounded-xl border border-border bg-muted/30 px-3 py-2 text-xs">
+              <div
+                key={s.role}
+                className="flex items-center justify-between rounded-xl border border-border bg-muted/30 px-3 py-2 text-xs"
+              >
                 <span className="font-semibold">{roleName(s.role)}</span>
-                <span className={s.have >= s.need ? "font-bold text-primary" : "font-bold text-[color:var(--gold)]"}>
+                <span
+                  className={
+                    s.have >= s.need
+                      ? "font-bold text-primary"
+                      : "font-bold text-[color:var(--gold)]"
+                  }
+                >
                   {Math.min(s.have, s.need)}/{s.need}
                   {s.have < s.need ? " · stand-in" : " ✓"}
                 </span>
               </div>
             ))}
-            {tpl?.optional?.length ? <p className="text-[11px] text-muted-foreground">Optional seats: {tpl.optional.map(roleName).join(", ")}.</p> : null}
-            {tooBig && <p className="text-xs font-semibold text-red-500">That's more than {data?.max_team_size ?? 7} seats including stand-ins.</p>}
+            {tpl?.optional?.length ? (
+              <p className="text-[11px] text-muted-foreground">
+                Optional seats: {tpl.optional.map(roleName).join(", ")}.
+              </p>
+            ) : null}
+            {tooBig && (
+              <p className="text-xs font-semibold text-red-500">
+                That's more than {data?.max_team_size ?? 7} seats including stand-ins.
+              </p>
+            )}
           </div>
         </Card>
 
@@ -432,12 +584,19 @@ export function TalentView({ onNext }: { onNext: () => void }) {
               <CardSkeleton />
             </div>
           ) : shown.length === 0 ? (
-            <EmptyState icon={Users} title={`No one waiting for ${archName(current)}`} body="People appear here after they pass onboarding and accept an offer from this company type." />
+            <EmptyState
+              icon={Users}
+              title={`No one waiting for ${archName(current)}`}
+              body="People appear here after they pass onboarding and accept an offer from this company type."
+            />
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {shown.map((c) => {
                 const on = picked.includes(c.user_id);
-                const days = Math.max(0, Math.floor((Date.now() - new Date(c.waiting_since).getTime()) / 86_400_000));
+                const days = Math.max(
+                  0,
+                  Math.floor((Date.now() - new Date(c.waiting_since).getTime()) / 86_400_000),
+                );
                 return (
                   <button
                     key={c.user_id}
@@ -448,7 +607,9 @@ export function TalentView({ onNext }: { onNext: () => void }) {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-3">
-                        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary/15 font-display text-sm font-bold text-primary ring-2 ring-primary/25">{initials(c.name)}</div>
+                        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary/15 font-display text-sm font-bold text-primary ring-2 ring-primary/25">
+                          {initials(c.name)}
+                        </div>
                         <div className="min-w-0">
                           <div className="truncate font-display text-base font-bold">{c.name}</div>
                           <div className="truncate text-xs text-muted-foreground">
@@ -457,14 +618,18 @@ export function TalentView({ onNext }: { onNext: () => void }) {
                           </div>
                         </div>
                       </div>
-                      <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ${days >= 3 ? "bg-[color:var(--gold)]/15 text-[color:var(--gold)]" : "bg-primary/15 text-primary"}`}>
+                      <span
+                        className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ${days >= 3 ? "bg-[color:var(--gold)]/15 text-[color:var(--gold)]" : "bg-primary/15 text-primary"}`}
+                      >
                         {days === 0 ? "today" : `${days}d waiting`}
                       </span>
                     </div>
                     <div className="grid grid-cols-3 gap-2 rounded-xl border border-border bg-muted/30 p-3 text-xs">
                       <div>
                         <div className="text-[10px] text-muted-foreground">Assessment</div>
-                        <div className="font-display font-bold text-[color:var(--brand-green-deep)] dark:text-[color:var(--brand-green)]">{c.score !== null ? `${Math.round(c.score)}%` : "—"}</div>
+                        <div className="font-display font-bold text-[color:var(--brand-green-deep)] dark:text-[color:var(--brand-green)]">
+                          {c.score !== null ? `${Math.round(c.score)}%` : "—"}
+                        </div>
                       </div>
                       <div>
                         <div className="text-[10px] text-muted-foreground">Hours/week</div>
@@ -475,7 +640,9 @@ export function TalentView({ onNext }: { onNext: () => void }) {
                         <div className="font-display font-bold">{c.tz_band}</div>
                       </div>
                     </div>
-                    <div className="flex items-center justify-end border-t border-border pt-3 text-xs font-bold text-primary">{on ? "✓ Selected" : "Select"}</div>
+                    <div className="flex items-center justify-end border-t border-border pt-3 text-xs font-bold text-primary">
+                      {on ? "✓ Selected" : "Select"}
+                    </div>
                   </button>
                 );
               })}
@@ -499,7 +666,8 @@ export function TalentView({ onNext }: { onNext: () => void }) {
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground">
                     {archName(t.archetype_id)} · {real} builder{real === 1 ? "" : "s"}
-                    {ins ? ` · ${ins} stand-in${ins === 1 ? "" : "s"}` : ""} · since {fmtDate(t.created_at)}
+                    {ins ? ` · ${ins} stand-in${ins === 1 ? "" : "s"}` : ""} · since{" "}
+                    {fmtDate(t.created_at)}
                   </div>
                 </div>
               );
@@ -526,22 +694,38 @@ const PM_MOVES = COLUMNS.filter((c) => c.key !== "done");
 
 export function BoardView() {
   const refresh = useRefresh();
-  const { data, isLoading, error } = useQuery({ queryKey: ["aipm", "board"], queryFn: () => api<any>("/aipm/board"), refetchInterval: 60_000 });
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["aipm", "board"],
+    queryFn: () => api<any>("/aipm/board"),
+    refetchInterval: 60_000,
+  });
   const [team, setTeam] = useState("");
   const teams: any[] = data?.teams ?? [];
   const tasks: any[] = (data?.tasks ?? []).filter((t: any) => !team || t.team_id === team);
   const teamName = (id: string) => teams.find((t) => t.id === id)?.name ?? "";
 
   const move = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string; title: string }) => api(`/aipm/tasks/${id}/status`, { body: { status } }),
+    mutationFn: ({ id, status }: { id: string; status: string; title: string }) =>
+      api(`/aipm/tasks/${id}/status`, { body: { status } }),
     onSuccess: (_d, v) => {
       refresh();
-      hzToast.success("Task moved", `"${v.title}" is now ${COLUMNS.find((c) => c.key === v.status)?.label.toLowerCase()}. The squad was told in chat.`);
+      hzToast.success(
+        "Task moved",
+        `"${v.title}" is now ${COLUMNS.find((c) => c.key === v.status)?.label.toLowerCase()}. The squad was told in chat.`,
+      );
     },
     onError: hzToast.fromError,
   });
   const reassign = useMutation({
-    mutationFn: ({ id, member_id }: { id: string; member_id: string; title: string; name: string }) => api(`/aipm/tasks/${id}/reassign`, { body: { member_id } }),
+    mutationFn: ({
+      id,
+      member_id,
+    }: {
+      id: string;
+      member_id: string;
+      title: string;
+      name: string;
+    }) => api(`/aipm/tasks/${id}/reassign`, { body: { member_id } }),
     onSuccess: (_d, v) => {
       refresh();
       hzToast.success("Task reassigned", `"${v.title}" now belongs to ${v.name}.`);
@@ -549,8 +733,13 @@ export function BoardView() {
     onError: hzToast.fromError,
   });
   const standup = useMutation({
-    mutationFn: () => api<{ squads: number }>("/aipm/standups", { body: { team_id: team || null } }),
-    onSuccess: (r) => hzToast.success("Stand-up requested", `${r.squads} squad${r.squads === 1 ? "" : "s"} notified in chat and by notification.`),
+    mutationFn: () =>
+      api<{ squads: number }>("/aipm/standups", { body: { team_id: team || null } }),
+    onSuccess: (r) =>
+      hzToast.success(
+        "Stand-up requested",
+        `${r.squads} squad${r.squads === 1 ? "" : "s"} notified in chat and by notification.`,
+      ),
     onError: hzToast.fromError,
   });
 
@@ -563,10 +752,28 @@ export function BoardView() {
         actions={
           <>
             <div className="w-56">
-              <HzSelect label="Squad" value={team} onChange={setTeam} options={[{ value: "", label: "All active squads" }, ...teams.map((t) => ({ value: t.id, label: t.name, hint: `P${t.level} · ${t.project_title}` }))]} />
+              <HzSelect
+                label="Squad"
+                value={team}
+                onChange={setTeam}
+                options={[
+                  { value: "", label: "All active squads" },
+                  ...teams.map((t) => ({
+                    value: t.id,
+                    label: t.name,
+                    hint: `P${t.level} · ${t.project_title}`,
+                  })),
+                ]}
+              />
             </div>
-            <button type="button" onClick={() => standup.mutate()} disabled={standup.isPending || !teams.length} className="btn-duo !py-2.5 !px-4 text-xs disabled:opacity-50">
-              <Play className="h-3.5 w-3.5" /> {standup.isPending ? "Sending…" : "Request stand-up updates"}
+            <button
+              type="button"
+              onClick={() => standup.mutate()}
+              disabled={standup.isPending || !teams.length}
+              className="btn-duo !py-2.5 !px-4 text-xs disabled:opacity-50"
+            >
+              <Play className="h-3.5 w-3.5" />{" "}
+              {standup.isPending ? "Sending…" : "Request stand-up updates"}
             </button>
           </>
         }
@@ -580,33 +787,63 @@ export function BoardView() {
           <CardSkeleton />
         </div>
       ) : teams.length === 0 ? (
-        <EmptyState icon={Layers} title="No active squads" body="Form a squad in Talent & Squads; its first project and tasks appear here straight away." />
+        <EmptyState
+          icon={Layers}
+          title="No active squads"
+          body="Form a squad in Talent & Squads; its first project and tasks appear here straight away."
+        />
       ) : (
         <div className="-mx-4 overflow-x-auto px-4 pb-2 md:mx-0 md:px-0">
           <div className="grid min-w-[1100px] grid-cols-5 gap-4">
             {COLUMNS.map((col) => {
               const colTasks = tasks.filter((t) => t.status === col.key);
               return (
-                <div key={col.key} className={`card-duo flex flex-col gap-3 bg-muted/20 p-3 ${col.key === "blocked" && colTasks.length ? "ring-1 ring-[color:var(--fire)]/30" : ""}`}>
+                <div
+                  key={col.key}
+                  className={`card-duo flex flex-col gap-3 bg-muted/20 p-3 ${col.key === "blocked" && colTasks.length ? "ring-1 ring-[color:var(--fire)]/30" : ""}`}
+                >
                   <div className="flex items-center justify-between border-b border-border px-1 pb-2.5">
                     <span className="font-display text-sm font-bold">{col.label}</span>
-                    <span className="rounded-full bg-primary/15 px-2 py-0.5 text-xs font-bold text-primary">{colTasks.length}</span>
+                    <span className="rounded-full bg-primary/15 px-2 py-0.5 text-xs font-bold text-primary">
+                      {colTasks.length}
+                    </span>
                   </div>
                   <div className="flex flex-col gap-3">
-                    {colTasks.length === 0 && <div className="px-1 py-6 text-center text-xs text-muted-foreground">Nothing here.</div>}
+                    {colTasks.length === 0 && (
+                      <div className="px-1 py-6 text-center text-xs text-muted-foreground">
+                        Nothing here.
+                      </div>
+                    )}
                     {colTasks.map((t) => {
-                      const members: any[] = (data.members?.[t.team_id] ?? []).filter((m: any) => !m.is_standin && m.id !== t.assignee_member_id);
+                      const members: any[] = (data.members?.[t.team_id] ?? []).filter(
+                        (m: any) => !m.is_standin && m.id !== t.assignee_member_id,
+                      );
                       return (
-                        <div key={t.id} className={`rounded-xl border bg-card p-3.5 shadow-sm ${t.blocker || t.status === "blocked" ? "border-[color:var(--fire)]/50" : "border-border"}`}>
+                        <div
+                          key={t.id}
+                          className={`rounded-xl border bg-card p-3.5 shadow-sm ${t.blocker || t.status === "blocked" ? "border-[color:var(--fire)]/50" : "border-border"}`}
+                        >
                           <div className="flex items-center justify-between gap-2">
-                            {!team && <span className="truncate text-[10px] font-bold text-primary">{teamName(t.team_id)}</span>}
-                            <span className="ml-auto shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold uppercase text-muted-foreground">{roleName(t.role_id).split(" ")[0]}</span>
+                            {!team && (
+                              <span className="truncate text-[10px] font-bold text-primary">
+                                {teamName(t.team_id)}
+                              </span>
+                            )}
+                            <span className="ml-auto shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold uppercase text-muted-foreground">
+                              {roleName(t.role_id).split(" ")[0]}
+                            </span>
                           </div>
-                          <div className="mt-2 font-display text-xs font-bold leading-snug">{t.title}</div>
+                          <div className="mt-2 font-display text-xs font-bold leading-snug">
+                            {t.title}
+                          </div>
                           <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                            <span className="truncate font-semibold text-foreground">{t.assignee_name}</span>
+                            <span className="truncate font-semibold text-foreground">
+                              {t.assignee_name}
+                            </span>
                             {t.due_at && (
-                              <span className={`flex shrink-0 items-center gap-1 ${t.overdue ? "font-bold text-[color:var(--fire)]" : ""}`}>
+                              <span
+                                className={`flex shrink-0 items-center gap-1 ${t.overdue ? "font-bold text-[color:var(--fire)]" : ""}`}
+                              >
                                 <Clock className="h-3 w-3" /> {fmtDate(t.due_at)}
                               </span>
                             )}
@@ -627,8 +864,13 @@ export function BoardView() {
                                 placeholder="Move to…"
                                 value=""
                                 disabled={move.isPending}
-                                onChange={(v) => v && move.mutate({ id: t.id, status: v, title: t.title })}
-                                options={PM_MOVES.filter((m) => m.key !== t.status).map((m) => ({ value: m.key, label: m.label }))}
+                                onChange={(v) =>
+                                  v && move.mutate({ id: t.id, status: v, title: t.title })
+                                }
+                                options={PM_MOVES.filter((m) => m.key !== t.status).map((m) => ({
+                                  value: m.key,
+                                  label: m.label,
+                                }))}
                               />
                               {members.length > 0 && (
                                 <HzSelect
@@ -639,9 +881,19 @@ export function BoardView() {
                                   disabled={reassign.isPending}
                                   onChange={(v) => {
                                     const m = members.find((x) => x.id === v);
-                                    if (m) reassign.mutate({ id: t.id, member_id: m.id, title: t.title, name: m.name });
+                                    if (m)
+                                      reassign.mutate({
+                                        id: t.id,
+                                        member_id: m.id,
+                                        title: t.title,
+                                        name: m.name,
+                                      });
                                   }}
-                                  options={members.map((m) => ({ value: m.id, label: m.name, hint: roleName(m.role_id) }))}
+                                  options={members.map((m) => ({
+                                    value: m.id,
+                                    label: m.name,
+                                    hint: roleName(m.role_id),
+                                  }))}
                                 />
                               )}
                             </div>
@@ -679,8 +931,14 @@ const ACTION_LABEL: Record<string, string> = {
 export function ReportsView() {
   const refresh = useRefresh();
   const board = useQuery({ queryKey: ["aipm", "board"], queryFn: () => api<any>("/aipm/board") });
-  const reports = useQuery({ queryKey: ["aipm", "reports"], queryFn: () => api<any[]>("/aipm/reports") });
-  const activity = useQuery({ queryKey: ["aipm", "activity"], queryFn: () => api<any[]>("/aipm/activity") });
+  const reports = useQuery({
+    queryKey: ["aipm", "reports"],
+    queryFn: () => api<any[]>("/aipm/reports"),
+  });
+  const activity = useQuery({
+    queryKey: ["aipm", "activity"],
+    queryFn: () => api<any[]>("/aipm/activity"),
+  });
   const teams: any[] = board.data?.teams ?? [];
   const [team, setTeam] = useState("");
   const current = team || teams[0]?.id || "";
@@ -703,10 +961,22 @@ export function ReportsView() {
         actions={
           <>
             <div className="w-56">
-              <HzSelect label="Squad" value={current} onChange={setTeam} placeholder="No active squads" options={teams.map((t) => ({ value: t.id, label: t.name, hint: t.project_title }))} />
+              <HzSelect
+                label="Squad"
+                value={current}
+                onChange={setTeam}
+                placeholder="No active squads"
+                options={teams.map((t) => ({ value: t.id, label: t.name, hint: t.project_title }))}
+              />
             </div>
-            <button type="button" onClick={() => create.mutate()} disabled={!current || create.isPending} className="btn-duo !py-2.5 !px-5 text-xs disabled:opacity-50">
-              <FileBarChart2 className="h-4 w-4" /> {create.isPending ? "Compiling…" : "Create sponsor report"}
+            <button
+              type="button"
+              onClick={() => create.mutate()}
+              disabled={!current || create.isPending}
+              className="btn-duo !py-2.5 !px-5 text-xs disabled:opacity-50"
+            >
+              <FileBarChart2 className="h-4 w-4" />{" "}
+              {create.isPending ? "Compiling…" : "Create sponsor report"}
             </button>
           </>
         }
@@ -718,7 +988,11 @@ export function ReportsView() {
           <CardSkeleton />
         </div>
       ) : (reports.data ?? []).length === 0 ? (
-        <EmptyState icon={FileBarChart2} title="No sponsor reports yet" body="Pick a squad and create a report. It's saved here so you can share progress with the partner." />
+        <EmptyState
+          icon={FileBarChart2}
+          title="No sponsor reports yet"
+          body="Pick a squad and create a report. It's saved here so you can share progress with the partner."
+        />
       ) : (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
           {(reports.data ?? []).map((rep) => {
@@ -727,13 +1001,17 @@ export function ReportsView() {
               <div key={rep.id} className="card-duo flex flex-col gap-5 p-6">
                 <div className="flex items-start justify-between gap-3 border-b border-border pb-4">
                   <div className="min-w-0">
-                    <div className="text-xs font-semibold text-primary">Partner summary · {fmtDateTime(rep.created_at)}</div>
+                    <div className="text-xs font-semibold text-primary">
+                      Partner summary · {fmtDateTime(rep.created_at)}
+                    </div>
                     <div className="mt-0.5 font-display text-lg font-bold">{s.company}</div>
                     <div className="text-xs text-muted-foreground">
                       {s.team_name} · P{s.level} {s.project_title}
                     </div>
                   </div>
-                  <span className="shrink-0 rounded-full bg-[color:var(--brand-green)]/15 px-3 py-1 font-display text-xs font-bold text-[color:var(--brand-green-deep)] dark:text-[color:var(--brand-green)]">{s.completion_rate}% complete</span>
+                  <span className="shrink-0 rounded-full bg-[color:var(--brand-green)]/15 px-3 py-1 font-display text-xs font-bold text-[color:var(--brand-green-deep)] dark:text-[color:var(--brand-green)]">
+                    {s.completion_rate}% complete
+                  </span>
                 </div>
                 <div>
                   <Progress value={s.completion_rate ?? 0} />
@@ -741,12 +1019,18 @@ export function ReportsView() {
                     <span>
                       <b className="text-foreground">{s.tasks_done}</b>/{s.tasks_total} tasks done
                     </span>
-                    {s.blocked > 0 && <span className="font-semibold text-[color:var(--fire)]">{s.blocked} blocked</span>}
+                    {s.blocked > 0 && (
+                      <span className="font-semibold text-[color:var(--fire)]">
+                        {s.blocked} blocked
+                      </span>
+                    )}
                     <span>due {fmtDate(s.due_at)}</span>
                   </div>
                 </div>
                 <div>
-                  <div className="mb-2 text-xs font-semibold text-muted-foreground">Deliverables shipped</div>
+                  <div className="mb-2 text-xs font-semibold text-muted-foreground">
+                    Deliverables shipped
+                  </div>
                   {(s.deliverables_shipped ?? []).length === 0 ? (
                     <p className="text-xs text-muted-foreground">Nothing graded yet.</p>
                   ) : (
@@ -761,17 +1045,34 @@ export function ReportsView() {
                   )}
                 </div>
                 <div>
-                  <div className="mb-2 text-xs font-semibold text-muted-foreground">Squad performance</div>
+                  <div className="mb-2 text-xs font-semibold text-muted-foreground">
+                    Squad performance
+                  </div>
                   <div className="divide-y divide-border rounded-xl border border-border bg-muted/20 px-4">
                     {(s.members ?? []).map((m: any) => (
-                      <div key={m.name} className="flex flex-wrap items-center justify-between gap-2 py-3 text-xs">
+                      <div
+                        key={m.name}
+                        className="flex flex-wrap items-center justify-between gap-2 py-3 text-xs"
+                      >
                         <div className="min-w-0">
-                          <span className="font-display font-bold">{m.name}</span> <span className="text-muted-foreground">· {m.role}</span>
+                          <span className="font-display font-bold">{m.name}</span>{" "}
+                          <span className="text-muted-foreground">· {m.role}</span>
                           <div className="text-[11px] text-muted-foreground">
-                            {m.tasks_done}/{m.tasks_total} tasks · {m.checkins_14d} stand-ups in 14 days{m.avg_score !== null ? ` · avg ${m.avg_score}%` : ""}
+                            {m.tasks_done}/{m.tasks_total} tasks · {m.checkins_14d} stand-ups in 14
+                            days{m.avg_score !== null ? ` · avg ${m.avg_score}%` : ""}
                           </div>
                         </div>
-                        <Pill tone={m.rating === "Needs support" ? "gold" : m.rating === "No graded work yet" ? "muted" : "primary"}>{m.rating}</Pill>
+                        <Pill
+                          tone={
+                            m.rating === "Needs support"
+                              ? "gold"
+                              : m.rating === "No graded work yet"
+                                ? "muted"
+                                : "primary"
+                          }
+                        >
+                          {m.rating}
+                        </Pill>
                       </div>
                     ))}
                   </div>
@@ -785,8 +1086,13 @@ export function ReportsView() {
       <div className="card-duo p-6">
         <div className="mb-4 flex items-center justify-between">
           <span className="font-display text-base font-bold">Recent activity</span>
-          <button type="button" onClick={() => activity.refetch()} className="inline-flex items-center gap-1 text-xs font-bold text-muted-foreground hover:text-primary">
-            <RefreshCw className={`h-3.5 w-3.5 ${activity.isFetching ? "animate-spin" : ""}`} /> Refresh
+          <button
+            type="button"
+            onClick={() => activity.refetch()}
+            className="inline-flex items-center gap-1 text-xs font-bold text-muted-foreground hover:text-primary"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${activity.isFetching ? "animate-spin" : ""}`} />{" "}
+            Refresh
           </button>
         </div>
         {(activity.data ?? []).length === 0 ? (
@@ -794,21 +1100,34 @@ export function ReportsView() {
         ) : (
           <div className="divide-y divide-border">
             {(activity.data ?? []).map((a) => (
-              <div key={a.id} className="flex flex-col gap-1.5 py-3.5 md:flex-row md:items-center md:justify-between">
+              <div
+                key={a.id}
+                className="flex flex-col gap-1.5 py-3.5 md:flex-row md:items-center md:justify-between"
+              >
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-display text-sm font-bold">{ACTION_LABEL[a.action] ?? a.action}</span>
-                    <span className="text-xs text-muted-foreground">· {fmtDateTime(a.created_at)}</span>
+                    <span className="font-display text-sm font-bold">
+                      {ACTION_LABEL[a.action] ?? a.action}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      · {fmtDateTime(a.created_at)}
+                    </span>
                   </div>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     by {a.actor?.full_name ?? a.actor?.username ?? "system"}
                     {a.details?.company ? ` · ${a.details.company}` : ""}
-                    {a.details?.from && a.details?.to ? ` · ${a.details.from} → ${a.details.to}` : ""}
+                    {a.details?.from && a.details?.to
+                      ? ` · ${a.details.from} → ${a.details.to}`
+                      : ""}
                     {typeof a.details?.formed === "number" ? ` · ${a.details.formed} squad(s)` : ""}
                   </p>
                 </div>
                 <span className="inline-flex w-fit items-center gap-1 rounded-full bg-primary/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-primary">
-                  {a.action.startsWith("aipm.") ? <CheckCircle2 className="h-3 w-3" /> : <ShieldAlert className="h-3 w-3" />}
+                  {a.action.startsWith("aipm.") ? (
+                    <CheckCircle2 className="h-3 w-3" />
+                  ) : (
+                    <ShieldAlert className="h-3 w-3" />
+                  )}
                   {a.action.split(".")[0]}
                 </span>
               </div>

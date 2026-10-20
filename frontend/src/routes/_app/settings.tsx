@@ -49,10 +49,7 @@ function Settings() {
   });
   const del = useMutation({
     mutationFn: () => api("/me", { method: "DELETE", body: { confirm: "DELETE" } }),
-    onSuccess: async () => {
-      await signOut();
-      window.location.href = "/";
-    },
+    onSuccess: () => void signOut("/"),
   });
   if (!me) return null;
 

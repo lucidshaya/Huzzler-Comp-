@@ -107,7 +107,7 @@ async function seedAdmin() {
   } else {
     await db.auth.admin.updateUserById(user.id, { password: env.ADMIN_PASSWORD });
   }
-  const { error } = await db.from("profiles").update({ username: env.ADMIN_USERNAME.toLowerCase(), app_role: "admin", full_name: "Huzzler Admin" }).eq("id", user.id);
+  const { error } = await db.from("profiles").update({ username: env.ADMIN_USERNAME.toLowerCase(), app_role: "admin", full_name: "Huzzler Admin", is_protected: true }).eq("id", user.id);
   if (error) throw error;
   console.log(`✓ admin: username "${env.ADMIN_USERNAME}" (sign in at /admin/login)`);
 }

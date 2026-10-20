@@ -97,3 +97,11 @@ describe("route wrapper", () => {
     expect((await request(app).get("/void")).body).toEqual({ ok: true });
   });
 });
+
+describe("help bot tokenizer", () => {
+  it("normalises words, drops stop words and handles naira", async () => {
+    const { tokenize } = await import("../src/services/help.js");
+    expect(tokenize("How do I get my ₦5,000 refund?")).toEqual(["get", "naira", "000", "refund"]);
+    expect(tokenize("Payments failing")).toEqual(["payment", "fail"]);
+  });
+});

@@ -6,8 +6,7 @@ import { CONSENT_VERSIONS, REQUIRED_CONSENTS, type ConsentType } from "../domain
 import { atLeast, hasPaidAccess } from "../domain/journey.js";
 import { badRequest, conflict, forbidden, notFound } from "../lib/errors.js";
 import { getJourney, transition, advanceTo } from "./journey.js";
-import { sendEmail } from "../lib/notify.js";
-import { render } from "../lib/templates.js";
+import { sendEmail, emailLayout, escapeHtml } from "../lib/notify.js";
 
 export async function getProfile(userId: string) {
   return must(await db.from("profiles").select("*").eq("id", userId).single(), "profile");
@@ -129,11 +128,7 @@ export async function beginOnboarding(userId: string) {
 
 const hashToken = (t: string) => crypto.createHash("sha256").update(t).digest("hex");
 
-const GUARDIAN_EMAIL = `<p>Hello {{guardian_name}},</p>
-<p>{{child_first_name}} (aged 17) has asked you to approve their Huzzler account. Huzzler is a paid (₦5,000 one-time or ₦2,500/month) skills programme where young people complete assessments and team projects and earn a certificate.</p>
-<p>Before they can pay, Nigerian data protection rules require a parent or guardian to consent to Huzzler processing their data, including AI grading of their work and processing outside Nigeria.</p>
-<p><a href="{{link}}">Review and respond</a> (link expires in 7 days).</p>
-<p>If you don't know who this is, you can ignore this email.</p>`;
+
 
 export async function requestGuardianConsent(userId: string, input: { guardian_name: string; guardian_email: string; guardian_phone?: string; relationship: string }) {
   const profile = await getProfile(userId);
@@ -155,10 +150,17 @@ export async function requestGuardianConsent(userId: string, input: { guardian_n
     "guardian consent",
   );
   const link = `${env.APP_URL}/guardian/${token}`;
+  const child = escapeHtml((profile.full_name ?? "Your child").split(" ")[0]);
   await sendEmail(
     input.guardian_email,
     "Please approve a Huzzler account",
-    render(GUARDIAN_EMAIL, { guardian_name: input.guardian_name, child_first_name: (profile.full_name ?? "Your child").split(" ")[0], link }),
+    emailLayout(
+      `Hello ${input.guardian_name},`,
+      `<p>${child} (aged 17) has asked you to approve their Huzzler account. Huzzler is a paid (₦5,000 one-time or ₦2,500/month) skills programme where young people complete assessments and team projects and earn a certificate.</p>
+<p>Before they can pay, Nigerian data protection rules require a parent or guardian to consent to Huzzler processing their data, including AI-assisted grading of their work and processing outside Nigeria.</p>
+<p>The link expires in 7 days. If you don't know who this is, you can ignore this email.</p>`,
+      { label: "Review and respond", url: link },
+    ),
   );
   return { sent: true, ...(env.NODE_ENV !== "production" ? { devLink: link } : {}) };
 }

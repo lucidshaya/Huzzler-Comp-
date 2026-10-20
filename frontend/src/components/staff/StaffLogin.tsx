@@ -8,9 +8,24 @@ import { markStaffBrowser } from "@/lib/siteStatus";
 
 export type StaffPortal = "admin" | "aipm";
 
-const PORTALS: Record<StaffPortal, { name: string; tagline: string; whoami: string; home: "/admin" | "/aipm"; logo: string }> = {
-  admin: { name: "Huzzler Admin", tagline: "Staff only. Every action is audited.", whoami: "/admin/whoami", home: "/admin", logo: "/huzzler-mark.svg" },
-  aipm: { name: "AI PM Portal", tagline: "Project managers and admins. Same staff sign-in as Admin.", whoami: "/aipm/whoami", home: "/aipm", logo: "/hustler-agent.svg" },
+const PORTALS: Record<
+  StaffPortal,
+  { name: string; tagline: string; whoami: string; home: "/admin" | "/aipm"; logo: string }
+> = {
+  admin: {
+    name: "Huzzler Admin",
+    tagline: "Staff only. Every action is audited.",
+    whoami: "/admin/whoami",
+    home: "/admin",
+    logo: "/huzzler-mark.svg",
+  },
+  aipm: {
+    name: "AI PM Portal",
+    tagline: "Project managers and admins. Same staff sign-in as Admin.",
+    whoami: "/aipm/whoami",
+    home: "/aipm",
+    logo: "/hustler-agent.svg",
+  },
 };
 
 /** Staff sign-in (username + password, then TOTP when required) shared by /admin and /aipm. */
@@ -97,7 +112,11 @@ export function StaffLogin({ portal }: { portal: StaffPortal }) {
     <div className="flex min-h-screen items-center justify-center bg-charcoal px-5 text-white">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex items-center gap-3">
-          <img src={p.logo} alt="Huzzler" className={`h-10 w-10 ${portal === "aipm" ? "animate-breathe" : ""}`} />
+          <img
+            src={p.logo}
+            alt="Huzzler"
+            className={`h-10 w-10 ${portal === "aipm" ? "animate-breathe" : ""}`}
+          />
           <div>
             <div className="font-display text-xl font-bold">{p.name}</div>
             <div className="text-xs text-white/50">{p.tagline}</div>
@@ -140,7 +159,9 @@ export function StaffLogin({ portal }: { portal: StaffPortal }) {
               href={portal === "admin" ? "/aipm/login" : "/admin/login"}
               className="mt-1 text-center text-xs font-semibold text-white/50 hover:text-white"
             >
-              {portal === "admin" ? "Project manager? Open the AI PM portal" : "Go to Huzzler Admin instead"}
+              {portal === "admin"
+                ? "Project manager? Open the AI PM portal"
+                : "Go to Huzzler Admin instead"}
             </a>
           </form>
         ) : (

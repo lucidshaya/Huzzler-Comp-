@@ -187,7 +187,11 @@ function ProfileStep({ onDone }: { onDone: () => void }) {
             label="Hours you can give per week"
             value={String(form.hours_per_week)}
             onChange={(v) => setForm({ ...form, hours_per_week: Number(v) })}
-            options={[5, 8, 10, 15, 20, 25, 30].map((h) => ({ value: String(h), label: `${h} hours`, hint: h >= 15 ? "Faster progress through projects" : undefined }))}
+            options={[5, 8, 10, 15, 20, 25, 30].map((h) => ({
+              value: String(h),
+              label: `${h} hours`,
+              hint: h >= 15 ? "Faster progress through projects" : undefined,
+            }))}
           />
         </Field>
       </div>

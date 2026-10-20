@@ -4,7 +4,6 @@ import { api, MAINTENANCE_EVENT } from "./api";
 
 export type SiteStatus = { maintenance: { enabled: boolean; message: string; eta: string | null } };
 
-
 const STAFF_KEY = "huzzler-staff-preview";
 /** Browsers that have signed in to a staff portal can still browse the site during maintenance. */
 export const markStaffBrowser = () => {

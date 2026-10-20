@@ -8,7 +8,8 @@ export type AiFeature =
   | "integrity_review"
   | "demo_grading"
   | "content_batch"
-  | "aipm_wbs";
+  | "aipm_wbs"
+  | "help_bot";
 
 export type FeatureConfig = { model: string; maxTokens: number; effort: "low" | "medium" | "high" };
 
@@ -24,6 +25,7 @@ const DEFAULTS: Record<AiFeature, FeatureConfig> = {
   demo_grading: { model: "claude-haiku-5-5", maxTokens: 6000, effort: "medium" },
   content_batch: { model: "claude-haiku-5-5", maxTokens: 16000, effort: "medium" },
   aipm_wbs: { model: "claude-haiku-5-5", maxTokens: 8000, effort: "medium" },
+  help_bot: { model: "claude-haiku-5-5", maxTokens: 1200, effort: "low" },
 };
 
 let cache: { at: number; overrides: Partial<Record<AiFeature, Partial<FeatureConfig>>> } | null = null;

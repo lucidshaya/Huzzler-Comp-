@@ -20,18 +20,40 @@ export function MaintenanceGate({ children }: { children: ReactNode }) {
     return (
       <>
         <div className="sticky top-0 z-[60] flex items-center justify-center gap-2 bg-[color:var(--gold)] px-4 py-1.5 text-center text-xs font-bold text-charcoal">
-          <Wrench className="h-3.5 w-3.5" /> Maintenance mode is on. Learners see the maintenance page; you're previewing as staff.
+          <Wrench className="h-3.5 w-3.5" /> Maintenance mode is on. Learners see the maintenance
+          page; you're previewing as staff.
         </div>
         {children}
       </>
     );
-  return <MaintenanceScreen message={m.message} eta={m.eta} onRetry={() => status.refetch()} checking={status.isFetching} />;
+  return (
+    <MaintenanceScreen
+      message={m.message}
+      eta={m.eta}
+      onRetry={() => status.refetch()}
+      checking={status.isFetching}
+    />
+  );
 }
 
-function MaintenanceScreen({ message, eta, onRetry, checking }: { message: string; eta: string | null; onRetry: () => void; checking: boolean }) {
+function MaintenanceScreen({
+  message,
+  eta,
+  onRetry,
+  checking,
+}: {
+  message: string;
+  eta: string | null;
+  onRetry: () => void;
+  checking: boolean;
+}) {
   const back = eta ? new Date(eta) : null;
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-charcoal px-5 text-white" role="status" aria-live="polite">
+    <div
+      className="flex min-h-screen flex-col items-center justify-center bg-charcoal px-5 text-white"
+      role="status"
+      aria-live="polite"
+    >
       <div className="hz-fade-up flex w-full max-w-md flex-col items-center gap-6 text-center">
         <img src="/huzzler-logo-darkmode.svg" alt="Huzzler" className="h-8 w-auto" />
         <div className="relative">
@@ -47,14 +69,28 @@ function MaintenanceScreen({ message, eta, onRetry, checking }: { message: strin
         {back && back.getTime() > Date.now() && (
           <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white/80">
             <Clock className="h-4 w-4 text-primary" />
-            Expected back {back.toLocaleString("en-NG", { weekday: "short", hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}
+            Expected back{" "}
+            {back.toLocaleString("en-NG", {
+              weekday: "short",
+              hour: "2-digit",
+              minute: "2-digit",
+              day: "numeric",
+              month: "short",
+            })}
           </div>
         )}
         <button type="button" onClick={onRetry} disabled={checking} className="btn-duo">
-          <RefreshCw className={`h-4 w-4 ${checking ? "animate-spin" : ""}`} /> {checking ? "Checking…" : "Check again"}
+          <RefreshCw className={`h-4 w-4 ${checking ? "animate-spin" : ""}`} />{" "}
+          {checking ? "Checking…" : "Check again"}
         </button>
         <p className="text-xs text-white/40">
-          Questions? <a href="mailto:support@huzzler.app" className="font-semibold text-white/60 underline hover:text-white">support@huzzler.app</a>
+          Questions?{" "}
+          <a
+            href="mailto:support@huzzler.app"
+            className="font-semibold text-white/60 underline hover:text-white"
+          >
+            support@huzzler.app
+          </a>
         </p>
       </div>
     </div>

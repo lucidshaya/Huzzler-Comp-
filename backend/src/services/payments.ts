@@ -3,11 +3,12 @@ import { db, must, ok } from "../lib/supabase.js";
 import { env } from "../config/env.js";
 import { logger } from "../lib/logger.js";
 import { audit } from "../lib/audit.js";
-import { notify, emailUser } from "../lib/notify.js";
+import { notify, emailUser, emailLayout } from "../lib/notify.js";
 import { badRequest, conflict, forbidden, notFound } from "../lib/errors.js";
 import { GRACE_DAYS, REFUND_WINDOW_HOURS } from "../domain/constants.js";
 import { hasPaidAccess, PAID_STATUSES } from "../domain/journey.js";
-import { paystack, type PaystackTransaction } from "./paystack.js";
+import { paystack, PaystackError, type PaystackTransaction } from "./paystack.js";
+import { HttpError } from "../lib/errors.js";
 import { getJourney, transition } from "./journey.js";
 import { getProfile } from "./profile.js";
 
@@ -46,14 +47,28 @@ export async function initializePayment(userId: string, planId: PlanId) {
   const reference = `hz_${planId === "monthly" ? "m" : "o"}_${crypto.randomBytes(9).toString("hex")}`;
   ok(await db.from("payments").insert({ user_id: userId, plan_id: planId, reference, amount_kobo: plan.amount_kobo, status: "pending" }), "payment insert");
 
-  const init = await paystack.initialize({
-    email,
-    amount: plan.amount_kobo,
-    reference,
-    callback_url: `${env.APP_URL}/billing/callback`,
-    metadata: { user_id: userId, plan_id: planId, upgrade: upgrading },
-    ...(planId === "monthly" ? { plan: await monthlyPlanCode() } : {}),
-  });
+  let init;
+  try {
+    init = await paystack.initialize({
+      email,
+      amount: plan.amount_kobo,
+      reference,
+      callback_url: `${env.APP_URL}/billing/callback`,
+      metadata: { user_id: userId, plan_id: planId, upgrade: upgrading },
+      ...(planId === "monthly" ? { plan: await monthlyPlanCode() } : {}),
+    });
+  } catch (err) {
+    // Don't leave a dangling pending payment, and tell the user something they can act on.
+    await db.from("payments").update({ status: "failed", raw: { init_error: String(err) } }).eq("reference", reference);
+    logger.error({ err: String(err), reference }, "Paystack initialize failed");
+    if (err instanceof PaystackError && err.status < 500) {
+      const msg = /email/i.test(err.providerMessage)
+        ? "Paystack couldn't accept the email on your account. Update your email in Settings or contact support."
+        : `Paystack couldn't start the payment: ${err.providerMessage}`;
+      throw new HttpError(400, msg, "PAYMENT_INIT_FAILED");
+    }
+    throw new HttpError(502, "We couldn't reach Paystack. Please try again in a moment.", "PAYMENT_PROVIDER_DOWN");
+  }
   return { reference, authorization_url: init.authorization_url, access_code: init.access_code };
 }
 
@@ -147,7 +162,11 @@ export async function applySuccessfulCharge(tx: PaystackTransaction, via: "verif
 }
 
 const receiptHtml = (planName: string, kobo: number, ref: string, paidAt: string | null) =>
-  `<h2>Thanks for your payment</h2><p>Plan: <b>${planName}</b><br/>Amount: <b>₦${(kobo / 100).toLocaleString("en-NG")}</b><br/>Reference: ${ref}<br/>Date: ${new Date(paidAt ?? Date.now()).toDateString()}</p><p>You can see your billing history any time on the Billing page.</p>`;
+  emailLayout(
+    "Thanks for your payment",
+    `<p>Plan: <b>${planName}</b><br/>Amount: <b>₦${(kobo / 100).toLocaleString("en-NG")}</b><br/>Reference: ${ref}<br/>Date: ${new Date(paidAt ?? Date.now()).toDateString()}</p><p>Your billing history is always on the Billing page.</p>`,
+    { label: "Start your onboarding tests", url: `${env.APP_URL}/tests` },
+  );
 
 async function userForCustomer(customerCode: string, metaUserId?: string): Promise<string | null> {
   if (metaUserId) return metaUserId;
@@ -247,7 +266,11 @@ async function startGrace(userId: string) {
   const until = new Date(Date.now() + GRACE_DAYS * DAY).toISOString();
   await db.from("user_journey").update({ grace_until: until }).eq("user_id", userId);
   await notify(userId, "billing.grace", "Payment didn't go through", `Renew within ${GRACE_DAYS} days to keep your place on your team.`);
-  await emailUser(userId, "Your Huzzler payment didn't go through", `<p>We couldn't renew your monthly plan. Renew within ${GRACE_DAYS} days to keep your place on your team. Your progress is saved either way.</p><p><a href="${env.APP_URL}/billing">Go to Billing</a></p>`);
+  await emailUser(
+    userId,
+    "Your Huzzler payment didn't go through",
+    emailLayout("Your payment didn't go through", `<p>We couldn't renew your monthly plan. Renew within ${GRACE_DAYS} days to keep your place on your team. Your progress is saved either way.</p>`, { label: "Go to Billing", url: `${env.APP_URL}/billing` }),
+  );
 }
 
 /** Daily: start grace for expired access, lapse users whose grace ran out. Returns lapsed user ids. */

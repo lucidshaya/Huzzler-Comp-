@@ -19,6 +19,7 @@ import {
 } from "@/components/app/ui";
 import { Appeal } from "@/components/app/Appeal";
 import { HzSelect } from "@/components/app/HzSelect";
+import { DetailSkeleton } from "@/components/app/Skeleton";
 
 export const Route = createFileRoute("/_app/workspace/task/$taskId")({
   head: () => ({ meta: [{ title: "Task · Huzzler" }] }),
@@ -67,7 +68,7 @@ function TaskPage() {
   const { taskId } = Route.useParams();
   const { data: me } = useMe();
   const qc = useQueryClient();
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["task", taskId],
     queryFn: () => api<Detail>(`/tasks/${taskId}`),
     refetchInterval: (q) =>
@@ -82,8 +83,8 @@ function TaskPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["task", taskId] }),
   });
 
-  if (isLoading || !me) return <Spinner />;
-  if (error || !data) return <ErrorNote error={error} />;
+  if (isLoading || !me) return <DetailSkeleton label="Loading task" />;
+  if (error || !data) return <ErrorNote error={error} onRetry={() => refetch()} />;
   const { task } = data;
   const mine = task.assignee_id === me.user.id;
   const readOnly = me.journey.status === "LAPSED" || task.project.status !== "active";

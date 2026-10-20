@@ -64,10 +64,14 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
           {expired ? r.title : "This page didn't load"}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          {expired ? r.message : "Something went wrong on our end. Try again — and if it keeps happening, head back to your dashboard."}
+          {expired
+            ? r.message
+            : "Something went wrong on our end. Try again — and if it keeps happening, head back to your dashboard."}
         </p>
         {import.meta.env.DEV && !expired && (
-          <pre className="mt-4 max-h-40 w-full overflow-auto rounded-lg bg-muted p-3 text-left text-xs text-red-500">{error instanceof Error ? error.message : String(error)}</pre>
+          <pre className="mt-4 max-h-40 w-full overflow-auto rounded-lg bg-muted p-3 text-left text-xs text-red-500">
+            {error instanceof Error ? error.message : String(error)}
+          </pre>
         )}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           {expired ? (
@@ -103,7 +107,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap",
       },
     ],
     scripts: [
@@ -128,7 +132,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>

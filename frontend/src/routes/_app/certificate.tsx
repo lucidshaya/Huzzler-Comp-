@@ -20,6 +20,7 @@ import {
   ScoreBadge,
   Spinner,
 } from "@/components/app/ui";
+import { ListPageSkeleton } from "@/components/app/Skeleton";
 
 export const Route = createFileRoute("/_app/certificate")({
   head: () => ({ meta: [{ title: "Certificate · Huzzler" }] }),
@@ -42,12 +43,12 @@ type Status = {
 
 function Certificate() {
   const { data: me } = useMe();
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["certification"],
     queryFn: () => api<Status>("/certification"),
   });
-  if (isLoading || !me) return <Spinner />;
-  if (error || !data) return <ErrorNote error={error} />;
+  if (isLoading || !me) return <ListPageSkeleton rows={4} label="Loading certificate" />;
+  if (error || !data) return <ErrorNote error={error} onRetry={() => refetch()} />;
   const code = data.pdf?.cert_code;
   const verifyUrl = code ? `${window.location.origin}/verify/${code}` : "";
 
