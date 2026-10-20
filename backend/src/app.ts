@@ -11,6 +11,7 @@ import { meRouter } from "./routes/me.js";
 import { billingRouter } from "./routes/billing.js";
 import { onboardingRouter } from "./routes/onboarding.js";
 import { teamRouter } from "./routes/team.js";
+import { supportRouter } from "./routes/support.js";
 import { adminRouter, adminAuthRouter } from "./routes/admin.js";
 import { requireAuth } from "./middleware/auth.js";
 
@@ -30,6 +31,7 @@ export function createApp() {
   app.use("/api", limiter(60_000, 300));
   app.use(["/api/billing", "/api/webhooks"], limiter(60_000, 30));
   app.use("/api/mentor", limiter(60_000, 20));
+  app.use(["/api/support", "/api/help"], limiter(60_000, 30));
   app.use(["/api/admin/auth", "/api/guardian"], limiter(15 * 60_000, 20));
 
   app.get("/health", (_req, res) => res.json({ ok: true }));
@@ -40,6 +42,7 @@ export function createApp() {
   app.use("/api/billing", billingRouter);
   app.use("/api/onboarding", onboardingRouter);
   app.use("/api/admin", adminRouter);
+  app.use("/api", supportRouter);
   app.use("/api", teamRouter);
 
   app.use((_req, res) => res.status(404).json({ error: "Not found" }));

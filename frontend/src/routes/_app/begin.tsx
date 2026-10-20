@@ -159,7 +159,7 @@ function BeginSteps({ status, minor }: { status: string; minor: boolean }) {
             {x.done ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
           </span>
           <span
-            className={`hidden text-sm font-semibold sm:inline ${i === current ? "text-foreground" : "text-muted-foreground"}`}
+            className={`text-xs font-semibold sm:text-sm ${i === current ? "text-foreground" : "text-muted-foreground"}`}
           >
             {x.label}
           </span>

@@ -9,7 +9,8 @@ export const getRouter = () => {
     defaultOptions: {
       queries: {
         // Client errors (expired session, not allowed, not found) won't fix themselves: show them now.
-        retry: (count, err) => !(err instanceof ApiError && err.status >= 400 && err.status < 500) && count < 2,
+        retry: (count, err) =>
+          !(err instanceof ApiError && err.status >= 400 && err.status < 500) && count < 2,
         refetchOnWindowFocus: false,
       },
     },

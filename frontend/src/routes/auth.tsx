@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowRight, Eye, EyeOff } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Github, MailCheck } from "lucide-react";
+import { ButtonSpinner } from "@/components/app/Loader";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
+import { safeNext } from "@/lib/api";
 
 export const Route = createFileRoute("/auth")({
   validateSearch: z.object({
     mode: z.enum(["signup", "login", "reset"]).optional(),
     next: z.string().optional(),
+    reason: z.enum(["expired"]).optional(),
   }),
   ssr: false,
   head: () => ({
@@ -39,6 +42,8 @@ function AuthPage() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
+  const [verifyEmail, setVerifyEmail] = useState<string | null>(null);
+  const [needsConfirm, setNeedsConfirm] = useState(false);
 
   useEffect(() => setMode(search.mode ?? "login"), [search.mode]);
 
@@ -47,8 +52,7 @@ function AuthPage() {
     supabase()
       .auth.getSession()
       .then(({ data }) => {
-        if (data.session)
-          navigate({ to: (search.next as "/dashboard") ?? "/dashboard", replace: true });
+        if (data.session) window.location.replace(safeNext(search.next));
       });
   }, [navigate, search.next]);
 
@@ -76,17 +80,25 @@ function AuthPage() {
           },
         });
         if (error) throw error;
+        // Supabase returns a user with no identities when the email is already registered.
+        if (data.user && data.user.identities?.length === 0)
+          throw new Error("An account with this email already exists. Sign in instead.");
         if (data.session) navigate({ to: "/setup" });
-        else setInfo("Check your email to confirm your account, then sign in.");
+        else setVerifyEmail(email);
       } else if (mode === "login") {
         const { error } = await sb.auth.signInWithPassword({ email, password });
-        if (error)
+        if (error) {
+          if (/not confirmed/i.test(error.message)) {
+            setNeedsConfirm(true);
+            throw new Error("Please verify your email first. We can send the link again.");
+          }
           throw new Error(
             error.message === "Invalid login credentials"
               ? "Wrong email or password."
               : error.message,
           );
-        navigate({ to: (search.next as "/dashboard") ?? "/dashboard" });
+        }
+        window.location.assign(safeNext(search.next));
       } else {
         const { error } = await sb.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/callback?next=/reset-password`,
@@ -101,14 +113,39 @@ function AuthPage() {
     }
   };
 
-  const google = async () => {
+  const [oauthBusy, setOauthBusy] = useState<"google" | "github" | null>(null);
+  const oauth = async (provider: "google" | "github") => {
     setError("");
+    setOauthBusy(provider);
     const { error } = await supabase().auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/callback` },
+      provider,
+      options: {
+        redirectTo: `${window.location.origin}/callback${search.next ? `?next=${encodeURIComponent(safeNext(search.next))}` : ""}`,
+        ...(provider === "github"
+          ? { scopes: "read:user user:email" }
+          : { queryParams: { prompt: "select_account" } }),
+      },
     });
-    if (error) setError(error.message);
+    if (error) {
+      setOauthBusy(null);
+      setError(
+        /provider is not enabled|Unsupported provider/i.test(error.message)
+          ? `${provider === "google" ? "Google" : "GitHub"} sign-in isn't switched on yet. Use email for now.`
+          : error.message,
+      );
+    }
   };
+
+  if (verifyEmail)
+    return (
+      <CheckInbox
+        email={verifyEmail}
+        onBack={() => {
+          setVerifyEmail(null);
+          switchMode("login");
+        }}
+      />
+    );
 
   return (
     <div
@@ -163,21 +200,52 @@ function AuthPage() {
             </p>
           )}
 
+          {search.reason === "expired" && mode === "login" && (
+            <div
+              role="status"
+              className="hz-fade-up mt-6 flex items-start gap-3 rounded-2xl bg-primary/10 p-4 text-sm ring-1 ring-primary/30"
+            >
+              <span className="mt-0.5 text-lg" aria-hidden>
+                🔒
+              </span>
+              <span>
+                <b className="block">Your session expired</b>
+                <span className="text-white/70">
+                  Sign in again and we'll take you back to where you were. Your drafts are saved.
+                </span>
+              </span>
+            </div>
+          )}
+
           {mode !== "reset" && (
             <>
-              <button
-                type="button"
-                onClick={google}
-                className="mt-8 flex w-full items-center justify-center gap-2 rounded-2xl bg-white/5 py-3 text-sm font-semibold ring-2 ring-white/20 transition-all hover:bg-white/10"
-              >
-                <GoogleIcon /> Continue with Google
-              </button>
+              <div className="mt-8 grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => oauth("google")}
+                  disabled={oauthBusy !== null}
+                  className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white/5 text-sm font-semibold ring-2 ring-white/20 transition-all hover:bg-white/10 disabled:opacity-60"
+                >
+                  {oauthBusy === "google" ? <ButtonSpinner /> : <GoogleIcon />} Continue with Google
+                </button>
+                <button
+                  type="button"
+                  onClick={() => oauth("github")}
+                  disabled={oauthBusy !== null}
+                  className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white/5 text-sm font-semibold ring-2 ring-white/20 transition-all hover:bg-white/10 disabled:opacity-60"
+                >
+                  {oauthBusy === "github" ? <ButtonSpinner /> : <Github size={16} />} Continue with
+                  GitHub
+                </button>
+              </div>
               <div className="my-6 flex items-center gap-3 text-xs font-semibold text-white/40">
                 <div className="h-px flex-1 bg-white/10" /> or{" "}
                 <div className="h-px flex-1 bg-white/10" />
               </div>
             </>
           )}
+
+          {needsConfirm && mode === "login" && <ResendLink email={email} />}
 
           <form onSubmit={onSubmit} className={`space-y-3 ${mode === "reset" ? "mt-8" : ""}`}>
             {error && (
@@ -301,5 +369,108 @@ function GoogleIcon() {
         d="M12 10.2v3.9h5.5c-.24 1.4-1.7 4.1-5.5 4.1-3.3 0-6-2.75-6-6.15S8.7 5.9 12 5.9c1.88 0 3.14.8 3.86 1.5l2.63-2.53C16.83 3.3 14.65 2.4 12 2.4 6.98 2.4 2.9 6.48 2.9 11.5S6.98 20.6 12 20.6c6.93 0 9.2-4.87 9.2-7.35 0-.5-.06-.9-.14-1.25H12z"
       />
     </svg>
+  );
+}
+
+function useCooldown(seconds: number) {
+  const [left, setLeft] = useState(0);
+  useEffect(() => {
+    if (left <= 0) return;
+    const t = setTimeout(() => setLeft((n) => n - 1), 1000);
+    return () => clearTimeout(t);
+  }, [left]);
+  return { left, start: () => setLeft(seconds) };
+}
+
+function ResendLink({ email }: { email: string }) {
+  const { left, start } = useCooldown(60);
+  const [msg, setMsg] = useState("");
+  const resend = async () => {
+    const { error } = await supabase().auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: `${window.location.origin}/callback` },
+    });
+    setMsg(error ? error.message : "Verification email sent. Check your inbox and spam folder.");
+    if (!error) start();
+  };
+  return (
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-white/5 p-3 text-sm ring-1 ring-white/15">
+      <span className="text-white/70">
+        {msg || `Didn't get the email for ${email || "your account"}?`}
+      </span>
+      <button
+        type="button"
+        disabled={left > 0 || !email}
+        onClick={resend}
+        className="font-bold text-primary disabled:text-white/40"
+      >
+        {left > 0 ? `Resend in ${left}s` : "Resend email"}
+      </button>
+    </div>
+  );
+}
+
+/** Shown after email sign-up until the user clicks the link we sent. */
+function CheckInbox({ email, onBack }: { email: string; onBack: () => void }) {
+  const { left, start } = useCooldown(60);
+  const [sent, setSent] = useState("");
+  useEffect(() => start(), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const resend = async () => {
+    const { error } = await supabase().auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: `${window.location.origin}/callback` },
+    });
+    setSent(error ? error.message : "Sent again. It can take a minute to arrive.");
+    if (!error) start();
+  };
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-charcoal px-5 text-white">
+      <div className="hz-fade-up w-full max-w-md text-center">
+        <span className="mx-auto grid h-20 w-20 place-items-center rounded-3xl bg-primary/15 text-primary ring-8 ring-primary/10">
+          <MailCheck className="h-10 w-10" />
+        </span>
+        <h1 className="mt-6 font-display text-3xl font-bold tracking-tight">Check your inbox</h1>
+        <p className="mt-3 text-white/70">
+          We sent a verification link to <b className="text-white">{email}</b>. Click it to activate
+          your account — it comes from <b className="text-white">fourtechonoliges@gmail.com</b>.
+        </p>
+        <ul className="mx-auto mt-6 max-w-sm space-y-2 text-left text-sm text-white/60">
+          <li>• Not there? Check your Spam or Promotions folder.</li>
+          <li>• The link opens Huzzler and signs you in automatically.</li>
+        </ul>
+        {sent && (
+          <p role="status" className="mt-4 text-sm font-semibold text-green-400">
+            {sent}
+          </p>
+        )}
+        <div className="mt-8 flex flex-col gap-3">
+          <a
+            href={`https://mail.google.com/mail/u/0/#search/from%3Afourtechonoliges%40gmail.com`}
+            target="_blank"
+            rel="noreferrer"
+            className="btn-duo"
+          >
+            Open Gmail
+          </a>
+          <button
+            type="button"
+            onClick={resend}
+            disabled={left > 0}
+            className="btn-duo-outline !text-white disabled:opacity-50"
+          >
+            {left > 0 ? `Resend in ${left}s` : "Resend email"}
+          </button>
+          <button
+            type="button"
+            onClick={onBack}
+            className="text-sm font-semibold text-white/60 hover:text-white"
+          >
+            Wrong email? Go back
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

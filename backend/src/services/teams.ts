@@ -83,7 +83,8 @@ async function createTeam(archetypeId: string, members: Candidate[], missingRole
     "team",
   );
   const rows = [
-    ...members.map((m) => ({ team_id: team.id, user_id: m.userId, role_id: m.roleId })),
+    // Every row carries the same keys: a bulk insert sends null for any key missing from a row.
+    ...members.map((m) => ({ team_id: team.id, user_id: m.userId, role_id: m.roleId, is_standin: false, standin_name: null })),
     ...missingRoles.map((r) => ({ team_id: team.id, user_id: null, role_id: r, is_standin: true, standin_name: `Huzzler stand-in (${names.get(r)})` })),
   ];
   ok(await db.from("team_members").insert(rows), "team members");

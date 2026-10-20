@@ -14,7 +14,9 @@ import {
   PageHeader,
   Pill,
   Spinner,
+  ConfirmButton,
 } from "@/components/app/ui";
+import { CardsPageSkeleton } from "@/components/app/Skeleton";
 
 export const Route = createFileRoute("/_app/offers")({
   head: () => ({ meta: [{ title: "Offers · Huzzler" }] }),
@@ -62,7 +64,7 @@ function Offers() {
     },
   });
   const [openId, setOpenId] = useState<string | null>(null);
-  if (isLoading) return <Spinner />;
+  if (isLoading) return <CardsPageSkeleton cards={2} label="Loading offers" />;
   const offers = data ?? [];
   const pending = offers.filter((o) => o.status === "pending");
   const accepted = offers.find((o) => o.status === "accepted");
@@ -148,20 +150,16 @@ function Offers() {
               >
                 Accept
               </button>
-              <button
-                onClick={() => {
-                  if (
-                    confirm(
-                      `Decline ${o.persona.name}? Declining twice moves you to the next cohort.`,
-                    )
-                  )
-                    respond.mutate({ id: o.id, accept: false });
-                }}
+              <ConfirmButton
+                onConfirm={() => respond.mutate({ id: o.id, accept: false })}
                 disabled={respond.isPending}
+                prompt="Decline? Two declines move you to the next cohort."
+                confirmLabel="Decline"
+                danger
                 className="btn-duo-outline !py-2.5"
               >
                 Decline
-              </button>
+              </ConfirmButton>
             </div>
           </Card>
         ))}

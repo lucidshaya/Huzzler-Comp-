@@ -4,7 +4,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, CheckCircle2, Clock, Cloud, Send } from "lucide-react";
 import { api } from "@/lib/api";
-import { Countdown, ErrorNote, Notice, Spinner } from "@/components/app/ui";
+import { ConfirmButton, Countdown, ErrorNote, Notice } from "@/components/app/ui";
 import {
   ChoiceQuestions,
   CodeAnswer,
@@ -13,6 +13,7 @@ import {
   SeededIssues,
   WrittenAnswer,
 } from "@/components/app/TestInputs";
+import { DetailSkeleton } from "@/components/app/Skeleton";
 
 export const Route = createFileRoute("/_app/tests/$testNo")({
   head: () => ({ meta: [{ title: "Test · Huzzler" }] }),
@@ -42,7 +43,7 @@ function TestRunner() {
   const { testNo } = Route.useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["test", testNo],
     queryFn: () => api<TestPayload>(`/onboarding/tests/${testNo}`),
     staleTime: Infinity,
@@ -110,11 +111,11 @@ function TestRunner() {
   });
   const onExpire = useCallback(() => submit.mutate(), [submit]);
 
-  if (isLoading) return <Spinner />;
+  if (isLoading) return <DetailSkeleton label="Loading test" />;
   if (error || !data)
     return (
       <div className="flex flex-col gap-4">
-        <ErrorNote error={error} />
+        <ErrorNote error={error} onRetry={() => refetch()} />
         <Link to="/tests" className="btn-duo-outline self-start">
           Back to tests
         </Link>
@@ -171,7 +172,7 @@ function TestRunner() {
 
   const c = test.content;
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-5 pb-28">
+    <div className="mx-auto flex max-w-3xl flex-col gap-5">
       <div className="sticky top-[57px] z-10 -mx-4 flex items-center justify-between gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur md:-mx-8 md:px-8">
         <div className="min-w-0">
           <div className="truncate font-display text-sm font-bold">
@@ -215,8 +216,8 @@ function TestRunner() {
       {test.kind === "code_sandbox" && <CodeAnswer content={c} value={answers} onChange={change} />}
       {test.kind === "ai_rubric" && <WrittenAnswer content={c} value={answers} onChange={change} />}
 
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 px-4 py-3 backdrop-blur">
-        <div className="mx-auto flex max-w-3xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="sticky bottom-[76px] z-20 -mx-1 rounded-2xl border border-border bg-background/95 px-4 py-3 shadow-[0_-8px_30px_-12px_rgba(0,0,0,0.35)] backdrop-blur md:bottom-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           {test.requires_declaration ? (
             <label className="flex items-start gap-2 text-xs">
               <input
@@ -234,23 +235,18 @@ function TestRunner() {
             <span />
           )}
           <div className="flex flex-col items-end gap-1">
-            <ErrorNote error={submit.error} />
-            <button
-              onClick={() => {
-                if (confirm("Submit this test? You can't change your answers afterwards."))
-                  submit.mutate();
-              }}
-              disabled={submit.isPending || (test.requires_declaration && !declared)}
-              className="btn-duo !py-2.5 disabled:opacity-50"
+            <ErrorNote error={submit.error} onRetry={() => submit.mutate()} />
+            <ConfirmButton
+              onConfirm={() => submit.mutate()}
+              pending={submit.isPending}
+              disabled={test.requires_declaration && !declared}
+              prompt="Submit? Answers can't be changed."
+              confirmLabel="Submit"
+              cancelLabel="Keep working"
+              className="btn-duo !py-2.5"
             >
-              {submit.isPending ? (
-                "Submitting…"
-              ) : (
-                <>
-                  <Send className="h-4 w-4" /> Submit test
-                </>
-              )}
-            </button>
+              <Send className="h-4 w-4" /> Submit test
+            </ConfirmButton>
           </div>
         </div>
       </div>

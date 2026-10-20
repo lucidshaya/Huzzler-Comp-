@@ -13,7 +13,9 @@ import {
   PageHeader,
   Pill,
   Spinner,
+  ConfirmButton,
 } from "@/components/app/ui";
+import { ListPageSkeleton } from "@/components/app/Skeleton";
 
 export const Route = createFileRoute("/_app/billing")({
   head: () => ({ meta: [{ title: "Billing · Huzzler" }] }),
@@ -44,7 +46,7 @@ type Summary = {
 function Billing() {
   const { data: me } = useMe();
   const qc = useQueryClient();
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["billing"],
     queryFn: () => api<Summary>("/billing"),
   });
@@ -58,8 +60,8 @@ function Billing() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["billing"] }),
   });
 
-  if (isLoading) return <Spinner />;
-  if (error || !data) return <ErrorNote error={error} />;
+  if (isLoading) return <ListPageSkeleton rows={4} label="Loading billing" />;
+  if (error || !data) return <ErrorNote error={error} onRetry={() => refetch()} />;
   const lapsed = data.status === "LAPSED";
   const monthlyActive =
     data.plan_id === "monthly" &&
@@ -139,20 +141,17 @@ function Billing() {
                 >
                   Upgrade to one-time ({naira(500000)})
                 </button>
-                <button
-                  onClick={() => {
-                    if (
-                      confirm(
-                        "Cancel your subscription? You keep access until the end of the paid period.",
-                      )
-                    )
-                      cancel.mutate();
-                  }}
-                  disabled={cancel.isPending}
+                <ConfirmButton
+                  onConfirm={() => cancel.mutate()}
+                  pending={cancel.isPending}
+                  prompt="Cancel? You keep access until the paid period ends."
+                  confirmLabel="Cancel plan"
+                  cancelLabel="Keep plan"
+                  danger
                   className="rounded-xl px-3 py-2 text-sm font-bold text-red-500 ring-1 ring-red-500/30 hover:bg-red-500/10"
                 >
                   Cancel subscription
-                </button>
+                </ConfirmButton>
               </>
             )}
             {!lapsed && !monthlyActive && (

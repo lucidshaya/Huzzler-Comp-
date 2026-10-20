@@ -5,8 +5,8 @@ import { env } from "../config/env.js";
 import { audit } from "../lib/audit.js";
 import { notify } from "../lib/notify.js";
 import { h, parse, uid } from "./util.js";
-import { HttpError, notFound, badRequest } from "../lib/errors.js";
-import { requireRole } from "../middleware/auth.js";
+import { HttpError, notFound, badRequest, forbidden } from "../lib/errors.js";
+import { requireRole, clearAuthCache } from "../middleware/auth.js";
 import { STATUSES, type JourneyStatus } from "../domain/journey.js";
 import { ROLE_IDS } from "../domain/constants.js";
 import { transition, getJourney } from "../services/journey.js";
@@ -17,6 +17,8 @@ import { computeProjectResults } from "../services/projects.js";
 import { issueCertificate } from "../services/certification.js";
 import { shortlist, requestConsent, updateCandidateOutcome } from "../services/opportunities.js";
 import { enqueue } from "../jobs/queue.js";
+import { listTicketsForStaff, getTicketForStaff, replyAsStaff, updateTicket } from "../services/support.js";
+import { resetHelpCorpus } from "../services/help.js";
 
 // ---------------------------------------------------------------------------
 // Staff sign-in by username. The username -> email mapping stays server-side.
@@ -153,11 +155,23 @@ adminRouter.get(
   }),
 );
 
+/** Loads the target account and refuses changes that would weaken staff accounts. */
+async function guardTarget(actor: { id: string; appRole: string }, targetId: string, action: string) {
+  // select("*") so this keeps working before the is_protected migration is applied
+  const { data: target } = await db.from("profiles").select("*").eq("id", targetId).maybeSingle();
+  if (!target) throw notFound("User not found");
+  if (target.is_protected) throw forbidden(`The main admin account can't be ${action}.`, "PROTECTED_ADMIN");
+  if (target.id === actor.id) throw forbidden(`You can't ${action.replace(/ed$/, "")} your own account.`, "SELF_ACTION");
+  if (target.app_role !== "user" && actor.appRole !== "admin") throw forbidden("Only admins can change other staff accounts.", "STAFF_TARGET");
+  return target;
+}
+
 adminRouter.post(
   "/users/:id/status",
   moderators,
   h(async (req) => {
     const { to, reason } = parse(z.object({ to: z.enum(["SUSPENDED", "WITHDRAWN", "RESUME"]), reason: z.string().min(3) }), req.body);
+    await guardTarget(req.user!, req.params.id, to === "RESUME" ? "changed" : "suspended");
     const j = await getJourney(req.params.id);
     if (to === "RESUME") {
       if (!j.resume_status) throw badRequest("Nothing to resume");
@@ -165,6 +179,7 @@ adminRouter.post(
     } else {
       await transition(req.params.id, to, reason, { actorId: uid(req) });
     }
+    clearAuthCache(req.params.id);
     await audit(uid(req), `user.${to.toLowerCase()}`, "profile", req.params.id, { reason }, req.ip);
   }),
 );
@@ -184,7 +199,11 @@ adminRouter.post(
   adminOnly,
   h(async (req) => {
     const b = parse(z.object({ role_id: z.enum(ROLE_IDS).optional(), app_role: z.enum(["user", "admin", "moderator", "content_reviewer", "partnerships"]).optional(), reason: z.string().min(3) }), req.body);
-    await db.from("profiles").update({ ...(b.role_id ? { role_id: b.role_id } : {}), ...(b.app_role ? { app_role: b.app_role } : {}) }).eq("id", req.params.id);
+    if (b.app_role) await guardTarget(req.user!, req.params.id, "changed");
+    const { error } = await db.from("profiles").update({ ...(b.role_id ? { role_id: b.role_id } : {}), ...(b.app_role ? { app_role: b.app_role } : {}) }).eq("id", req.params.id);
+    // The database trigger is the last line of defence (protected admin, last remaining admin).
+    if (error) throw forbidden(error.message.includes("admin") ? error.message : "That change isn't allowed.", "ROLE_CHANGE_REFUSED");
+    clearAuthCache(req.params.id);
     await audit(uid(req), "user.change_role", "profile", req.params.id, b, req.ip);
   }),
 );
@@ -256,6 +275,7 @@ adminRouter.post(
     const patch: Record<string, unknown> = { status };
     if (table === "test_bank" && status === "approved") Object.assign(patch, { approved_by: uid(req), approved_at: new Date().toISOString() });
     await db.from(table).update(patch).eq("id", req.params.id);
+    if (table === "faq") resetHelpCorpus();
     await audit(uid(req), `content.${status}`, table, req.params.id, {}, req.ip);
   }),
 );
@@ -463,4 +483,61 @@ adminRouter.post("/users/:id/issue-certificate", adminOnly, h(async (req) => {
   const r = await issueCertificate(req.params.id);
   await audit(uid(req), "cert.issue", "profile", req.params.id, { issued: Boolean(r) }, req.ip);
   return r ?? { issued: false, reason: "not eligible" };
+}));
+
+// ---------------------------------------------------------------------------
+// Support inbox (report an issue)
+// ---------------------------------------------------------------------------
+adminRouter.get("/support", moderators, h(async (req) => listTicketsForStaff(typeof req.query.status === "string" ? req.query.status : undefined)));
+adminRouter.get("/support/:id", moderators, h(async (req) => getTicketForStaff(parse(z.string().uuid(), req.params.id))));
+adminRouter.post(
+  "/support/:id/messages",
+  moderators,
+  h(async (req) => replyAsStaff(uid(req), parse(z.string().uuid(), req.params.id), parse(z.object({ body: z.string().trim().min(1).max(5000) }), req.body).body, req.ip)),
+);
+adminRouter.patch(
+  "/support/:id",
+  moderators,
+  h(async (req) =>
+    updateTicket(
+      uid(req),
+      parse(z.string().uuid(), req.params.id),
+      parse(
+        z.object({
+          status: z.enum(["open", "awaiting_user", "resolved", "closed"]).optional(),
+          priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+          assigned_to: z.string().uuid().nullable().optional(),
+        }).refine((v) => Object.keys(v).length > 0, "Nothing to update"),
+        req.body,
+      ),
+      req.ip,
+    ),
+  ),
+);
+
+// ---------------------------------------------------------------------------
+// Help bot: questions it couldn't answer, and FAQ management (the bot's knowledge base)
+// ---------------------------------------------------------------------------
+adminRouter.get("/help/queries", reviewers, h(async (req) => {
+  const onlyUnanswered = req.query.unanswered !== "false";
+  let q = db.from("help_queries").select("id, question, answered, source, score, helpful, created_at").order("created_at", { ascending: false }).limit(200);
+  if (onlyUnanswered) q = q.or("answered.eq.false,helpful.eq.false");
+  return (await q).data ?? [];
+}));
+const FaqInput = z.object({ question: z.string().trim().min(5).max(300), answer: z.string().trim().min(10).max(3000), role_id: z.enum(ROLE_IDS).nullable().optional() });
+adminRouter.post("/faq", reviewers, h(async (req) => {
+  const b = parse(FaqInput, req.body);
+  const { data, error } = await db.from("faq").insert({ ...b, role_id: b.role_id ?? null, status: "approved" }).select().single();
+  if (error) throw badRequest(error.message);
+  resetHelpCorpus();
+  await audit(uid(req), "faq.create", "faq", data.id, {}, req.ip);
+  return data;
+}));
+adminRouter.put("/faq/:id", reviewers, h(async (req) => {
+  const b = parse(FaqInput.partial(), req.body);
+  const { data, error } = await db.from("faq").update(b).eq("id", parse(z.string().uuid(), req.params.id)).select().single();
+  if (error || !data) throw notFound("FAQ not found");
+  resetHelpCorpus();
+  await audit(uid(req), "faq.update", "faq", req.params.id, {}, req.ip);
+  return data;
 }));

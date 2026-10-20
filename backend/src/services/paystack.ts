@@ -3,6 +3,16 @@ import { env } from "../config/env.js";
 
 const BASE = "https://api.paystack.co";
 
+export class PaystackError extends Error {
+  constructor(
+    public status: number,
+    public providerMessage: string,
+    path: string,
+  ) {
+    super(`Paystack ${path}: ${providerMessage}`);
+  }
+}
+
 async function ps<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method,
@@ -10,7 +20,7 @@ async function ps<T>(method: "GET" | "POST", path: string, body?: unknown): Prom
     body: body ? JSON.stringify(body) : undefined,
   });
   const json = (await res.json().catch(() => ({}))) as { status?: boolean; message?: string; data?: T };
-  if (!res.ok || json.status === false) throw new Error(`Paystack ${path}: ${json.message ?? res.status}`);
+  if (!res.ok || json.status === false) throw new PaystackError(res.status, json.message ?? String(res.status), path);
   return json.data as T;
 }
 

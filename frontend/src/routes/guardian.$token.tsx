@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { CheckCircle2, ShieldCheck, XCircle } from "lucide-react";
 import { api } from "@/lib/api";
 import { ErrorNote, Spinner } from "@/components/app/ui";
+import { CardSkeleton } from "@/components/app/Skeleton";
 
 export const Route = createFileRoute("/guardian/$token")({
   ssr: false,
@@ -15,7 +16,7 @@ export const Route = createFileRoute("/guardian/$token")({
 
 function Guardian() {
   const { token } = Route.useParams();
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["guardian", token],
     queryFn: () =>
       api<{ guardian_name: string; child_first_name: string; status: string; expired: boolean }>(
@@ -36,8 +37,8 @@ function Guardian() {
     <div className="min-h-screen bg-background px-5 py-10 text-foreground">
       <div className="mx-auto max-w-xl">
         <img src="/huzzler-mark.svg" alt="Huzzler" className="mb-6 h-10 w-10" />
-        {isLoading && <Spinner />}
-        <ErrorNote error={error} />
+        {isLoading && <CardSkeleton lines={6} />}
+        <ErrorNote error={error} onRetry={() => refetch()} />
         {data &&
           (m.isSuccess ? (
             <div className="card-duo p-6 text-center">

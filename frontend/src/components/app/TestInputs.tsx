@@ -1,5 +1,8 @@
 import { ArrowDown, ArrowUp, Flag, ImagePlus, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
+import { Skeleton } from "./Skeleton";
+
+const CodeEditor = lazy(() => import("./CodeEditor"));
 import { uploadFile } from "@/lib/api";
 import { inputCls } from "./ui";
 
@@ -277,7 +280,10 @@ export function CodeAnswer({
   return (
     <div className="flex flex-col gap-3">
       {content.schema && (
-        <pre className="overflow-x-auto rounded-xl border border-border bg-muted/40 p-3 text-xs">
+        <pre className="overflow-x-auto rounded-xl border border-border bg-muted/40 p-4 font-mono text-[13px] leading-relaxed">
+          <span className="mb-1 block font-sans text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            Schema
+          </span>
           {content.schema}
           {content.sample ? `\n\n-- ${content.sample}` : ""}
         </pre>
@@ -287,28 +293,22 @@ export function CodeAnswer({
           <b>Example:</b> <code>{content.visible_tests}</code>
         </div>
       )}
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-semibold">
-          {field === "sql" ? "Your SQL" : `Your code (${content.language ?? "javascript"})`}
-        </span>
-        <textarea
-          spellCheck={false}
-          rows={18}
-          className={`${inputCls} font-mono text-sm leading-relaxed`}
-          value={code}
-          onChange={(e) => onChange({ ...value, [field]: e.target.value })}
-          onKeyDown={(e) => {
-            if (e.key === "Tab") {
-              e.preventDefault();
-              const t = e.currentTarget;
-              const s = t.selectionStart;
-              const next = code.slice(0, s) + "  " + code.slice(t.selectionEnd);
-              onChange({ ...value, [field]: next });
-              requestAnimationFrame(() => t.setSelectionRange(s + 2, s + 2));
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-semibold">{field === "sql" ? "Your SQL" : "Your code"}</span>
+        <Suspense fallback={<Skeleton className="h-[420px] w-full rounded-xl" />}>
+          <CodeEditor
+            value={code}
+            onChange={(v) => onChange({ ...value, [field]: v })}
+            language={
+              field === "sql"
+                ? "sql"
+                : content.language === "typescript"
+                  ? "typescript"
+                  : "javascript"
             }
-          }}
-        />
-      </label>
+          />
+        </Suspense>
+      </div>
       {field === "code" && (
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-semibold">Notes (approach, edge cases)</span>

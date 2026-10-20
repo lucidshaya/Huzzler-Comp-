@@ -11,13 +11,16 @@ import {
   ShieldAlert,
   Handshake,
   Users,
+  LifeBuoy,
+  Bot,
   UsersRound,
 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
-import { signOut } from "@/lib/supabase";
+import { signOut, supabase } from "@/lib/supabase";
 import { ThemeToggle } from "@/lib/theme";
 import { Spinner } from "@/components/app/ui";
 import { OverviewTab } from "@/components/admin/Overview";
+import { SupportTab, HelpBotTab } from "@/components/admin/SupportTabs";
 import {
   UsersTab,
   PaymentsTab,
@@ -50,6 +53,13 @@ const TABS = [
     icon: Users,
     roles: ["admin", "moderator", "content_reviewer", "partnerships"],
     el: UsersTab,
+  },
+  {
+    key: "support",
+    label: "Support inbox",
+    icon: LifeBuoy,
+    roles: ["admin", "moderator"],
+    el: SupportTab,
   },
   { key: "payments", label: "Payments", icon: CreditCard, roles: ["admin"], el: PaymentsTab },
   {
@@ -86,6 +96,13 @@ const TABS = [
     icon: Handshake,
     roles: ["admin", "partnerships"],
     el: OpportunitiesTab,
+  },
+  {
+    key: "helpbot",
+    label: "Help bot",
+    icon: Bot,
+    roles: ["admin", "content_reviewer"],
+    el: HelpBotTab,
   },
   { key: "system", label: "Flags & audit", icon: Settings2, roles: ["admin"], el: SystemTab },
 ];
@@ -133,10 +150,7 @@ function Admin() {
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <button
-              onClick={async () => {
-                await signOut();
-                navigate({ to: "/admin/login" });
-              }}
+              onClick={() => void signOut("/admin/login")}
               className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-bold text-muted-foreground hover:text-red-500"
             >
               <LogOut className="h-4 w-4" /> Sign out

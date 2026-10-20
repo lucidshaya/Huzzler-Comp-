@@ -16,6 +16,7 @@ import {
   ScoreBadge,
   Spinner,
 } from "@/components/app/ui";
+import { TableSkeleton } from "@/components/app/Skeleton";
 
 const useInvalidate = () => {
   const qc = useQueryClient();
@@ -101,7 +102,7 @@ export function UsersTab() {
         </select>
       </div>
       {isLoading ? (
-        <Spinner />
+        <TableSkeleton />
       ) : (
         <Table head={["Name", "Field", "Status", "Plan", "Joined", ""]}>
           {(data ?? []).map((u) => (
@@ -168,7 +169,7 @@ function UserDrawer({ id, onClose }: { id: string; onClose: () => void }) {
         </div>
         <ErrorNote error={error ?? act.error} />
         {!data ? (
-          <Spinner />
+          <TableSkeleton />
         ) : (
           <>
             <div className="grid grid-cols-2 gap-2 text-sm">
@@ -214,6 +215,12 @@ function UserDrawer({ id, onClose }: { id: string; onClose: () => void }) {
                 View uploaded ID (expires in 5 min)
               </a>
             )}
+            {data.profile.is_protected && (
+              <div className="rounded-xl border border-primary/40 bg-primary/10 p-3 text-sm">
+                <b>Protected admin account.</b> It always keeps the admin role and can't be
+                suspended or deleted — enforced by the database.
+              </div>
+            )}
             <div className="flex flex-wrap gap-2">
               <SmallBtn
                 onClick={() =>
@@ -224,7 +231,7 @@ function UserDrawer({ id, onClose }: { id: string; onClose: () => void }) {
               >
                 {data.profile.identity_verified ? "Unverify ID" : "Verify ID"}
               </SmallBtn>
-              {data.journey.status === "SUSPENDED" ? (
+              {data.profile.is_protected ? null : data.journey.status === "SUSPENDED" ? (
                 <SmallBtn
                   onClick={() =>
                     run(
@@ -273,26 +280,28 @@ function UserDrawer({ id, onClose }: { id: string; onClose: () => void }) {
                   </option>
                 ))}
               </select>
-              <select
-                aria-label="Staff role"
-                className="rounded-lg border border-border bg-background px-2 text-xs"
-                defaultValue=""
-                onChange={(e) =>
-                  e.target.value &&
-                  run(
-                    `/admin/users/${id}/role`,
-                    { app_role: e.target.value },
-                    "Reason for staff role change",
-                  )
-                }
-              >
-                <option value="">Staff role…</option>
-                {["user", "moderator", "content_reviewer", "partnerships", "admin"].map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
+              {!data.profile.is_protected && (
+                <select
+                  aria-label="Staff role"
+                  className="rounded-lg border border-border bg-background px-2 text-xs"
+                  defaultValue=""
+                  onChange={(e) =>
+                    e.target.value &&
+                    run(
+                      `/admin/users/${id}/role`,
+                      { app_role: e.target.value },
+                      "Reason for staff role change",
+                    )
+                  }
+                >
+                  <option value="">Staff role…</option>
+                  {["user", "moderator", "content_reviewer", "partnerships", "admin"].map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              )}
               <SmallBtn
                 onClick={() =>
                   act.mutate({ path: `/admin/users/${id}/issue-certificate`, body: {} })
@@ -351,7 +360,7 @@ export function PaymentsTab() {
       api(`/admin/payments/${id}/refund`, { body: { reason, override } }),
     onSuccess: inv,
   });
-  if (isLoading) return <Spinner />;
+  if (isLoading) return <TableSkeleton />;
   return (
     <div className="flex flex-col gap-4">
       <ErrorNote error={error ?? refund.error} />
@@ -472,7 +481,7 @@ export function ContentTab() {
       </p>
       <ErrorNote error={set.error} />
       {isLoading ? (
-        <Spinner />
+        <TableSkeleton />
       ) : (data ?? []).length === 0 ? (
         <EmptyState icon={Search} title={`No ${status} ${kind}`} />
       ) : (
@@ -581,7 +590,7 @@ export function GradingTab() {
       user_id,
     });
   };
-  if (review.isLoading) return <Spinner />;
+  if (review.isLoading) return <TableSkeleton />;
   const r = review.data ?? { test_submissions: [], deliverables: [], flagged_grades: [] };
   return (
     <div className="flex flex-col gap-4">
@@ -727,7 +736,7 @@ export function TeamsTab() {
     mutationFn: () => api<{ formed: number }>("/admin/teams/run-matching", { method: "POST" }),
     onSuccess: inv,
   });
-  if (isLoading) return <Spinner />;
+  if (isLoading) return <TableSkeleton />;
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -790,7 +799,7 @@ export function IntegrityTab() {
       api(`/admin/reports/${id}`, { body: { status } }),
     onSuccess: inv,
   });
-  if (isLoading) return <Spinner />;
+  if (isLoading) return <TableSkeleton />;
   return (
     <div className="flex flex-col gap-4">
       <Card>
@@ -948,7 +957,7 @@ export function OpportunitiesTab() {
         <ErrorNote error={create.error ?? shortlist.error ?? consent.error ?? outcome.error} />
       </Card>
       {isLoading ? (
-        <Spinner />
+        <TableSkeleton />
       ) : (
         (data ?? []).map((o) => (
           <Card key={o.id}>

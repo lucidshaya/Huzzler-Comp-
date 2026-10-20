@@ -7,7 +7,8 @@ export type AiFeature =
   | "mentor_chat"
   | "integrity_review"
   | "demo_grading"
-  | "content_batch";
+  | "content_batch"
+  | "help_bot";
 
 export type FeatureConfig = { model: string; maxTokens: number; effort: "low" | "medium" | "high" };
 
@@ -22,6 +23,7 @@ const DEFAULTS: Record<AiFeature, FeatureConfig> = {
   integrity_review: { model: "claude-haiku-5-5", maxTokens: 2000, effort: "low" },
   demo_grading: { model: "claude-haiku-5-5", maxTokens: 6000, effort: "medium" },
   content_batch: { model: "claude-haiku-5-5", maxTokens: 16000, effort: "medium" },
+  help_bot: { model: "claude-haiku-5-5", maxTokens: 1200, effort: "low" },
 };
 
 let cache: { at: number; overrides: Partial<Record<AiFeature, Partial<FeatureConfig>>> } | null = null;

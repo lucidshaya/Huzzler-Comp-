@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type { Request, Response, NextFunction } from "express";
 import { db } from "../lib/supabase.js";
 import { adminMfaRequired } from "../config/env.js";
@@ -16,25 +17,44 @@ declare global {
 
 const lastSeen = new Map<string, number>();
 
+// Verified sessions are cached briefly so each request doesn't pay two extra Supabase round trips.
+// A revoked session or a role change takes effect within AUTH_CACHE_MS.
+const AUTH_CACHE_MS = 60_000;
+const authCache = new Map<string, { user: AuthedUser; until: number }>();
+const cacheKey = (token: string) => crypto.createHash("sha256").update(token).digest("hex");
+export const clearAuthCache = (userId?: string) => {
+  if (!userId) return authCache.clear();
+  for (const [k, v] of authCache) if (v.user.id === userId) authCache.delete(k);
+};
+
 /** Verifies the Supabase JWT on every request (Supabase validates signature + expiry + revocation). */
 export async function requireAuth(req: Request, _res: Response, next: NextFunction) {
   try {
     const header = req.headers.authorization;
     const token = header?.startsWith("Bearer ") ? header.slice(7) : null;
     if (!token) throw new HttpError(401, "Sign in required");
-    const { data, error } = await db.auth.getUser(token);
-    if (error || !data.user) throw new HttpError(401, "Session expired, please sign in again");
-    const { data: profile } = await db.from("profiles").select("app_role, deleted_at").eq("id", data.user.id).single();
-    if (!profile || profile.deleted_at) throw new HttpError(401, "Account not found");
-    // getUser has already validated the token; read the assurance level from its payload.
-    const aal = (() => {
-      try {
-        return JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString()).aal ?? "aal1";
-      } catch {
-        return "aal1";
-      }
-    })();
-    req.user = { id: data.user.id, email: data.user.email ?? null, appRole: profile.app_role, aal };
+    const key = cacheKey(token);
+    const hit = authCache.get(key);
+    if (hit && hit.until > Date.now()) {
+      req.user = hit.user;
+    } else {
+      const { data, error } = await db.auth.getUser(token);
+      if (error || !data.user) throw new HttpError(401, "Session expired, please sign in again");
+      const { data: profile } = await db.from("profiles").select("app_role, deleted_at").eq("id", data.user.id).single();
+      if (!profile || profile.deleted_at) throw new HttpError(401, "Account not found");
+      // getUser has already validated the token; read the assurance level and expiry from its payload.
+      const payload = (() => {
+        try {
+          return JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString()) as { aal?: string; exp?: number };
+        } catch {
+          return {};
+        }
+      })();
+      req.user = { id: data.user.id, email: data.user.email ?? null, appRole: profile.app_role, aal: payload.aal ?? "aal1" };
+      const until = Math.min(Date.now() + AUTH_CACHE_MS, (payload.exp ?? 0) * 1000);
+      if (until > Date.now()) authCache.set(key, { user: req.user, until });
+      if (authCache.size > 5000) authCache.delete(authCache.keys().next().value!);
+    }
 
     // Activity tracking for inactivity rules, throttled to once per 10 minutes per user.
     const now = Date.now();

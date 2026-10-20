@@ -67,3 +67,11 @@ export async function uploadFile(file: File, signPath = "/uploads/sign"): Promis
 }
 
 export const naira = (kobo: number) => `₦${(kobo / 100).toLocaleString("en-NG")}`;
+
+/** Only same-site, non-auth paths are allowed as post-login destinations (no open redirects). */
+export function safeNext(next?: string | null): string {
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\"))
+    return "/dashboard";
+  if (next.startsWith("/auth") || next.startsWith("/callback")) return "/dashboard";
+  return next;
+}

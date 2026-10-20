@@ -6,6 +6,7 @@ import { env } from "../config/env.js";
 import { aiConfigured } from "../ai/aiClient.js";
 import { audit } from "../lib/audit.js";
 import { h, parse, uid } from "./util.js";
+import { forbidden } from "../lib/errors.js";
 import { ROLE_IDS, CONSENT_VERSIONS, REQUIRED_CONSENTS } from "../domain/constants.js";
 import { getJourney } from "../services/journey.js";
 import {
@@ -14,6 +15,7 @@ import {
 } from "../services/profile.js";
 import { removeMember } from "../services/teams.js";
 import { cancelSubscription } from "../services/payments.js";
+import { clearAuthCache } from "../middleware/auth.js";
 
 export const meRouter = Router();
 
@@ -126,11 +128,14 @@ meRouter.get("/privacy/export", h(async (req, res) => {
 meRouter.delete("/", h(async (req) => {
   const id = uid(req);
   parse(z.object({ confirm: z.literal("DELETE") }), req.body);
+  const { data: me } = await db.from("profiles").select("*").eq("id", id).single();
+  if (me?.is_protected) throw forbidden("The main admin account can't be deleted.", "PROTECTED_ADMIN");
   await removeMember(id, "account deleted").catch(() => {});
   await cancelSubscription(id).catch(() => {});
   await db.from("profiles").update({ deleted_at: new Date().toISOString(), full_name: "Deleted user", username: null, phone: null, dob: null, bio: null, avatar_url: null, open_to_opportunities: false }).eq("id", id);
   await db.from("user_journey").update({ status: "WITHDRAWN" }).eq("user_id", id);
   await db.auth.admin.updateUserById(id, { email: `deleted+${id}@huzzler.invalid`, phone: "", ban_duration: "876000h", user_metadata: {} });
+  clearAuthCache(id);
   await audit(id, "account.delete", "profile", id);
   return { deleted: true };
 }));

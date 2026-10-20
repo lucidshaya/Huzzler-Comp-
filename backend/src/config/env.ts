@@ -33,7 +33,13 @@ const Env = z.object({
   JUDGE0_TOKEN: z.string().optional(),
 
   RESEND_API_KEY: z.string().optional(),
-  EMAIL_FROM: z.string().default("Huzzler <no-reply@huzzler.app>"),
+  // Gmail SMTP (free): fourtechonoliges@gmail.com + a Google App Password. Gmail allows ~500 emails/day.
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().default(465),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  EMAIL_FROM: z.string().default("Huzzler <fourtechonoliges@gmail.com>"),
+  SUPPORT_EMAIL: z.string().email().default("fourtechonoliges@gmail.com"),
 
   REDIS_URL: z.string().optional(),
   SENTRY_DSN: z.string().optional(),

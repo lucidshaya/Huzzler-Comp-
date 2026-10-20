@@ -1,11 +1,25 @@
 // Static loading: placeholders shaped like the content that's coming, so the page doesn't jump
 // when data arrives. Use these for page content; HuzzlerLoader is for full-screen moments.
 
-export function Skeleton({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
+export function Skeleton({
+  className = "",
+  style,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+}) {
   return <div className={`skeleton ${className}`} style={style} aria-hidden />;
 }
 
-function Wrap({ label, children, className = "" }: { label: string; children: React.ReactNode; className?: string }) {
+function Wrap({
+  label,
+  children,
+  className = "",
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
     <div role="status" aria-busy="true" aria-label={label} className={className}>
       {children}
@@ -24,7 +38,13 @@ export function HeaderSkeleton() {
   );
 }
 
-export function CardSkeleton({ lines = 3, className = "" }: { lines?: number; className?: string }) {
+export function CardSkeleton({
+  lines = 3,
+  className = "",
+}: {
+  lines?: number;
+  className?: string;
+}) {
   return (
     <div className={`card-duo flex flex-col gap-3 p-5 ${className}`}>
       <div className="flex items-center gap-3">
@@ -52,7 +72,13 @@ export function RowSkeleton() {
 }
 
 /** Header + a stack of rows (tests, results, billing history). */
-export function ListPageSkeleton({ rows = 5, label = "Loading" }: { rows?: number; label?: string }) {
+export function ListPageSkeleton({
+  rows = 5,
+  label = "Loading",
+}: {
+  rows?: number;
+  label?: string;
+}) {
   return (
     <Wrap label={label} className="mx-auto flex w-full max-w-4xl flex-col gap-6">
       <HeaderSkeleton />
@@ -66,7 +92,15 @@ export function ListPageSkeleton({ rows = 5, label = "Loading" }: { rows?: numbe
 }
 
 /** Header + a grid of cards (offers, certificate, dashboard sections). */
-export function CardsPageSkeleton({ cards = 4, cols = 2, label = "Loading" }: { cards?: number; cols?: 2 | 3; label?: string }) {
+export function CardsPageSkeleton({
+  cards = 4,
+  cols = 2,
+  label = "Loading",
+}: {
+  cards?: number;
+  cols?: 2 | 3;
+  label?: string;
+}) {
   return (
     <Wrap label={label} className="mx-auto flex w-full max-w-5xl flex-col gap-6">
       <HeaderSkeleton />
@@ -117,7 +151,10 @@ export function WorkspaceSkeleton() {
           <Skeleton className="mb-4 h-5 w-24" />
           <div className="flex gap-3 overflow-hidden">
             {Array.from({ length: 4 }).map((_, c) => (
-              <div key={c} className="flex w-[230px] shrink-0 flex-col gap-2 rounded-xl border border-border p-2">
+              <div
+                key={c}
+                className="flex w-[230px] shrink-0 flex-col gap-2 rounded-xl border border-border p-2"
+              >
                 <Skeleton className="h-3 w-20" />
                 {Array.from({ length: 3 - (c % 2) }).map((_, i) => (
                   <Skeleton key={i} className="h-16 w-full" />
@@ -129,7 +166,11 @@ export function WorkspaceSkeleton() {
         <div className="card-duo flex h-[420px] flex-col gap-3 p-4">
           <Skeleton className="h-4 w-24" />
           {[70, 50, 80, 40, 60].map((w, i) => (
-            <Skeleton key={i} className={`h-9 ${i % 2 ? "self-end" : ""}`} style={{ width: `${w}%` }} />
+            <Skeleton
+              key={i}
+              className={`h-9 ${i % 2 ? "self-end" : ""}`}
+              style={{ width: `${w}%` }}
+            />
           ))}
         </div>
       </div>

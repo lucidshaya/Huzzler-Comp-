@@ -83,7 +83,7 @@ export async function startAttempt(userId: string) {
     rows.push(
       c
         ? { attempt_id: attempt.id, user_id: userId, test_no: testNo, test_bank_id: c.test_bank_id, carried_over: true, score: c.score, status: "graded" }
-        : { attempt_id: attempt.id, user_id: userId, test_no: testNo, test_bank_id: await pickTestVersion(profile.role_id, testNo, userId, prevBankIds), status: "not_started" },
+        : { attempt_id: attempt.id, user_id: userId, test_no: testNo, test_bank_id: await pickTestVersion(profile.role_id, testNo, userId, prevBankIds), carried_over: false, score: null, status: "not_started" },
     );
   }
   ok(await db.from("test_submissions").insert(rows), "submissions");
@@ -102,12 +102,20 @@ export async function attemptOverview(userId: string) {
   return { attempt, tests: (subs ?? []).map((s) => ({ ...s, weight: TEST_WEIGHTS[s.test_no] })) };
 }
 
+/** The submission for this test in the user's latest attempt (one round trip via a join). */
 async function getSubmission(userId: string, testNo: number) {
-  const attempt = await currentAttempt(userId);
-  if (!attempt || attempt.status !== "in_progress") throw conflict("No attempt in progress.");
-  const { data: sub } = await db.from("test_submissions").select("*").eq("attempt_id", attempt.id).eq("test_no", testNo).single();
-  if (!sub) throw notFound();
-  return { attempt, sub };
+  const { data } = await db
+    .from("test_submissions")
+    .select("*, attempt:attempt_id!inner(id, attempt_no, status, user_id, role_id)")
+    .eq("user_id", userId)
+    .eq("test_no", testNo)
+    .order("attempt_no", { referencedTable: "attempt", ascending: false })
+    .limit(5);
+  const rows = (data ?? []) as Array<Record<string, any> & { attempt: { id: string; attempt_no: number; status: string } }>;
+  const latest = rows.sort((a, b) => b.attempt.attempt_no - a.attempt.attempt_no)[0];
+  if (!latest || latest.attempt.status !== "in_progress") throw conflict("No attempt in progress.");
+  const { attempt, ...sub } = latest;
+  return { attempt, sub: sub as Record<string, any> };
 }
 
 /** Tests are taken in order: every earlier test must be submitted (or carried over). */
@@ -119,9 +127,12 @@ async function assertInOrder(attemptId: string, testNo: number) {
 
 export async function getTest(userId: string, testNo: number) {
   const { attempt, sub } = await getSubmission(userId, testNo);
-  await assertInOrder(attempt.id, testNo);
-  const bank = must(await db.from("test_bank").select("id, title, kind, content, time_limit_min, test_no").eq("id", sub.test_bank_id).single(), "test");
   // answer_key is never selected.
+  const [, bankRes] = await Promise.all([
+    assertInOrder(attempt.id, testNo),
+    db.from("test_bank").select("id, title, kind, content, time_limit_min, test_no").eq("id", sub.test_bank_id).single(),
+  ]);
+  const bank = must(bankRes, "test");
   return {
     submission: { id: sub.id, status: sub.status, draft: sub.draft, started_at: sub.started_at, deadline_at: sub.deadline_at, carried_over: sub.carried_over, score: sub.score },
     test: { ...bank, weight: TEST_WEIGHTS[testNo], requires_declaration: testNo === 3 || testNo === 4 },

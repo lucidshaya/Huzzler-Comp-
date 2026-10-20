@@ -32,6 +32,7 @@ import {
 } from "@/components/app/ui";
 import { Board } from "@/components/app/Board";
 import { TeamTree } from "@/components/app/TeamTree";
+import { WorkspaceSkeleton } from "@/components/app/Skeleton";
 
 export const Route = createFileRoute("/_app/workspace/")({
   head: () => ({ meta: [{ title: "Workspace · Huzzler" }] }),
@@ -112,7 +113,7 @@ function Workspace() {
     return () => void supabase().removeChannel(ch);
   }, [team.data?.team?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (team.isLoading || ws.isLoading || !me) return <Spinner />;
+  if (team.isLoading || ws.isLoading || !me) return <WorkspaceSkeleton />;
   if (!team.data?.team)
     return (
       <EmptyState

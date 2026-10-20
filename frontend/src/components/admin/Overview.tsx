@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Card, CardTitle, ErrorNote, Spinner } from "@/components/app/ui";
 import { DailyColumns, HBars, Kpi } from "./charts";
+import { DashboardSkeleton } from "@/components/app/Skeleton";
 
 type Overview = {
   funnel: Record<string, number>;
@@ -68,13 +69,13 @@ const STAGE_OF: Record<string, number> = {
 };
 
 export function OverviewTab() {
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["admin", "overview"],
     queryFn: () => api<Overview>("/admin/overview"),
     refetchInterval: 60_000,
   });
-  if (isLoading) return <Spinner />;
-  if (error || !data) return <ErrorNote error={error} />;
+  if (isLoading) return <DashboardSkeleton label="Loading overview" />;
+  if (error || !data) return <ErrorNote error={error} onRetry={() => refetch()} />;
   const funnel = STAGES.map((label, i) => ({
     label,
     value: Object.entries(data.funnel).reduce(

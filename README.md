@@ -52,5 +52,9 @@ Optional services: `JUDGE0_URL` (sandbox for code/SQL tests — without it those
 
 ```bash
 cd backend && npm test          # business rules, graders, matching, webhook security, content integrity
+
+# Full journey against a running API (creates throwaway users, then deletes them):
+PORT=3002 AI_MOCK=true npx tsx src/server.ts &   # separate test server
+E2E_API=http://localhost:3002 npm run e2e
 cd frontend && npx tsc --noEmit && npm run build
 ```
