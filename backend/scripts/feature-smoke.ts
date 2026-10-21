@@ -75,6 +75,7 @@ async function supportAndHelp(u: { id: string; token: string }, admin: string) {
   const none = await expect2xx<any>(u.token, "ask something the FAQ can't answer", "/help/ask", "POST", { question: "zxqv purple elephant quantum soup" });
   none?.source === "none" ? ok("unanswered question falls back to 'report an issue'") : bad("expected source none", none);
 
+  if (process.env.E2E_SKIP_REPORT) return console.log("\n▶ Report an issue: skipped (E2E_SKIP_REPORT, avoids emailing support)");
   console.log("\n▶ Report an issue");
   const up = await expect2xx<any>(u.token, "screenshot upload URL", "/support/upload-url", "POST", { ext: "png" });
   let attachment: string | undefined;
