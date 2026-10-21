@@ -32,12 +32,14 @@ function SupportPage() {
   if (isLoading) return <ListPageSkeleton rows={4} label="Loading your reports" />;
 
   const showDetail = Boolean(ticket) || creating;
+  // With no reports yet there's nothing to list: give the form the full width.
+  const hasTickets = (data ?? []).length > 0;
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
       <PageHeader
         chip="Help & support"
         title="Talk to the Huzzler team"
-        body="Report a problem, attach a screenshot and chat with us here. For quick answers, tap the help bubble in the corner."
+        body="Report a problem, attach a screenshot and chat with us here. For quick answers, use the help bubble on any other page."
         actions={
           <button
             onClick={() => {
@@ -51,8 +53,10 @@ function SupportPage() {
         }
       />
       <ErrorNote error={error} onRetry={() => refetch()} />
-      <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
-        <div className={`flex flex-col gap-2 ${showDetail ? "hidden lg:flex" : ""}`}>
+      <div className={`grid gap-4 ${hasTickets ? "lg:grid-cols-[320px_1fr]" : ""}`}>
+        <div
+          className={`flex flex-col gap-2 ${showDetail ? (hasTickets ? "hidden lg:flex" : "hidden") : ""}`}
+        >
           {(data ?? []).length === 0 && !creating && (
             <EmptyState
               icon={LifeBuoy}
@@ -84,7 +88,9 @@ function SupportPage() {
             </Link>
           ))}
         </div>
-        <Card className={`${showDetail ? "" : "hidden lg:block"} min-h-[420px]`}>
+        <Card
+          className={`${showDetail ? "" : hasTickets ? "hidden lg:block" : "hidden"} min-h-[420px]`}
+        >
           {showDetail && (
             <button
               onClick={() => {

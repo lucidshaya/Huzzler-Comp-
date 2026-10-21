@@ -86,6 +86,8 @@ async function capturePage(): Promise<Blob> {
   const { toBlob } = await import("html-to-image");
   const blob = await toBlob(document.body, {
     cacheBust: true,
+    // Google Fonts' stylesheet is cross-origin and can't be read; skipping it avoids errors and a slow capture.
+    skipFonts: true,
     pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
     width: window.innerWidth,
     height: window.innerHeight,

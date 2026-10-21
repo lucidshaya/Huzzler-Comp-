@@ -251,7 +251,8 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
         </div>
       </div>
 
-      <HelpWidget />
+      {/* The Help & support page is the support centre itself; a second floating form would cover it. */}
+      {!pathname.startsWith("/support") && <HelpWidget />}
 
       {/* Mobile bottom tab bar */}
       <nav
