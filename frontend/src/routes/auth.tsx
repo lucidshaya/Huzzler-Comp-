@@ -120,8 +120,25 @@ function AuthPage() {
   };
 
   const [oauthBusy, setOauthBusy] = useState<"google" | "github" | null>(null);
+  // Which social providers are switched on in Supabase. A disabled one would otherwise send the
+  // browser to a raw "provider is not enabled" error page.
+  const [providers, setProviders] = useState<Record<string, boolean> | null>(null);
+  useEffect(() => {
+    fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/settings`, {
+      headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setProviders(d?.external ?? null))
+      .catch(() => setProviders(null));
+  }, []);
   const oauth = async (provider: "google" | "github") => {
     setError("");
+    if (providers && !providers[provider]) {
+      setError(
+        `${provider === "google" ? "Google" : "GitHub"} sign-in isn't available yet. Use your email and a password for now.`,
+      );
+      return;
+    }
     setOauthBusy(provider);
     const { error } = await supabase().auth.signInWithOAuth({
       provider,
