@@ -34,7 +34,8 @@ export function createApp() {
   app.use(["/api/billing", "/api/webhooks"], limiter(60_000, 30));
   app.use("/api/mentor", limiter(60_000, 20));
   app.use(["/api/support", "/api/help"], limiter(60_000, 30));
-  app.use(["/api/admin/auth", "/api/guardian"], limiter(15 * 60_000, 20));
+  app.use(["/api/admin/auth", "/api/guardian", "/api/invites"], limiter(15 * 60_000, 20));
+  app.use("/api/workstation/run", limiter(60_000, 20));
 
   app.get("/health", (_req, res) => res.json({ ok: true }));
   app.use("/api", publicRouter);

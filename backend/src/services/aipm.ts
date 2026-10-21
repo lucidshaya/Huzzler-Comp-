@@ -9,6 +9,11 @@ import { aiConfigured, callStructured } from "../ai/aiClient.js";
 import { PROMPT_VERSIONS } from "../ai/prompts.js";
 import { wbsFromLibrary } from "../content/bank/projects.js";
 import { createTeam, loadPool, postSystemMessage, roleNames, runMatching } from "./teams.js";
+import { recordDecision } from "../lib/decisions.js";
+import { formTeams, type SquadTemplate } from "../domain/matching.js";
+import { ARCHETYPE_IDS, STANDIN_AFTER_HOURS } from "../domain/constants.js";
+import { env } from "../config/env.js";
+import { featureConfig, type AiFeature } from "../ai/features.js";
 
 // ---------------------------------------------------------------------------
 // Overview
@@ -168,6 +173,23 @@ export async function createBrief(actorId: string, input: BriefInput) {
     "brief",
   );
   await audit(actorId, "aipm.brief_created", "partner_brief", brief.id, { company: input.company, generated_by: generatedBy, tasks: wbs.role_tasks.length });
+  const byRole = new Map<string, number>();
+  for (const t of wbs.role_tasks) byRole.set(String(t.role_id), (byRole.get(String(t.role_id)) ?? 0) + 1);
+  await recordDecision({
+    kind: "wbs",
+    engine: generatedBy === "ai" ? "ai" : "rules",
+    model: generatedBy === "ai" ? (await featureConfig("aipm_wbs")).model : null,
+    subjectType: "partner_brief",
+    subjectId: brief.id,
+    summary: `Turned ${input.company}'s brief "${input.title}" into ${wbs.role_tasks.length} tasks across ${byRole.size} roles and ${wbs.milestones.length} milestones (${days} days).`,
+    reasoning: [
+      { label: "Squad shape", detail: `Company type ${input.archetype_id} needs ${roles.join(", ")}; every role gets at least one task.` },
+      { label: "Milestones", detail: wbs.milestones.map((m) => `${m.title} (day ${m.day_offset})`).join(" → ") },
+      ...[...byRole].map(([role, n]) => ({ label: role, detail: `${n} task${n === 1 ? "" : "s"}`, weight: n })),
+      { label: "Engine", detail: generatedBy === "ai" ? "Claude read the brief and wrote the breakdown; a person approves it in Content before any squad gets it." : "No API key yet: the role task library filled the breakdown. Add the key and Claude writes it from the brief." },
+    ],
+    confidence: generatedBy === "ai" ? 0.8 : 0.6,
+  });
   return getBrief(brief.id);
 }
 
@@ -431,4 +453,95 @@ export async function activity() {
     .order("created_at", { ascending: false })
     .limit(80);
   return data ?? [];
+}
+
+// ---------------------------------------------------------------------------
+// AI reasoning: how the AI PM (or the rules engine standing in for it) thinks
+// ---------------------------------------------------------------------------
+
+const AI_FEATURES: AiFeature[] = ["onboarding_grading", "project_grading", "second_grading", "demo_grading", "mentor_chat", "aipm_wbs", "help_bot", "workstation", "integrity_review"];
+
+export async function aiStatus() {
+  const monthStart = new Date();
+  monthStart.setUTCDate(1);
+  monthStart.setUTCHours(0, 0, 0, 0);
+  const [{ data: calls }, { data: decisions }, models] = await Promise.all([
+    db.from("ai_calls").select("feature, cost_usd, success, latency_ms").gte("created_at", monthStart.toISOString()),
+    db.from("ai_decisions").select("kind, engine, status").gte("created_at", monthStart.toISOString()),
+    Promise.all(AI_FEATURES.map(async (f) => [f, (await featureConfig(f)).model] as const)),
+  ]);
+  const byFeature: Record<string, { calls: number; cost_usd: number; failures: number }> = {};
+  for (const c of calls ?? []) {
+    const k = (byFeature[c.feature] ??= { calls: 0, cost_usd: 0, failures: 0 });
+    k.calls++;
+    k.cost_usd += Number(c.cost_usd);
+    if (!c.success) k.failures++;
+  }
+  const byKind: Record<string, { ai: number; rules: number; mock: number; flagged: number; overridden: number }> = {};
+  for (const d of decisions ?? []) {
+    const k = (byKind[d.kind] ??= { ai: 0, rules: 0, mock: 0, flagged: 0, overridden: 0 });
+    k[d.engine as "ai" | "rules" | "mock"]++;
+    if (d.status === "flagged") k.flagged++;
+    if (d.status === "overridden") k.overridden++;
+  }
+  return {
+    configured: aiConfigured(),
+    mock: env.AI_MOCK && !aiConfigured(),
+    models: Object.fromEntries(models),
+    month: { calls: calls?.length ?? 0, cost_usd: (calls ?? []).reduce((s, c) => s + Number(c.cost_usd), 0), by_feature: byFeature },
+    decisions: byKind,
+  };
+}
+
+export async function decisions(kind?: string) {
+  let q = db
+    .from("ai_decisions")
+    .select("id, kind, engine, model, subject_type, subject_id, summary, reasoning, confidence, latency_ms, status, created_at, profile:user_id(full_name), team:team_id(name)")
+    .order("created_at", { ascending: false })
+    .limit(80);
+  if (kind) q = q.eq("kind", kind);
+  return (await q).data ?? [];
+}
+
+/** Dry run of squad matching: what the matcher would do right now and why, without forming teams. */
+export async function matchingPreview() {
+  const pool = await loadPool();
+  const names = await roleNames();
+  const ids = pool.map((c) => c.userId);
+  const { data: profiles } = ids.length ? await db.from("profiles").select("id, full_name").in("id", ids) : { data: [] as Array<{ id: string; full_name: string | null }> };
+  const nameOf = new Map((profiles ?? []).map((p) => [p.id, p.full_name ?? "Unnamed"]));
+  const out = [];
+  for (const archetype of ARCHETYPE_IDS) {
+    const candidates = pool.filter((c) => c.archetypeId === archetype);
+    if (!candidates.length) continue;
+    const { data: tpl } = await db.from("squad_templates").select("template").eq("archetype_id", archetype).eq("active", true).order("version", { ascending: false }).limit(1).maybeSingle();
+    if (!tpl) continue;
+    const { data: compat } = await db.from("role_archetype_compatibility").select("role_id").eq("archetype_id", archetype);
+    const template = tpl.template as SquadTemplate;
+    const teams = formTeams(candidates, template, new Set((compat ?? []).map((c) => c.role_id)), {
+      allowStandins: (seed) => Date.now() - seed.waitingSince.getTime() > STANDIN_AFTER_HOURS * 3_600_000,
+    });
+    const placed = new Set(teams.flatMap((t) => t.members.map((m) => m.userId)));
+    const need = Object.entries(template.required).map(([r, n]) => `${n}× ${names.get(r) ?? r}`).join(", ");
+    out.push({
+      archetype_id: archetype,
+      required: need,
+      waiting: candidates.length,
+      proposed: teams.map((t) => ({
+        members: t.members.map((m, i) => ({
+          name: nameOf.get(m.userId) ?? "Unnamed",
+          role: names.get(m.roleId) ?? m.roleId,
+          why: i === 0 ? `Seed: waiting since ${m.waitingSince.toISOString().slice(0, 10)}` : `Closest ${names.get(m.roleId)}: score band ${m.scoreBand * 10}s, ${m.tzBand}, ${m.hoursPerWeek} h/week`,
+        })),
+        standins: t.missingRoles.map((r) => names.get(r) ?? r),
+      })),
+      waiting_why: candidates
+        .filter((c) => !placed.has(c.userId))
+        .map((c) => {
+          const hoursLeft = Math.max(0, Math.ceil(STANDIN_AFTER_HOURS - (Date.now() - c.waitingSince.getTime()) / 3_600_000));
+          return { name: nameOf.get(c.userId) ?? "Unnamed", role: names.get(c.roleId) ?? c.roleId, why: `Not enough people in the other required roles yet (${need}). Starts with stand-ins in ${hoursLeft} h if no one else arrives.` };
+        }),
+    });
+  }
+  return { generated_at: new Date().toISOString(), standin_after_hours: STANDIN_AFTER_HOURS, archetypes: out };
 }

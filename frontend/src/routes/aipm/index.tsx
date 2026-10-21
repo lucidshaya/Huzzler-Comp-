@@ -4,7 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import {
   Activity,
+  Brain,
   ChevronLeft,
+  Gavel,
   ChevronRight,
   FileText,
   Kanban,
@@ -28,10 +30,13 @@ import {
   TalentView,
   type AipmTab,
 } from "@/components/aipm/Views";
+import { AiView, GradingView } from "@/components/aipm/Intelligence";
 
 export const Route = createFileRoute("/aipm/")({
   ssr: false,
-  validateSearch: z.object({ tab: z.enum(["briefs", "talent", "board", "reports"]).optional() }),
+  validateSearch: z.object({
+    tab: z.enum(["briefs", "talent", "board", "grading", "ai", "reports"]).optional(),
+  }),
   head: () => ({
     meta: [{ title: "AI PM Portal · Huzzler" }, { name: "robots", content: "noindex" }],
   }),
@@ -42,6 +47,8 @@ const NAV: { key: AipmTab; label: string; icon: LucideIcon }[] = [
   { key: "briefs", label: "Briefs & WBS", icon: FileText },
   { key: "talent", label: "Talent & Squads", icon: Users },
   { key: "board", label: "Sprint Board", icon: Kanban },
+  { key: "grading", label: "Project grading", icon: Gavel },
+  { key: "ai", label: "AI reasoning", icon: Brain },
   { key: "reports", label: "Activity & Reports", icon: Activity },
 ];
 
@@ -231,6 +238,8 @@ function AipmPortal() {
             {active === "briefs" && <BriefsView onNext={() => goTo("talent")} />}
             {active === "talent" && <TalentView onNext={() => goTo("board")} />}
             {active === "board" && <BoardView />}
+            {active === "grading" && <GradingView />}
+            {active === "ai" && <AiView />}
             {active === "reports" && <ReportsView />}
           </div>
         </main>

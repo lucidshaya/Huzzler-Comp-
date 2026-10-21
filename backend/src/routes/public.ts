@@ -14,6 +14,7 @@ import { unsubscribe } from "../services/emailCampaigns.js";
 import { getGuardianRequest, respondGuardian } from "../services/profile.js";
 import { verifyCertificate, publicPortfolio } from "../services/certification.js";
 import { recordCiResult } from "../services/projects.js";
+import { AcceptInput, acceptInvite, inviteInfo } from "../services/staff.js";
 
 export const publicRouter = Router();
 
@@ -29,6 +30,10 @@ publicRouter.get(
     return { roles: roles.data, archetypes: archetypes.data, compatibility: compat.data, plans: plans.data };
   }),
 );
+
+// Staff invites: open the link from the email, set a username and password.
+publicRouter.get("/invites/:token", h(async (req) => inviteInfo(req.params.token)));
+publicRouter.post("/invites/:token/accept", h(async (req) => acceptInvite(req.params.token, parse(AcceptInput, req.body), req.ip)));
 
 // Site status for the web app (maintenance screen). Public and cheap: cached for 15s.
 publicRouter.get(

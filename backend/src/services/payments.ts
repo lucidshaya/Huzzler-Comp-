@@ -11,6 +11,7 @@ import { paystack, PaystackError, type PaystackTransaction } from "./paystack.js
 import { HttpError } from "../lib/errors.js";
 import { getJourney, transition } from "./journey.js";
 import { getProfile } from "./profile.js";
+import { applyTokenCharge, isTokenReference, verifyTokenPurchase } from "./tokens.js";
 
 type PlanId = "one_time" | "monthly";
 const DAY = 86_400_000;
@@ -87,6 +88,8 @@ const planCodeOf = (t: PaystackTransaction) => (typeof t.plan === "string" ? t.p
  * charge.success webhook — whichever arrives first unlocks access; the other is a no-op.
  */
 export async function applySuccessfulCharge(tx: PaystackTransaction, via: "verify" | "webhook") {
+  // Token top-ups have their own table; without this they'd look like subscription renewals below.
+  if (isTokenReference(tx.reference)) return applyTokenCharge(tx, via);
   if (tx.status !== "success") return { applied: false, reason: tx.status };
 
   let { data: payment } = await db.from("payments").select("*").eq("reference", tx.reference).maybeSingle();
@@ -157,7 +160,7 @@ export async function applySuccessfulCharge(tx: PaystackTransaction, via: "verif
   }
 
   await notify(userId, "payment.success", "Payment received", `Your ${plan.name} plan is active. You can start your onboarding tests now.`);
-  await emailUser(userId, "Your Huzzler receipt", receiptHtml(plan.name, plan.amount_kobo, tx.reference, tx.paid_at));
+  void emailUser(userId, "Your Huzzler receipt", receiptHtml(plan.name, plan.amount_kobo, tx.reference, tx.paid_at));
   return { applied: true };
 }
 
@@ -177,6 +180,7 @@ async function userForCustomer(customerCode: string, metaUserId?: string): Promi
 }
 
 export async function verifyPayment(userId: string, reference: string) {
+  if (isTokenReference(reference)) return verifyTokenPurchase(userId, reference);
   const { data: payment } = await db.from("payments").select("user_id, status").eq("reference", reference).maybeSingle();
   if (!payment || payment.user_id !== userId) throw notFound("Payment not found");
   if (payment.status === "success") return { status: "success" };

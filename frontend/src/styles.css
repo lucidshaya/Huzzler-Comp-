@@ -502,3 +502,135 @@
     fill-opacity: 1;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Scrollbars: thin, rounded and Huzzler blue everywhere (Chrome/Edge/Safari + Firefox).
+   --------------------------------------------------------------------------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--primary) 75%, transparent)
+    color-mix(in oklab, var(--primary) 8%, transparent);
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: color-mix(in oklab, var(--primary) 7%, transparent);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--primary) 70%, white),
+    var(--primary)
+  );
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ---------------------------------------------------------------------------
+   Landing explainer video: rotating blue border, soft glow, gentle float.
+   --------------------------------------------------------------------------- */
+@property --hz-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes hz-border-spin {
+  to {
+    --hz-angle: 360deg;
+  }
+}
+@keyframes hz-glow-breathe {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.02);
+  }
+}
+@keyframes hz-grid-drift {
+  to {
+    background-position: 32px 32px;
+  }
+}
+.hz-video-wrap {
+  animation: float-y 7s ease-in-out infinite;
+}
+.hz-video-frame {
+  position: relative;
+  border-radius: 1.75rem;
+  padding: 3px;
+  background: conic-gradient(
+    from var(--hz-angle),
+    var(--primary),
+    color-mix(in oklab, var(--primary) 25%, white),
+    oklch(0.62 0.17 245),
+    color-mix(in oklab, var(--primary) 25%, white),
+    var(--primary)
+  );
+  animation: hz-border-spin 6s linear infinite;
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--primary) 35%, transparent),
+    0 30px 80px -30px color-mix(in oklab, var(--primary) 70%, transparent);
+  transition: transform 0.4s ease;
+}
+.hz-video-wrap:hover .hz-video-frame {
+  transform: translateY(-4px) scale(1.01);
+}
+.hz-video-glow {
+  position: absolute;
+  inset: -24px;
+  border-radius: 2.5rem;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--primary) 45%, transparent),
+    transparent
+  );
+  filter: blur(28px);
+  animation: hz-glow-breathe 5s ease-in-out infinite;
+  pointer-events: none;
+}
+.hz-video-overlay {
+  background:
+    radial-gradient(
+      circle at 50% 45%,
+      color-mix(in oklab, var(--primary) 35%, transparent),
+      transparent 60%
+    ),
+    linear-gradient(160deg, oklch(0.25 0.04 250 / 0.85), oklch(0.18 0.03 250 / 0.92));
+}
+.hz-video-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(color-mix(in oklab, var(--primary) 18%, transparent) 1px, transparent 1px),
+    linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--primary) 18%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 32px 32px;
+  mask-image: radial-gradient(circle at center, black 30%, transparent 75%);
+  animation: hz-grid-drift 4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hz-video-wrap,
+  .hz-video-frame,
+  .hz-video-glow,
+  .hz-video-grid {
+    animation: none;
+  }
+}

@@ -12,6 +12,9 @@ export const getRouter = () => {
         retry: (count, err) =>
           !(err instanceof ApiError && err.status >= 400 && err.status < 500) && count < 2,
         refetchOnWindowFocus: false,
+        // Reuse data for 20s when moving between pages instead of refetching on every mount.
+        staleTime: 20_000,
+        gcTime: 10 * 60_000,
       },
     },
   });
@@ -20,6 +23,9 @@ export const getRouter = () => {
     routeTree,
     context: { queryClient },
     scrollRestoration: true,
+    // Load a page's code while the pointer is on its link, so navigation feels instant.
+    defaultPreload: "intent",
+    defaultPreloadDelay: 60,
     defaultPreloadStaleTime: 0,
     // Route transitions that wait on a loader show the branded loader after a short delay.
     defaultPendingComponent: () => <HuzzlerLoader fullScreen />,

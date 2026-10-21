@@ -2,8 +2,13 @@ import { Router } from "express";
 import { z } from "zod";
 import { h, parse, uid } from "./util.js";
 import { requireRole } from "../middleware/auth.js";
+import { badRequest } from "../lib/errors.js";
+import { answerAppeal, listAppeals, resolveGrade, reviewQueue } from "../services/grading.js";
 import {
   activity,
+  aiStatus,
+  decisions,
+  matchingPreview,
   BriefInput,
   createBrief,
   createReport,
@@ -48,3 +53,24 @@ aipmRouter.post("/standups", h(async (req) => requestStandup(uid(req), parse(z.o
 aipmRouter.get("/reports", h(async () => listReports()));
 aipmRouter.post("/teams/:id/report", h(async (req) => createReport(uid(req), req.params.id)));
 aipmRouter.get("/activity", h(async () => activity()));
+
+// Project grading (deliverables and demo day) lives here, next to the squads; onboarding grading stays in Admin.
+aipmRouter.get("/grading", h(async () => ({ ...(await reviewQueue("projects")), appeals: await listAppeals("projects") })));
+aipmRouter.post(
+  "/grading/:subjectType/:subjectId/resolve",
+  h(async (req) => {
+    if (!["deliverable", "demo"].includes(req.params.subjectType)) throw badRequest("Onboarding tests are graded in Admin.");
+    return resolveGrade(uid(req), req.params.subjectType, req.params.subjectId, parse(z.object({ score: z.number().min(0).max(100), feedback: z.string().max(4000).optional(), user_id: z.string().uuid().optional() }), req.body), req.ip);
+  }),
+);
+aipmRouter.post(
+  "/appeals/:id",
+  h(async (req) =>
+    answerAppeal(uid(req), "projects", req.params.id, parse(z.object({ status: z.enum(["upheld", "adjusted", "rejected"]), response: z.string().min(10).max(4000), new_score: z.number().min(0).max(100).optional() }), req.body), req.ip),
+  ),
+);
+
+// How the AI PM thinks: engine status, the decision log, and a dry run of squad matching.
+aipmRouter.get("/ai/status", h(async () => aiStatus()));
+aipmRouter.get("/ai/decisions", h(async (req) => decisions(typeof req.query.kind === "string" && req.query.kind ? req.query.kind : undefined)));
+aipmRouter.get("/ai/matching-preview", h(async () => matchingPreview()));

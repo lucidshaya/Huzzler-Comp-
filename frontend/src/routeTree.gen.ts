@@ -20,6 +20,7 @@ import { Route as AppBillingRouteImport } from './routes/_app/billing'
 import { Route as AppCertificateRouteImport } from './routes/_app/certificate'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppOffersRouteImport } from './routes/_app/offers'
+import { Route as AppOpportunitiesRouteImport } from './routes/_app/opportunities'
 import { Route as AppResultsRouteImport } from './routes/_app/results'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppSupportRouteImport } from './routes/_app/support'
@@ -29,6 +30,7 @@ import { Route as AipmIndexRouteImport } from './routes/aipm/index'
 import { Route as AipmLoginRouteImport } from './routes/aipm/login'
 import { Route as BillingCallbackRouteImport } from './routes/billing.callback'
 import { Route as GuardianTokenRouteImport } from './routes/guardian.$token'
+import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as UUsernameRouteImport } from './routes/u.$username'
 import { Route as VerifyCertIdRouteImport } from './routes/verify.$certId'
 import { Route as AppTestsIndexRouteImport } from './routes/_app/tests/index'
@@ -90,6 +92,11 @@ const AppOffersRoute = AppOffersRouteImport.update({
   path: '/offers',
   getParentRoute: () => AppRoute,
 } as any)
+const AppOpportunitiesRoute = AppOpportunitiesRouteImport.update({
+  id: '/opportunities',
+  path: '/opportunities',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppResultsRoute = AppResultsRouteImport.update({
   id: '/results',
   path: '/results',
@@ -135,6 +142,11 @@ const GuardianTokenRoute = GuardianTokenRouteImport.update({
   path: '/guardian/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InviteTokenRoute = InviteTokenRouteImport.update({
+  id: '/invite/$token',
+  path: '/invite/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const UUsernameRoute = UUsernameRouteImport.update({
   id: '/u/$username',
   path: '/u/$username',
@@ -177,6 +189,7 @@ export interface FileRoutesByFullPath {
   '/certificate': typeof AppCertificateRoute
   '/dashboard': typeof AppDashboardRoute
   '/offers': typeof AppOffersRoute
+  '/opportunities': typeof AppOpportunitiesRoute
   '/results': typeof AppResultsRoute
   '/settings': typeof AppSettingsRoute
   '/support': typeof AppSupportRoute
@@ -184,6 +197,7 @@ export interface FileRoutesByFullPath {
   '/aipm/login': typeof AipmLoginRoute
   '/billing/callback': typeof BillingCallbackRoute
   '/guardian/$token': typeof GuardianTokenRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/u/$username': typeof UUsernameRoute
   '/verify/$certId': typeof VerifyCertIdRoute
   '/admin/': typeof AdminIndexRoute
@@ -204,6 +218,7 @@ export interface FileRoutesByTo {
   '/certificate': typeof AppCertificateRoute
   '/dashboard': typeof AppDashboardRoute
   '/offers': typeof AppOffersRoute
+  '/opportunities': typeof AppOpportunitiesRoute
   '/results': typeof AppResultsRoute
   '/settings': typeof AppSettingsRoute
   '/support': typeof AppSupportRoute
@@ -211,6 +226,7 @@ export interface FileRoutesByTo {
   '/aipm/login': typeof AipmLoginRoute
   '/billing/callback': typeof BillingCallbackRoute
   '/guardian/$token': typeof GuardianTokenRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/u/$username': typeof UUsernameRoute
   '/verify/$certId': typeof VerifyCertIdRoute
   '/admin': typeof AdminIndexRoute
@@ -233,6 +249,7 @@ export interface FileRoutesById {
   '/_app/certificate': typeof AppCertificateRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/offers': typeof AppOffersRoute
+  '/_app/opportunities': typeof AppOpportunitiesRoute
   '/_app/results': typeof AppResultsRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/support': typeof AppSupportRoute
@@ -240,6 +257,7 @@ export interface FileRoutesById {
   '/aipm/login': typeof AipmLoginRoute
   '/billing/callback': typeof BillingCallbackRoute
   '/guardian/$token': typeof GuardianTokenRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/u/$username': typeof UUsernameRoute
   '/verify/$certId': typeof VerifyCertIdRoute
   '/admin/': typeof AdminIndexRoute
@@ -262,6 +280,7 @@ export interface FileRouteTypes {
     | '/certificate'
     | '/dashboard'
     | '/offers'
+    | '/opportunities'
     | '/results'
     | '/settings'
     | '/support'
@@ -269,6 +288,7 @@ export interface FileRouteTypes {
     | '/aipm/login'
     | '/billing/callback'
     | '/guardian/$token'
+    | '/invite/$token'
     | '/u/$username'
     | '/verify/$certId'
     | '/admin/'
@@ -289,6 +309,7 @@ export interface FileRouteTypes {
     | '/certificate'
     | '/dashboard'
     | '/offers'
+    | '/opportunities'
     | '/results'
     | '/settings'
     | '/support'
@@ -296,6 +317,7 @@ export interface FileRouteTypes {
     | '/aipm/login'
     | '/billing/callback'
     | '/guardian/$token'
+    | '/invite/$token'
     | '/u/$username'
     | '/verify/$certId'
     | '/admin'
@@ -317,6 +339,7 @@ export interface FileRouteTypes {
     | '/_app/certificate'
     | '/_app/dashboard'
     | '/_app/offers'
+    | '/_app/opportunities'
     | '/_app/results'
     | '/_app/settings'
     | '/_app/support'
@@ -324,6 +347,7 @@ export interface FileRouteTypes {
     | '/aipm/login'
     | '/billing/callback'
     | '/guardian/$token'
+    | '/invite/$token'
     | '/u/$username'
     | '/verify/$certId'
     | '/admin/'
@@ -345,6 +369,7 @@ export interface RootRouteChildren {
   AipmLoginRoute: typeof AipmLoginRoute
   BillingCallbackRoute: typeof BillingCallbackRoute
   GuardianTokenRoute: typeof GuardianTokenRoute
+  InviteTokenRoute: typeof InviteTokenRoute
   UUsernameRoute: typeof UUsernameRoute
   VerifyCertIdRoute: typeof VerifyCertIdRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -430,6 +455,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOffersRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/opportunities': {
+      id: '/_app/opportunities'
+      path: '/opportunities'
+      fullPath: '/opportunities'
+      preLoaderRoute: typeof AppOpportunitiesRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/results': {
       id: '/_app/results'
       path: '/results'
@@ -493,6 +525,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GuardianTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/invite/$token': {
+      id: '/invite/$token'
+      path: '/invite/$token'
+      fullPath: '/invite/$token'
+      preLoaderRoute: typeof InviteTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/u/$username': {
       id: '/u/$username'
       path: '/u/$username'
@@ -544,6 +583,7 @@ interface AppRouteChildren {
   AppCertificateRoute: typeof AppCertificateRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppOffersRoute: typeof AppOffersRoute
+  AppOpportunitiesRoute: typeof AppOpportunitiesRoute
   AppResultsRoute: typeof AppResultsRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppSupportRoute: typeof AppSupportRoute
@@ -559,6 +599,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppCertificateRoute: AppCertificateRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppOffersRoute: AppOffersRoute,
+  AppOpportunitiesRoute: AppOpportunitiesRoute,
   AppResultsRoute: AppResultsRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppSupportRoute: AppSupportRoute,
@@ -581,6 +622,7 @@ const rootRouteChildren: RootRouteChildren = {
   AipmLoginRoute: AipmLoginRoute,
   BillingCallbackRoute: BillingCallbackRoute,
   GuardianTokenRoute: GuardianTokenRoute,
+  InviteTokenRoute: InviteTokenRoute,
   UUsernameRoute: UUsernameRoute,
   VerifyCertIdRoute: VerifyCertIdRoute,
   AdminIndexRoute: AdminIndexRoute,

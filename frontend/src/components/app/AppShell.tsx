@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  Coins,
   LifeBuoy,
   type LucideIcon,
 } from "lucide-react";
@@ -25,6 +26,7 @@ import { ThemeToggle } from "@/lib/theme";
 import { signOut as doSignOut } from "@/lib/supabase";
 import { api } from "@/lib/api";
 import { hasPaid, onTeam, roleName, STATUS_LABEL, type Me } from "@/lib/journey";
+import { fmtTokens, useWallet } from "@/lib/tokens";
 import { HuzzlerLoader } from "./Loader";
 import { HelpWidget } from "./Support";
 import { fmtDateTime } from "./ui";
@@ -57,9 +59,9 @@ function navFor(me: Me): NavItem[] {
       locked: !paid,
     },
     {
-      to: "/offers",
-      label: "Offers",
-      short: "Offers",
+      to: "/opportunities",
+      label: "Opportunities",
+      short: "Jobs",
       icon: Briefcase,
       locked: !VERIFIED.includes(s),
     },
@@ -216,6 +218,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {(hasPaid(me.journey.status) || me.journey.status === "LAPSED") && <TokenChip />}
                 <Notifications unread={me.unread_notifications} />
                 <ThemeToggle />
                 <AccountMenu me={me} onSignOut={signOut} />
@@ -325,6 +328,21 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
         </>
       )}
     </div>
+  );
+}
+
+/** Token balance in the header; opens Billing where tokens are bought. */
+function TokenChip() {
+  const { data } = useWallet();
+  return (
+    <Link
+      to="/billing"
+      hash="tokens"
+      aria-label={`Token balance: ${fmtTokens(data?.balance ?? 0)}`}
+      className="hidden h-11 items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 text-sm font-bold text-primary hover:bg-primary/15 sm:inline-flex"
+    >
+      <Coins className="h-4 w-4" /> {data ? fmtTokens(data.balance) : "—"}
+    </Link>
   );
 }
 

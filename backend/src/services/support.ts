@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { db, must } from "../lib/supabase.js";
 import { env } from "../config/env.js";
 import { audit } from "../lib/audit.js";
-import { notify, notifyStaff, sendEmail, emailUser, emailLayout, escapeHtml } from "../lib/notify.js";
+import { notify, notifyStaff, sendEmail, emailUser, emailLayout, escapeHtml, later } from "../lib/notify.js";
 import { badRequest, forbidden, HttpError, notFound } from "../lib/errors.js";
 
 export const SUPPORT_CATEGORIES = ["bug", "payment", "account", "tests", "team", "grading", "other"] as const;
@@ -48,8 +48,11 @@ export async function createTicket(
   userId: string,
   input: { category: SupportCategory; subject: string; body: string; page_url?: string; user_agent?: string; attachment_path?: string },
 ) {
-  await rateLimit("support_tickets", "user_id", userId, MAX_TICKETS_PER_HOUR);
   const attachment = assertOwnAttachment(userId, input.attachment_path);
+  const [, { data: p }] = await Promise.all([
+    rateLimit("support_tickets", "user_id", userId, MAX_TICKETS_PER_HOUR),
+    db.from("profiles").select("full_name, username").eq("id", userId).single(),
+  ]);
   const ticket = must(
     await db
       .from("support_tickets")
@@ -67,16 +70,20 @@ export async function createTicket(
   );
   must(await db.from("support_messages").insert({ ticket_id: ticket.id, sender_id: userId, is_staff: false, body: input.body, attachment_path: attachment }).select("id").single(), "message");
 
-  await notifyStaff("support.new", `New report: ${input.subject}`, `Category: ${input.category}`, { ticketId: ticket.id });
-  const { data: p } = await db.from("profiles").select("full_name, username").eq("id", userId).single();
-  await sendEmail(
-    env.SUPPORT_EMAIL,
-    `[Huzzler support] ${input.category}: ${input.subject}`,
-    emailLayout(
-      `New report from ${p?.full_name ?? "a user"}`,
-      `<p><b>Category:</b> ${escapeHtml(input.category)}<br/><b>Subject:</b> ${escapeHtml(input.subject)}<br/><b>Page:</b> ${escapeHtml(input.page_url ?? "—")}</p><p style="white-space:pre-wrap">${escapeHtml(input.body)}</p>${attachment ? "<p>A screenshot is attached in the admin inbox.</p>" : ""}`,
-      { label: "Open the support inbox", url: `${env.APP_URL}/admin` },
-    ),
+  // Staff pings and the inbox email run after the response so a slow mail server never fails a report.
+  later(
+    Promise.all([
+      notifyStaff("support.new", `New report: ${input.subject}`, `Category: ${input.category}`, { ticketId: ticket.id }),
+      sendEmail(
+        env.SUPPORT_EMAIL,
+        `[Huzzler support] ${input.category}: ${input.subject}`,
+        emailLayout(
+          `New report from ${p?.full_name ?? "a user"}`,
+          `<p><b>Category:</b> ${escapeHtml(input.category)}<br/><b>Subject:</b> ${escapeHtml(input.subject)}<br/><b>Page:</b> ${escapeHtml(input.page_url ?? "—")}</p><p style="white-space:pre-wrap">${escapeHtml(input.body)}</p>${attachment ? "<p>A screenshot is attached in the admin inbox.</p>" : ""}`,
+          { label: "Open the support inbox", url: `${env.APP_URL}/admin` },
+        ),
+      ),
+    ]),
   );
   return ticket;
 }
@@ -117,7 +124,7 @@ export async function replyAsUser(userId: string, ticketId: string, body: string
   const attachment = assertOwnAttachment(userId, attachmentPath);
   const msg = must(await db.from("support_messages").insert({ ticket_id: ticketId, sender_id: userId, is_staff: false, body, attachment_path: attachment }).select().single(), "message");
   await db.from("support_tickets").update({ status: "open", unread_by_staff: true, last_message_at: new Date().toISOString() }).eq("id", ticketId);
-  await notifyStaff("support.reply", `Reply on: ${ticket.subject}`, body.slice(0, 120), { ticketId });
+  later(notifyStaff("support.reply", `Reply on: ${ticket.subject}`, body.slice(0, 120), { ticketId }));
   return msg;
 }
 
@@ -156,11 +163,11 @@ export async function replyAsStaff(staffId: string, ticketId: string, body: stri
     .update({ status: "awaiting_user", unread_by_user: true, last_message_at: new Date().toISOString(), assigned_to: ticket.assigned_to ?? staffId })
     .eq("id", ticketId);
   await notify(ticket.user_id, "support.reply", "Huzzler support replied", body.slice(0, 140), { ticketId });
-  await emailUser(
+  later(emailUser(
     ticket.user_id,
     `Re: ${ticket.subject}`,
     emailLayout("Huzzler support replied to your report", `<p style="white-space:pre-wrap">${escapeHtml(body)}</p>`, { label: "View the conversation", url: `${env.APP_URL}/support?ticket=${ticketId}` }),
-  );
+  ));
   await audit(staffId, "support.reply", "support_ticket", ticketId, {}, ip);
   return msg;
 }

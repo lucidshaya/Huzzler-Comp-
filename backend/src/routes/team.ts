@@ -5,7 +5,8 @@ import { db } from "../lib/supabase.js";
 import { h, parse, uid } from "./util.js";
 import { forbidden } from "../lib/errors.js";
 import { requirePaidAccess } from "../middleware/auth.js";
-import { listOffers, respondToOffer } from "../services/offers.js";
+import { listOffers, respondToOffer, restoreOffer } from "../services/offers.js";
+import { CanvasInput, RunInput, runTool, saveCanvas, workstationState } from "../services/workstation.js";
 import { myTeam, assertTeamMember, maybeStandinReply } from "../services/teams.js";
 import { workspace, updateTask, getTaskDetail, unlockHint, submitDeliverable, submitCheckin, submitPeerReviews, submitDemo, ciToken } from "../services/projects.js";
 import { mentorHistory, askMentor } from "../services/mentor.js";
@@ -36,10 +37,25 @@ teamRouter.get("/team/messages", h(async (req) => {
   return (data ?? []).reverse();
 }));
 
+// This week's stand-ups for the whole squad (the squad view's stand-up panel).
+teamRouter.get("/team/checkins", h(async (req) => {
+  const team = await myTeam(uid(req));
+  if (!team) return [];
+  const since = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
+  const { data } = await db.from("checkins").select("id, user_id, checkin_date, yesterday, today, blockers, created_at, profile:user_id(full_name)").eq("team_id", team.team!.id).gte("checkin_date", since).order("created_at", { ascending: false }).limit(60);
+  return data ?? [];
+}));
+
 teamRouter.use(requirePaidAccess);
 
 teamRouter.get("/offers", h(async (req) => listOffers(uid(req))));
 teamRouter.post("/offers/:id/respond", h(async (req) => respondToOffer(uid(req), req.params.id, parse(z.object({ accept: z.boolean() }), req.body).accept)));
+teamRouter.post("/offers/:id/restore", h(async (req) => restoreOffer(uid(req), req.params.id)));
+
+// Workstation: AI tools in the team workspace, paid for with tokens.
+teamRouter.get("/workstation", h(async (req) => workstationState(uid(req))));
+teamRouter.post("/workstation/run", h(async (req) => runTool(uid(req), parse(RunInput, req.body))));
+teamRouter.put("/workstation/canvas", h(async (req) => saveCanvas(uid(req), parse(CanvasInput, req.body).nodes)));
 
 teamRouter.post("/team/messages", h(async (req) => {
   const { body } = parse(z.object({ body: z.string().trim().min(1).max(4000) }), req.body);

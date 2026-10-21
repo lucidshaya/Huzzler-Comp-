@@ -203,9 +203,9 @@ export function nextStep(me: Me): { label: string; to: string; hint: string } {
     case "TESTS_PASSED":
     case "OFFER_PENDING":
       return {
-        label: "Review your offers",
-        to: "/offers",
-        hint: "Accept within 72 hours to join a team.",
+        label: "Review your opportunities",
+        to: "/opportunities",
+        hint: "Accept one within 72 hours to join a squad.",
       };
     case "PLACED":
     case "PROJECT_1":
@@ -246,7 +246,7 @@ export const STATUS_LABEL: Record<JourneyStatus, string> = {
   TESTING: "Taking tests",
   TESTS_PASSED: "Verified",
   TESTS_FAILED: "Retake pending",
-  OFFER_PENDING: "Offers",
+  OFFER_PENDING: "Opportunities",
   PLACED: "Placed",
   PROJECT_1: "Project 1",
   PROJECT_2: "Project 2",

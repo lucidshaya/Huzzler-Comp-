@@ -8,6 +8,7 @@ import { badRequest, conflict, notFound } from "../lib/errors.js";
 import { ROLE_IDS } from "../domain/constants.js";
 import type { JourneyStatus } from "../domain/journey.js";
 import { enqueue } from "../jobs/queue.js";
+import { deliverEmail, emailReady, smtpReady } from "../lib/notify.js";
 
 // ---------------------------------------------------------------------------
 // Audiences: learners only, never suspended/withdrawn accounts or people who opted out.
@@ -94,13 +95,15 @@ export async function unsubscribe(userId: string, token: string) {
 // Campaigns
 // ---------------------------------------------------------------------------
 
-export const emailConfigured = () => Boolean(env.RESEND_API_KEY);
+// Gmail SMTP (fourtechonoliges@gmail.com) is used when it's set up; Resend is the alternative.
+export const emailConfigured = emailReady;
+const NOT_CONFIGURED = "Email sending isn't set up yet: add the Gmail SMTP settings (SMTP_HOST, SMTP_USER, SMTP_PASS) or RESEND_API_KEY to the API's environment.";
 
 export const CampaignInput = z.object({ subject: z.string().trim().min(3).max(150), body: z.string().trim().min(10).max(20000), audience: Audience });
 
 export async function listCampaigns() {
   const { data } = await db.from("email_campaigns").select("*, creator:created_by(full_name, username)").order("created_at", { ascending: false }).limit(50);
-  return { configured: emailConfigured(), from: env.EMAIL_FROM, segments: Object.entries(SEGMENTS).map(([value, s]) => ({ value, label: s.label })), campaigns: data ?? [] };
+  return { configured: emailConfigured(), provider: smtpReady() ? "gmail" : env.RESEND_API_KEY ? "resend" : null, from: env.EMAIL_FROM, segments: Object.entries(SEGMENTS).map(([value, s]) => ({ value, label: s.label })), campaigns: data ?? [] };
 }
 
 export async function createCampaign(actorId: string, input: z.infer<typeof CampaignInput>) {
@@ -133,21 +136,21 @@ export function previewHtml(subject: string, body: string) {
 }
 
 export async function sendTest(actorId: string, id: string) {
-  if (!emailConfigured()) throw badRequest("Email sending isn't set up yet: add RESEND_API_KEY to the API's environment.", "EMAIL_NOT_CONFIGURED");
+  if (!emailConfigured()) throw badRequest(NOT_CONFIGURED, "EMAIL_NOT_CONFIGURED");
   const c = await loadDraft(id);
   const { data: u } = await db.auth.admin.getUserById(actorId);
   const { data: p } = await db.from("profiles").select("full_name").eq("id", actorId).single();
   if (!u.user?.email) throw badRequest("Your staff account has no email address.");
   const { html, text } = renderEmail(c.subject, c.body, (p?.full_name ?? "there").split(" ")[0], unsubscribeUrl(actorId));
-  const res = await resendBatch([{ to: u.user.email, subject: `[Test] ${c.subject}`, html, text, unsubscribe: unsubscribeUrl(actorId) }]);
-  if (!res.ok) throw badRequest(`Resend rejected the test: ${res.error}`);
+  const res = await sendBatch([{ to: u.user.email, subject: `[Test] ${c.subject}`, html, text, unsubscribe: unsubscribeUrl(actorId) }]);
+  if (!res.ok) throw badRequest(`The test email wasn't accepted: ${res.error}`);
   await db.from("email_campaigns").update({ test_sent_at: new Date().toISOString() }).eq("id", id);
   return { to: u.user.email };
 }
 
 /** Snapshots the audience into email_deliveries and queues the send. */
 export async function startSend(actorId: string, id: string) {
-  if (!emailConfigured()) throw badRequest("Email sending isn't set up yet: add RESEND_API_KEY to the API's environment.", "EMAIL_NOT_CONFIGURED");
+  if (!emailConfigured()) throw badRequest(NOT_CONFIGURED, "EMAIL_NOT_CONFIGURED");
   const c = await loadDraft(id);
   if (c.status !== "draft") throw conflict("This email has already been sent or cancelled.");
   const members = await audienceMembers(Audience.parse(c.audience));
@@ -179,12 +182,31 @@ export async function cancelSend(actorId: string, id: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Sending (background job): batches of 100 via Resend, resumes until every delivery is done
+// Sending (background job): batches of 100 via Resend, or one by one over Gmail SMTP; resumes until
+// every delivery is done
 // ---------------------------------------------------------------------------
 
 type Outgoing = { to: string; subject: string; html: string; text: string; unsubscribe: string };
 
-async function resendBatch(emails: Outgoing[]): Promise<{ ok: true } | { ok: false; error: string; retryable: boolean }> {
+const unsubscribeHeaders = (url: string) => ({ "List-Unsubscribe": `<${url}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" });
+
+type BatchResult = { ok: true } | { ok: false; error: string; retryable: boolean };
+
+/** Sends a batch; over SMTP each email goes separately and per-recipient results come back. */
+async function sendBatch(emails: Outgoing[]): Promise<BatchResult & { results?: Array<{ ok: boolean; error?: string; retryable?: boolean }> }> {
+  if (!smtpReady()) return resendBatch(emails);
+  const results: Array<{ ok: boolean; error?: string; retryable?: boolean }> = [];
+  for (const e of emails) {
+    const r = await deliverEmail(e.to, e.subject, e.html, { text: e.text, headers: unsubscribeHeaders(e.unsubscribe) });
+    results.push(r.ok ? { ok: true } : { ok: false, error: r.error, retryable: r.retryable });
+    if (!r.ok && r.retryable) break; // Gmail is throttling: stop and let the job retry later
+  }
+  const firstErr = results.find((r) => !r.ok);
+  if (!firstErr) return { ok: true, results };
+  return { ok: false, error: firstErr.error ?? "send failed", retryable: Boolean(firstErr.retryable), results };
+}
+
+async function resendBatch(emails: Outgoing[]): Promise<BatchResult> {
   const res = await fetch("https://api.resend.com/emails/batch", {
     method: "POST",
     headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
@@ -195,7 +217,7 @@ async function resendBatch(emails: Outgoing[]): Promise<{ ok: true } | { ok: fal
         subject: e.subject,
         html: e.html,
         text: e.text,
-        headers: { "List-Unsubscribe": `<${e.unsubscribe}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
+        headers: unsubscribeHeaders(e.unsubscribe),
       })),
     ),
   });
@@ -212,10 +234,10 @@ export async function processCampaign(campaignId: string) {
   while (Date.now() < deadline) {
     const { data: status } = await db.from("email_campaigns").select("status").eq("id", campaignId).single();
     if (status?.status !== "sending") return; // cancelled
-    const { data: batch } = await db.from("email_deliveries").select("id, user_id, email, first_name").eq("campaign_id", campaignId).eq("status", "pending").limit(100);
+    const { data: batch } = await db.from("email_deliveries").select("id, user_id, email, first_name").eq("campaign_id", campaignId).eq("status", "pending").limit(smtpReady() ? 15 : 100); // SMTP sends one at a time
     if (!batch?.length) break;
 
-    const res = await resendBatch(
+    const res = await sendBatch(
       batch.map((d) => {
         const unsub = unsubscribeUrl(d.user_id);
         const { html, text } = renderEmail(c.subject, c.body, d.first_name ?? "there", unsub);
@@ -223,7 +245,18 @@ export async function processCampaign(campaignId: string) {
       }),
     );
     const ids = batch.map((d) => d.id);
-    if (res.ok) {
+    if (res.results) {
+      // SMTP: record each recipient; anything not attempted (throttled) stays pending for the retry.
+      const sentIds = ids.filter((_, i) => res.results![i]?.ok);
+      const failed = res.results.map((r, i) => ({ r, id: ids[i] })).filter((x) => !x.r.ok && !x.r.retryable);
+      if (sentIds.length) await db.from("email_deliveries").update({ status: "sent", sent_at: new Date().toISOString(), error: null }).in("id", sentIds);
+      for (const f of failed) await db.from("email_deliveries").update({ status: "failed", error: f.r.error ?? "rejected" }).eq("id", f.id);
+      if (!res.ok) await db.from("email_campaigns").update({ last_error: res.error }).eq("id", campaignId);
+      if (!res.ok && res.retryable) {
+        await refreshCounts(campaignId);
+        throw new Error(`Email provider is throttling: ${res.error}`); // job retries with backoff
+      }
+    } else if (res.ok) {
       await db.from("email_deliveries").update({ status: "sent", sent_at: new Date().toISOString(), error: null }).in("id", ids);
     } else if (res.retryable) {
       await db.from("email_campaigns").update({ last_error: res.error }).eq("id", campaignId);
@@ -234,7 +267,7 @@ export async function processCampaign(campaignId: string) {
       logger.error({ campaignId, error: res.error }, "email batch rejected");
     }
     await refreshCounts(campaignId);
-    await new Promise((r) => setTimeout(r, 600)); // stay under Resend's default 2 requests/second
+    await new Promise((r) => setTimeout(r, 600)); // stay under provider rate limits (Resend: 2 req/s)
   }
 
   const { count: pending } = await db.from("email_deliveries").select("id", { count: "exact", head: true }).eq("campaign_id", campaignId).eq("status", "pending");

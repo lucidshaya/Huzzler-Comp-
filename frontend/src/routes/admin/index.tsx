@@ -16,6 +16,8 @@ import {
   LifeBuoy,
   Bot,
   UsersRound,
+  Home,
+  Coins,
 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { signOut, supabase } from "@/lib/supabase";
@@ -33,9 +35,11 @@ import {
   GradingTab,
   StaffTab,
   IntegrityTab,
-  OpportunitiesTab,
   SystemTab,
 } from "@/components/admin/Tabs";
+import { OpportunitiesTab } from "@/components/admin/Opportunities";
+import { TokensTab } from "@/components/admin/Tokens";
+import { HomeTab } from "@/components/admin/Home";
 
 export const Route = createFileRoute("/admin/")({
   ssr: false,
@@ -44,7 +48,15 @@ export const Route = createFileRoute("/admin/")({
 });
 
 // Which staff roles see which tabs (the API enforces the same rules).
-const TABS = [
+const ALL_STAFF = ["admin", "moderator", "content_reviewer", "partnerships"];
+const TABS: Array<{
+  key: string;
+  label: string;
+  icon: typeof Home;
+  roles: string[];
+  el: (p: { go: (tab: string) => void }) => React.ReactNode;
+}> = [
+  { key: "home", label: "My dashboard", icon: Home, roles: ALL_STAFF, el: HomeTab },
   {
     key: "overview",
     label: "Overview",
@@ -67,6 +79,7 @@ const TABS = [
     el: SupportTab,
   },
   { key: "payments", label: "Payments", icon: CreditCard, roles: ["admin"], el: PaymentsTab },
+  { key: "tokens", label: "Tokens", icon: Coins, roles: ["admin"], el: TokensTab },
   {
     key: "content",
     label: "Content bank",
@@ -76,7 +89,7 @@ const TABS = [
   },
   {
     key: "grading",
-    label: "Grading & appeals",
+    label: "Onboarding grading",
     icon: Gavel,
     roles: ["admin", "moderator"],
     el: GradingTab,
@@ -94,7 +107,7 @@ const TABS = [
     key: "opportunities",
     label: "Opportunities",
     icon: Handshake,
-    roles: ["admin", "partnerships"],
+    roles: ["admin", "partnerships", "content_reviewer"],
     el: OpportunitiesTab,
   },
   { key: "emails", label: "Emails", icon: Mail, roles: ["admin"], el: EmailsTab },
@@ -110,10 +123,11 @@ const TABS = [
 
 function Admin() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState("home");
   const who = useQuery({
     queryKey: ["admin", "whoami"],
-    queryFn: () => api<{ role: string }>("/admin/whoami"),
+    queryFn: () =>
+      api<{ role: string; full_name: string | null; staff_title: string | null }>("/admin/whoami"),
     retry: false,
   });
 
@@ -137,6 +151,10 @@ function Admin() {
     );
   const tabs = TABS.filter((t) => t.roles.includes(who.data.role));
   const Active = (tabs.find((t) => t.key === tab) ?? tabs[0]).el;
+  const go = (k: string) => {
+    setTab(k);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -145,9 +163,12 @@ function Admin() {
           <div className="flex items-center gap-3">
             <img src="/huzzler-mark.svg" alt="" className="h-8 w-8" />
             <div>
-              <div className="font-display font-bold">Huzzler Admin</div>
-              <div className="text-xs capitalize text-muted-foreground">
-                {who.data.role.replace("_", " ")}
+              <div className="font-display font-bold">
+                {who.data.full_name ? who.data.full_name.split(" ")[0] : "Huzzler"}'s dashboard
+              </div>
+              <div className="text-xs text-muted-foreground">
+                <span className="capitalize">{who.data.role.replace("_", " ")}</span>
+                {who.data.staff_title ? ` · ${who.data.staff_title}` : ""}
               </div>
             </div>
           </div>
@@ -190,7 +211,7 @@ function Admin() {
         </nav>
       </header>
       <main className="mx-auto max-w-[1400px] px-4 py-6 md:px-8">
-        <Active />
+        <Active go={go} />
       </main>
     </div>
   );

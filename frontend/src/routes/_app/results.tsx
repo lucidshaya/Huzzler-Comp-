@@ -95,8 +95,8 @@ function Results() {
                 <Pill tone="green">
                   <Award className="h-3 w-3" /> Verified
                 </Pill>
-                <Link to="/offers" className="btn-duo">
-                  See your job offers
+                <Link to="/opportunities" className="btn-duo">
+                  See your opportunities
                 </Link>
               </div>
             ) : (

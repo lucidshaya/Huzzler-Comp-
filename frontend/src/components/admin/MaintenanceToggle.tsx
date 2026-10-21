@@ -74,18 +74,30 @@ export function MaintenanceToggle() {
   };
 
   const on = Boolean(data?.enabled);
+  // Green while learners can use the site, red while it's in maintenance.
   return (
     <span
-      className={`hidden items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-bold sm:inline-flex ${on ? "border-[color:var(--gold)]/50 bg-[color:var(--gold)]/15 text-[color:var(--gold)]" : "border-border text-muted-foreground"}`}
+      className={`hidden items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-bold sm:inline-flex ${on ? "border-red-500/50 bg-red-500/10 text-red-600 dark:text-red-400" : "border-emerald-500/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"}`}
       title={on ? "Learners see the maintenance page" : "The site is live for learners"}
     >
-      {on && <Wrench className="h-3.5 w-3.5" />}
+      {on ? (
+        <Wrench className="h-3.5 w-3.5" />
+      ) : (
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+        </span>
+      )}
       {on ? "Maintenance" : "Site live"}
       <HzSwitch
-        label="Maintenance mode"
-        checked={on}
+        label={
+          on ? "Site is in maintenance. Switch to go live" : "Site is live. Switch to maintenance"
+        }
+        checked={!on}
         disabled={!data || save.isPending}
-        onChange={(next) => void (next ? turnOn() : turnOff())}
+        onTrack="border-emerald-500 bg-emerald-500"
+        offTrack="border-red-500 bg-red-500"
+        onChange={(live) => void (live ? turnOff() : turnOn())}
       />
     </span>
   );

@@ -61,7 +61,7 @@ const TONE: Record<string, "gold" | "primary" | "green" | "muted" | "red"> = {
 const catLabel = (c: string) => CATEGORIES.find((x) => x.id === c)?.label ?? c;
 
 export function SupportTab() {
-  const [status, setStatus] = useState<string>("open");
+  const [status, setStatus] = useState<string>("all");
   const [openId, setOpenId] = useState<string | null>(null);
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["admin", "support", status],
@@ -73,7 +73,7 @@ export function SupportTab() {
     <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
       <div className={`flex flex-col gap-3 ${openId ? "hidden lg:flex" : ""}`}>
         <div className="flex flex-wrap gap-1.5">
-          {[...STATUS, "all"].map((s) => (
+          {["all", ...STATUS].map((s) => (
             <button
               key={s}
               onClick={() => setStatus(s)}

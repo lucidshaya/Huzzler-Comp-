@@ -17,6 +17,8 @@ function Callback() {
   const ref = reference ?? trxref;
   const qc = useQueryClient();
   const [state, setState] = useState<"checking" | "success" | "pending" | "failed">("checking");
+  // Token top-ups use their own reference prefix (hz_t_); they return to the Workstation, not the tests.
+  const tokens = Boolean(ref?.startsWith("hz_t_"));
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
@@ -74,13 +76,26 @@ function Callback() {
         {state === "success" && (
           <>
             <CheckCircle2 className="mx-auto h-12 w-12 text-[color:var(--brand-green)]" />
-            <h1 className="mt-4 font-display text-2xl font-bold">You're in!</h1>
+            <h1 className="mt-4 font-display text-2xl font-bold">
+              {tokens ? "Tokens added" : "You're in!"}
+            </h1>
             <p className="mt-2 text-sm text-muted-foreground">
               Payment confirmed. A receipt is on its way to your email.
             </p>
-            <Link to="/tests" className="btn-duo mt-6">
-              Start onboarding tests
-            </Link>
+            {tokens ? (
+              <div className="mt-6 flex flex-wrap justify-center gap-2">
+                <Link to="/workspace" search={{ tab: "workstation" }} className="btn-duo">
+                  Open the Workstation
+                </Link>
+                <Link to="/billing" hash="tokens" className="btn-duo-outline">
+                  View tokens
+                </Link>
+              </div>
+            ) : (
+              <Link to="/tests" className="btn-duo mt-6">
+                Start onboarding tests
+              </Link>
+            )}
           </>
         )}
         {state === "failed" && (
@@ -90,7 +105,7 @@ function Callback() {
             <p className="mt-2 text-sm text-muted-foreground">
               {msg} You haven't been charged twice — try again when you're ready.
             </p>
-            <Link to="/begin" className="btn-duo mt-6">
+            <Link to={tokens ? "/billing" : "/begin"} className="btn-duo mt-6">
               Try again
             </Link>
           </>

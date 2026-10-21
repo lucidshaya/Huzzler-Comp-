@@ -390,40 +390,37 @@ function SetupSteps({ from }: { from?: string }) {
     <Card className="border-[color:var(--gold)]/40 bg-[color:var(--gold)]/5">
       <CardTitle icon={AlertTriangle}>Set up email sending (one time)</CardTitle>
       <p className="mb-3 text-sm text-muted-foreground">
-        Huzzler sends email through Resend. Until it's connected you can write drafts, but nothing
-        is sent.
+        Huzzler sends email from <b>fourtechonoliges@gmail.com</b> over Gmail SMTP. Until it's
+        connected you can write drafts, but nothing is sent.
       </p>
       <ol className="flex list-decimal flex-col gap-2 pl-5 text-sm">
         <li>
-          Create a free account at{" "}
+          Sign in to the Gmail account, turn on 2-Step Verification, then create an{" "}
           <a
             className="font-bold text-primary underline"
-            href="https://resend.com"
+            href="https://myaccount.google.com/apppasswords"
             target="_blank"
             rel="noreferrer"
           >
-            resend.com
+            App Password
           </a>
           .
         </li>
         <li>
-          In Resend → <b>Domains</b>, add the domain you send from (currently{" "}
-          <code>{from ?? "EMAIL_FROM"}</code>) and add the DNS records it shows at your domain
-          provider. Wait until it says <b>Verified</b>.
-        </li>
-        <li>
-          In Resend → <b>API Keys</b>, create a key with <b>Sending access</b>.
-        </li>
-        <li>
-          In Vercel → project <b>huzzler-api</b> → Settings → Environment Variables, add{" "}
-          <code>RESEND_API_KEY</code> (the key) and check <code>EMAIL_FROM</code> uses the verified
-          domain, e.g. <code>Huzzler &lt;hello@yourdomain.com&gt;</code>.
+          In Vercel → project <b>huzzler-api</b> → Settings → Environment Variables, set{" "}
+          <code>SMTP_HOST=smtp.gmail.com</code>, <code>SMTP_PORT=465</code>,{" "}
+          <code>SMTP_USER=fourtechonoliges@gmail.com</code>, <code>SMTP_PASS</code> (the App
+          Password) and <code>EMAIL_FROM</code> (currently <code>{from ?? "not set"}</code>).
         </li>
         <li>
           Redeploy huzzler-api (Deployments → ⋯ → Redeploy). This banner disappears once it's
           connected.
         </li>
       </ol>
+      <p className="mt-3 text-xs text-muted-foreground">
+        Gmail allows about 500 emails a day. For larger lists, add <code>RESEND_API_KEY</code>{" "}
+        instead.
+      </p>
     </Card>
   );
 }
@@ -456,7 +453,7 @@ function HowTo() {
         </li>
         <li>
           <b className="text-foreground">Send</b>: confirm the number of recipients. Emails go out
-          in batches of 100; watch progress in the list below. You can cancel while it's sending.
+          in small batches; watch progress in the list below. You can cancel while it's sending.
         </li>
         <li>
           Everyone gets an unsubscribe link (required by the NDPA). People who unsubscribe are

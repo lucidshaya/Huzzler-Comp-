@@ -29,10 +29,18 @@ const PORTALS: Record<
 };
 
 /** Staff sign-in (username + password, then TOTP when required) shared by /admin and /aipm. */
-export function StaffLogin({ portal }: { portal: StaffPortal }) {
-  const p = PORTALS[portal];
+export function StaffLogin({
+  portal,
+  initialUsername = "",
+}: {
+  portal: StaffPortal;
+  initialUsername?: string;
+}) {
   const navigate = useNavigate();
-  const [username, setUsername] = useState("");
+  // The API says which portal this person belongs in (project managers use /aipm).
+  const [target, setTarget] = useState<StaffPortal>(portal);
+  const p = PORTALS[portal];
+  const [username, setUsername] = useState(initialUsername);
   const [password, setPassword] = useState("");
   const [step, setStep] = useState<"credentials" | "mfa">("credentials");
   const [mfa, setMfa] = useState<{ factorId: string; qr?: string; secret?: string } | null>(null);
@@ -40,11 +48,12 @@ export function StaffLogin({ portal }: { portal: StaffPortal }) {
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
 
-  const afterSession = async () => {
+  const afterSession = async (where: StaffPortal = target) => {
+    const t = PORTALS[where];
     try {
-      await api(p.whoami);
+      await api(t.whoami);
       markStaffBrowser();
-      navigate({ to: p.home });
+      navigate({ to: t.home });
     } catch (err) {
       if (err instanceof ApiError && err.code === "MFA_REQUIRED") await startMfa();
       else throw err;
@@ -74,13 +83,19 @@ export function StaffLogin({ portal }: { portal: StaffPortal }) {
     setBusy(true);
     setError(null);
     try {
-      const s = await api<{ access_token: string; refresh_token: string }>("/admin/auth/login", {
-        body: { username, password },
-        auth: false,
+      const s = await api<{
+        access_token: string;
+        refresh_token: string;
+        portal?: "/admin" | "/aipm";
+      }>("/admin/auth/login", { body: { username, password }, auth: false });
+      const { error } = await supabase().auth.setSession({
+        access_token: s.access_token,
+        refresh_token: s.refresh_token,
       });
-      const { error } = await supabase().auth.setSession(s);
       if (error) throw error;
-      await afterSession();
+      const where: StaffPortal = s.portal === "/aipm" ? "aipm" : portal;
+      setTarget(where);
+      await afterSession(where);
     } catch (err) {
       setError(err);
     } finally {

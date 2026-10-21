@@ -4,6 +4,7 @@ import { isBorderline, gradingsDisagree, round2 } from "../domain/grading.js";
 import { gradeWithRubric, type GradeRequest, type GradeOutcome } from "../ai/grader.js";
 import { AiUnavailableError, AiBudgetError, AiOutputError } from "../ai/aiClient.js";
 import { flagPossibleAi } from "./integrity.js";
+import { recordDecision } from "../lib/decisions.js";
 
 export type AiGradeResult =
   | { state: "graded"; score: number; gradeId: string }
@@ -35,13 +36,18 @@ async function storeGrade(s: Subject, userId: string, g: GradeOutcome, opts: { s
  * injection/anomaly flags or invalid output. The model never decides pass/fail.
  */
 export async function gradeSubjectWithAi(subject: Subject, req: GradeRequest): Promise<AiGradeResult> {
+  const started = Date.now();
   let first: GradeOutcome;
   try {
     first = await gradeWithRubric(req);
   } catch (err) {
-    if (err instanceof AiUnavailableError) return { state: "awaiting_ai" };
+    if (err instanceof AiUnavailableError) {
+      await logGradeDecision(subject, req, { state: "awaiting_ai", score: null, model: "none" });
+      return { state: "awaiting_ai" };
+    }
     if (err instanceof AiBudgetError || err instanceof AiOutputError) {
       logger.warn({ err: String(err), subject }, "AI grading failed, routing to human review");
+      await logGradeDecision(subject, req, { state: "needs_review", score: null, model: "none", reason: String(err.message) });
       return { state: "needs_review", score: null, gradeId: null, reason: String(err.message) };
     }
     throw err; // API errors: let the queue retry with backoff
@@ -70,5 +76,40 @@ export async function gradeSubjectWithAi(subject: Subject, req: GradeRequest): P
   }
 
   const gradeId = await storeGrade(subject, req.userId, first, { score: finalScore, isFinal: true, needsReview });
+  await logGradeDecision(subject, req, { state: needsReview ? "needs_review" : "graded", score: finalScore, model: first.model, reason, grade: first, latencyMs: Date.now() - started });
   return needsReview ? { state: "needs_review", score: finalScore, gradeId, reason } : { state: "graded", score: finalScore, gradeId };
+}
+
+/** Logs why a grade came out the way it did, criterion by criterion, for the AI PM portal. */
+async function logGradeDecision(
+  s: Subject,
+  req: GradeRequest,
+  r: { state: "graded" | "needs_review" | "awaiting_ai"; score: number | null; model: string; reason?: string; grade?: GradeOutcome; latencyMs?: number },
+) {
+  const engine = r.state === "awaiting_ai" || r.model === "none" ? "rules" : r.model === "mock" ? "mock" : "ai";
+  const what = s.subjectType.replace("_", " ");
+  await recordDecision({
+    kind: "grading",
+    engine,
+    model: engine === "ai" ? r.model : null,
+    userId: req.userId,
+    subjectType: s.subjectType,
+    subjectId: s.subjectId,
+    summary:
+      r.state === "awaiting_ai"
+        ? `Parked a ${what} (${req.rubricId}) for AI grading: no API key yet, so it waits for the key or a person.`
+        : r.score === null
+          ? `Couldn't grade a ${what} automatically; sent to a person (${r.reason ?? "review"}).`
+          : `Graded a ${what} (${req.rubricId}): ${r.score}/100${r.state === "needs_review" ? `, sent to a person (${r.reason || "review"})` : ""}.`,
+    reasoning: [
+      ...Object.entries(r.grade?.criteria_breakdown ?? {}).map(([id, c]) => ({ label: id, detail: c.note || "No note.", weight: c.score })),
+      ...(r.grade?.strengths ? [{ label: "Strengths", detail: r.grade.strengths.slice(0, 400) }] : []),
+      ...(r.grade?.gaps ? [{ label: "Gaps", detail: r.grade.gaps.slice(0, 400) }] : []),
+      ...(r.state === "needs_review" ? [{ label: "Safety net", detail: r.reason || "Flagged for a human." }] : []),
+      ...(r.state === "awaiting_ai" ? [{ label: "Waiting", detail: "Once ANTHROPIC_API_KEY is set, the retry job grades everything parked here." }] : []),
+    ],
+    confidence: r.score === null ? null : r.state === "needs_review" ? 0.5 : 0.85,
+    latencyMs: r.latencyMs ?? null,
+    status: r.state === "needs_review" ? "flagged" : "committed",
+  });
 }

@@ -22,12 +22,12 @@ import { hzForm, hzPrompt } from "@/components/app/Dialogs";
 import { hzToast } from "@/components/app/Toast";
 import { TableSkeleton } from "@/components/app/Skeleton";
 
-const useInvalidate = () => {
+export const useInvalidate = () => {
   const qc = useQueryClient();
   return () => qc.invalidateQueries({ queryKey: ["admin"] });
 };
 /** Asks for the audit-log reason every sensitive admin action needs. */
-const askReason = (title: string, confirmLabel = "Confirm") =>
+export const askReason = (title: string, confirmLabel = "Confirm") =>
   hzPrompt({
     title,
     label: "Reason (saved to the audit log)",
@@ -37,7 +37,7 @@ const askReason = (title: string, confirmLabel = "Confirm") =>
     confirmLabel,
   });
 
-function Table({ head, children }: { head: string[]; children: React.ReactNode }) {
+export function Table({ head, children }: { head: string[]; children: React.ReactNode }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
       <table className="w-full text-left text-sm">
@@ -55,10 +55,14 @@ function Table({ head, children }: { head: string[]; children: React.ReactNode }
     </div>
   );
 }
-const Td = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
-  <td className={`px-3 py-2 align-top ${className}`}>{children}</td>
-);
-const SmallBtn = ({
+export const Td = ({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) => <td className={`px-3 py-2 align-top ${className}`}>{children}</td>;
+export const SmallBtn = ({
   children,
   onClick,
   danger,
@@ -592,6 +596,8 @@ export function ContentTab() {
 }
 
 // ---------------------------------------------------------------------------
+// Grading & appeals for onboarding tests only. Project deliverables and demo day are graded in the
+// AI PM portal, next to the squads they belong to.
 export function GradingTab() {
   const inv = useInvalidate();
   const review = useQuery({
@@ -613,14 +619,12 @@ export function GradingTab() {
       id,
       score,
       feedback,
-      user_id,
     }: {
       type: string;
       id: string;
       score: number;
       feedback?: string;
-      user_id?: string;
-    }) => api(`/admin/grading/${type}/${id}/resolve`, { body: { score, feedback, user_id } }),
+    }) => api(`/admin/grading/${type}/${id}/resolve`, { body: { score, feedback } }),
     onSuccess: () => {
       inv();
       hzToast.success("Grade saved", "The learner can see it now.");
@@ -643,7 +647,7 @@ export function GradingTab() {
     },
     onError: hzToast.fromError,
   });
-  const grade = async (type: string, id: string, user_id?: string) => {
+  const grade = async (type: string, id: string) => {
     const v = await hzForm({
       title: "Record the final grade",
       confirmLabel: "Save grade",
@@ -670,7 +674,6 @@ export function GradingTab() {
       id,
       score: Number(v.score),
       feedback: String(v.feedback).trim() || undefined,
-      user_id,
     });
   };
   const respond = async (id: string, adjust: boolean) => {
@@ -710,12 +713,19 @@ export function GradingTab() {
     });
   };
   if (review.isLoading) return <TableSkeleton />;
-  const r = review.data ?? { test_submissions: [], deliverables: [], flagged_grades: [] };
+  const r = review.data ?? { test_submissions: [], flagged_grades: [] };
   return (
     <div className="flex flex-col gap-4">
+      <p className="text-xs text-muted-foreground">
+        Onboarding tests only. Project deliverables and demo day are graded in the{" "}
+        <a href="/aipm?tab=grading" className="font-bold text-primary underline">
+          AI PM portal
+        </a>
+        .
+      </p>
       <ErrorNote error={resolve.error ?? answer.error} />
       <Card>
-        <CardTitle>Test submissions needing a grade ({r.test_submissions.length})</CardTitle>
+        <CardTitle>Onboarding answers needing a grade ({r.test_submissions.length})</CardTitle>
         {r.test_submissions.length === 0 ? (
           <p className="text-sm text-muted-foreground">Queue is empty.</p>
         ) : (
@@ -724,7 +734,8 @@ export function GradingTab() {
               <summary className="flex cursor-pointer flex-wrap items-center gap-2 text-sm">
                 <b>{s.test_bank?.title}</b>{" "}
                 <span className="text-muted-foreground">
-                  {roleName(s.test_bank?.role_id)} · T{s.test_no}
+                  {s.profile?.full_name ?? "Learner"} · {roleName(s.test_bank?.role_id)} · T
+                  {s.test_no}
                 </span>{" "}
                 <Pill tone="gold">{s.status.replace("_", " ")}</Pill>
               </summary>
@@ -739,39 +750,21 @@ export function GradingTab() {
         )}
       </Card>
       <Card>
-        <CardTitle>Deliverables needing a grade ({r.deliverables.length})</CardTitle>
-        {r.deliverables.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Queue is empty.</p>
-        ) : (
-          r.deliverables.map((d: any) => (
-            <details key={d.id} className="border-b border-border py-2">
-              <summary className="cursor-pointer text-sm">
-                <b>{d.task?.title}</b>{" "}
-                <span className="text-muted-foreground">{roleName(d.task?.role_id)}</span>{" "}
-                <Pill tone="gold">{d.status.replace("_", " ")}</Pill>
-              </summary>
-              <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-muted/50 p-3 text-xs">
-                {d.content}
-              </pre>
-              <SmallBtn onClick={() => grade("deliverable", d.id)}>Grade</SmallBtn>
-            </details>
-          ))
-        )}
-      </Card>
-      <Card>
         <CardTitle>Flagged AI grades ({r.flagged_grades.length})</CardTitle>
+        {r.flagged_grades.length === 0 && (
+          <p className="text-sm text-muted-foreground">Nothing flagged.</p>
+        )}
         {r.flagged_grades.map((g: any) => (
           <div
             key={g.id}
             className="flex flex-wrap items-center justify-between gap-2 border-b border-border py-2 text-sm"
           >
             <span>
-              {g.subject_type} · <ScoreBadge score={g.score} />{" "}
+              {g.profile?.full_name ?? "Learner"} · <ScoreBadge score={g.score} />{" "}
               {g.flags?.possible_prompt_injection && <Pill tone="red">injection?</Pill>}{" "}
-              {g.flags?.anomaly && <Pill tone="gold">{g.flags.anomaly}</Pill>}{" "}
-              {g.subject_type === "demo" && <Pill>demo review</Pill>}
+              {g.flags?.anomaly && <Pill tone="gold">{g.flags.anomaly}</Pill>}
             </span>
-            <SmallBtn onClick={() => grade(g.subject_type, g.subject_id, g.user_id)}>
+            <SmallBtn onClick={() => grade(g.subject_type, g.subject_id)}>
               Confirm / override
             </SmallBtn>
           </div>
@@ -827,19 +820,11 @@ export function GradingTab() {
 // Team: the people who work at Huzzler and what each role can do.
 // ---------------------------------------------------------------------------
 export const STAFF_ROLES = [
-  { value: "admin", label: "Admin", hint: "Everything, including payments, settings and the team" },
-  { value: "moderator", label: "Moderator", hint: "Users, grading & appeals, integrity" },
-  {
-    value: "content_reviewer",
-    label: "Content reviewer",
-    hint: "Approves tests, projects and personas",
-  },
-  { value: "partnerships", label: "Partnerships", hint: "Company requests and opportunities" },
-  {
-    value: "project_manager",
-    label: "Project manager",
-    hint: "AI PM portal: briefs, squads, sprint board, reports",
-  },
+  { value: "admin", label: "Admin", hint: "Everything" },
+  { value: "moderator", label: "Moderator", hint: "Users, support, onboarding grading" },
+  { value: "content_reviewer", label: "Content reviewer", hint: "Tests, projects, listings" },
+  { value: "partnerships", label: "Partnerships", hint: "Opportunities & hiring" },
+  { value: "project_manager", label: "Project manager", hint: "AI PM portal & project grading" },
 ];
 const staffRoleLabel = (r: string) => STAFF_ROLES.find((s) => s.value === r)?.label ?? r;
 
@@ -849,21 +834,51 @@ export function StaffTab() {
     queryKey: ["admin", "staff"],
     queryFn: () => api<any[]>("/admin/staff"),
   });
+  const invites = useQuery({
+    queryKey: ["admin", "staff", "invites"],
+    queryFn: () => api<any[]>("/admin/staff/invites"),
+  });
   const me = useQuery({
     queryKey: ["admin", "whoami"],
     queryFn: () => api<{ id: string }>("/admin/whoami"),
   });
-  const [form, setForm] = useState({ identifier: "", app_role: "moderator", staff_title: "" });
-  const add = useMutation({
+  const [form, setForm] = useState({ email: "", app_role: "moderator", staff_title: "" });
+  const invite = useMutation({
     mutationFn: () =>
-      api("/admin/staff", { body: { ...form, staff_title: form.staff_title || undefined } }),
-    onSuccess: () => {
+      api<{ link: string; emailed: boolean }>("/admin/staff/invites", {
+        body: { ...form, staff_title: form.staff_title || undefined },
+      }),
+    onSuccess: (r) => {
       inv();
+      if (r.emailed)
+        hzToast.success("Invite sent", `${form.email} will get a link to set up their account.`);
+      else
+        hzToast.info(
+          "Invite created, email not sent",
+          "Email isn't configured, so copy the link from the pending list and send it yourself.",
+        );
+      void navigator.clipboard?.writeText(r.link).catch(() => {});
+      setForm({ email: "", app_role: form.app_role, staff_title: "" });
+    },
+    onError: hzToast.fromError,
+  });
+  const inviteAction = useMutation({
+    mutationFn: ({ id, kind }: { id: string; kind: "resend" | "revoke" }) =>
+      kind === "resend"
+        ? api<{ link: string; emailed: boolean }>(`/admin/staff/invites/${id}/resend`, {
+            method: "POST",
+          })
+        : api(`/admin/staff/invites/${id}`, { method: "DELETE" }),
+    onSuccess: (r: any, v) => {
+      inv();
+      if (v.kind === "revoke") return hzToast.success("Invite cancelled");
+      void navigator.clipboard?.writeText(r.link).catch(() => {});
       hzToast.success(
-        "Added to the team",
-        `${form.identifier} is now a ${staffRoleLabel(form.app_role).toLowerCase()}.`,
+        r.emailed ? "Invite re-sent" : "New link created",
+        r.emailed
+          ? "A fresh link is on its way."
+          : "Email isn't configured; the link is copied to your clipboard.",
       );
-      setForm({ identifier: "", app_role: form.app_role, staff_title: "" });
     },
     onError: hzToast.fromError,
   });
@@ -951,66 +966,101 @@ export function StaffTab() {
     });
     if (reason) remove.mutate({ id: s.id, reason, name: s.full_name ?? "They" });
   };
+  const pending = invites.data ?? [];
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="grid gap-4 lg:grid-cols-5">
-        <Card className="lg:col-span-3">
-          <CardTitle>Add a team member</CardTitle>
-          <p className="mb-3 text-xs text-muted-foreground">
-            They need a Huzzler account first. Staff sign in at /admin/login (project managers at
-            /aipm/login) with their username.
-          </p>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              add.mutate();
-            }}
-            className="grid gap-2 sm:grid-cols-2"
-          >
-            <input
-              className={`${inputCls} !py-2 text-sm sm:col-span-2`}
-              placeholder="Username or email"
-              aria-label="Username or email"
-              required
-              minLength={3}
-              value={form.identifier}
-              onChange={(e) => setForm({ ...form, identifier: e.target.value })}
-            />
-            <HzSelect
-              label="Role"
-              value={form.app_role}
-              onChange={(v) => setForm({ ...form, app_role: v })}
-              options={STAFF_ROLES}
-            />
-            <input
-              className={`${inputCls} !py-2 text-sm`}
-              placeholder="Job title (optional)"
-              aria-label="Job title"
-              maxLength={80}
-              value={form.staff_title}
-              onChange={(e) => setForm({ ...form, staff_title: e.target.value })}
-            />
-            <button disabled={add.isPending} className="btn-duo !py-2 text-sm sm:col-span-2">
-              {add.isPending ? "Adding…" : "Add to the team"}
-            </button>
-          </form>
-        </Card>
-        <Card className="lg:col-span-2">
-          <CardTitle>What each role can do</CardTitle>
-          <ul className="flex flex-col gap-2 text-sm">
-            {STAFF_ROLES.map((r) => (
-              <li
-                key={r.value}
-                className="flex flex-col rounded-xl border border-border bg-muted/30 px-3 py-2"
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
+      <Card className="!p-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <CardTitle>Invite a team member</CardTitle>
+          <span className="text-xs text-muted-foreground">
+            No account needed: they get an email link to set a username and password.
+          </span>
+        </div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            invite.mutate();
+          }}
+          className="grid items-center gap-2 sm:grid-cols-[1.4fr_1fr_1fr_auto]"
+        >
+          <input
+            type="email"
+            className={`${inputCls} !py-2 text-sm`}
+            placeholder="Email address"
+            aria-label="Email address"
+            required
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+          />
+          <HzSelect
+            label="Role"
+            value={form.app_role}
+            onChange={(v) => setForm({ ...form, app_role: v })}
+            options={STAFF_ROLES}
+          />
+          <input
+            className={`${inputCls} !py-2 text-sm`}
+            placeholder="Job title (optional)"
+            aria-label="Job title"
+            maxLength={80}
+            value={form.staff_title}
+            onChange={(e) => setForm({ ...form, staff_title: e.target.value })}
+          />
+          <button disabled={invite.isPending} className="btn-duo !px-4 !py-2 text-xs">
+            {invite.isPending ? "Sending…" : "Send invite"}
+          </button>
+        </form>
+        <div className="mt-3 flex flex-wrap gap-1.5" aria-label="What each role can do">
+          {STAFF_ROLES.map((r) => (
+            <span
+              key={r.value}
+              title={r.hint}
+              className={`rounded-full border px-2.5 py-1 text-[11px] ${form.app_role === r.value ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}
+            >
+              <b className="font-bold">{r.label}</b> · {r.hint}
+            </span>
+          ))}
+        </div>
+      </Card>
+
+      {pending.length > 0 && (
+        <Card className="!p-4">
+          <CardTitle>Pending invites ({pending.length})</CardTitle>
+          <div className="divide-y divide-border">
+            {pending.map((i: any) => (
+              <div
+                key={i.id}
+                className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
               >
-                <span className="font-display font-bold">{r.label}</span>
-                <span className="text-xs text-muted-foreground">{r.hint}</span>
-              </li>
+                <span className="min-w-0">
+                  <b>{i.email}</b>{" "}
+                  <span className="text-xs text-muted-foreground">
+                    {staffRoleLabel(i.app_role)}
+                    {i.staff_title ? ` · ${i.staff_title}` : ""} · sent {fmtDate(i.last_sent_at)}
+                  </span>{" "}
+                  {i.expired && <Pill tone="gold">expired</Pill>}
+                </span>
+                <span className="flex gap-1.5">
+                  <SmallBtn
+                    disabled={inviteAction.isPending}
+                    onClick={() => inviteAction.mutate({ id: i.id, kind: "resend" })}
+                  >
+                    {i.expired ? "Send new link" : "Resend"}
+                  </SmallBtn>
+                  <SmallBtn
+                    danger
+                    disabled={inviteAction.isPending}
+                    onClick={() => inviteAction.mutate({ id: i.id, kind: "revoke" })}
+                  >
+                    Cancel
+                  </SmallBtn>
+                </span>
+              </div>
             ))}
-          </ul>
+          </div>
         </Card>
-      </div>
+      )}
 
       <ErrorNote error={error} />
       {isLoading ? (
@@ -1031,7 +1081,7 @@ export function StaffTab() {
                   </div>
                 </Td>
                 <Td>
-                  <div className="w-48">
+                  <div className="w-44">
                     <HzSelect
                       size="sm"
                       label={`Role for ${s.full_name ?? "staff member"}`}
@@ -1167,7 +1217,8 @@ export function IntegrityTab() {
 }
 
 // ---------------------------------------------------------------------------
-export function OpportunitiesTab() {
+// Hiring partners: real companies asking for certified learners (shown under Opportunities).
+export function HiringPartnersPanel() {
   const inv = useInvalidate();
   const { data, isLoading } = useQuery({
     queryKey: ["admin", "opps"],

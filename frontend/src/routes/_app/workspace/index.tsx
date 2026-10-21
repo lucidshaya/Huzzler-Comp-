@@ -1,20 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { z } from "zod";
 import {
+  Calendar,
   CalendarCheck,
+  Coins,
+  ExternalLink,
   Flag,
   GitBranch,
+  ListChecks,
   MessageSquare,
   Presentation,
   Send,
   Star,
   Target,
+  Terminal,
+  Upload,
   Users,
+  Video,
+  type LucideIcon,
 } from "lucide-react";
 import { api, API_URL } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { roleName, useMe } from "@/lib/journey";
+import { memberName, useTeam, useWorkspace, type TeamMember } from "@/lib/team";
+import { fmtTokens, useWallet } from "@/lib/tokens";
 import {
   Card,
   CardTitle,
@@ -28,59 +39,24 @@ import {
   Pill,
   Progress,
   ScoreBadge,
-  Spinner,
 } from "@/components/app/ui";
 import { Board } from "@/components/app/Board";
 import { TeamTree } from "@/components/app/TeamTree";
 import { WorkspaceSkeleton } from "@/components/app/Skeleton";
+import { HustlerPanel } from "@/components/app/Hustler";
+import { Workstation } from "@/components/app/Workstation";
+
+type Tab = "board" | "squad" | "workstation" | "deliverables";
 
 export const Route = createFileRoute("/_app/workspace/")({
-  head: () => ({ meta: [{ title: "Workspace · Huzzler" }] }),
+  validateSearch: z.object({
+    tab: z.enum(["board", "squad", "workstation", "deliverables"]).optional(),
+  }),
+  head: () => ({ meta: [{ title: "Team workspace · Huzzler" }] }),
   component: Workspace,
 });
 
-type Member = {
-  id: string;
-  user_id: string | null;
-  role_id: string;
-  is_standin: boolean;
-  standin_name: string | null;
-  profile: { full_name: string | null; username: string | null } | null;
-};
-type TeamData = {
-  team: {
-    id: string;
-    name: string;
-    current_level: number;
-    persona: { name: string; mission: string };
-  };
-  members: Member[];
-  myRole: string;
-} | null;
-type WorkspaceData = {
-  project: {
-    id: string;
-    level: number;
-    status: string;
-    due_at: string;
-    started_at: string;
-    repo_url: string | null;
-    template: { title: string; brief: string };
-  } | null;
-  milestones: Array<{ id: string; title: string; due_at: string; status: string }>;
-  tasks: Array<{
-    id: string;
-    milestone_id: string | null;
-    role_id: string;
-    assignee_id: string | null;
-    assignee_member_id: string | null;
-    title: string;
-    status: string;
-    due_at: string | null;
-  }>;
-  checkedInToday: boolean;
-  results: Array<{ project_instance_id: string; total: number; passed: boolean }>;
-} | null;
+type Member = TeamMember;
 type Message = {
   id: string;
   user_id: string | null;
@@ -90,15 +66,20 @@ type Message = {
   created_at: string;
 };
 
+const TABS: Array<{ key: Tab; label: string; icon: LucideIcon }> = [
+  { key: "board", label: "Board", icon: Target },
+  { key: "squad", label: "Squad", icon: Users },
+  { key: "workstation", label: "Workstation", icon: Terminal },
+  { key: "deliverables", label: "Deliverables", icon: Upload },
+];
+
 function Workspace() {
   const { data: me } = useMe();
-  const team = useQuery({ queryKey: ["team"], queryFn: () => api<TeamData>("/team") });
-  const ws = useQuery({
-    queryKey: ["workspace"],
-    queryFn: () => api<WorkspaceData>("/workspace"),
-    refetchInterval: 30_000,
-  });
-  const [tab, setTab] = useState<"board" | "chat" | "team">("board");
+  const navigate = useNavigate({ from: "/workspace/" });
+  const tab = Route.useSearch().tab ?? "board";
+  const team = useTeam();
+  const ws = useWorkspace();
+  const wallet = useWallet();
 
   useEffect(() => {
     const id = team.data?.team?.id;
@@ -119,28 +100,31 @@ function Workspace() {
       <EmptyState
         icon={Users}
         title="You're not on a team yet"
-        body="Accept an offer and we'll place you with real teammates."
+        body="Accept an opportunity and we'll place you with real teammates straight away."
+        action={
+          <Link to="/opportunities" className="btn-duo !py-2 !px-4 text-sm">
+            View opportunities
+          </Link>
+        }
       />
     );
   const t = team.data;
   const w = ws.data;
   const lapsed = me.journey.status === "LAPSED";
 
-  const nameOf = (memberId: string | null, userId: string | null) => {
-    const m = t.members.find((x) => x.id === memberId || (userId && x.user_id === userId));
-    if (!m) return "Unassigned";
-    return m.is_standin ? "Stand-in" : (m.profile?.full_name ?? "Teammate").split(" ")[0];
-  };
+  const byMember = (memberId: string | null, userId: string | null) =>
+    t.members.find((x) => x.id === memberId || (userId && x.user_id === userId));
   const tasks = (w?.tasks ?? []).map((x) => ({
     id: x.id,
     title: x.title,
     status: x.status,
     role: roleName(x.role_id).split(" ")[0],
-    assignee: nameOf(x.assignee_member_id, x.assignee_id),
+    assignee: memberName(byMember(x.assignee_member_id, x.assignee_id)).split(" ")[0],
     isMine: x.assignee_id === me.user.id,
     isStandin: !x.assignee_id,
     due_at: x.due_at,
   }));
+  const myTasks = (w?.tasks ?? []).filter((x) => x.assignee_id === me.user.id);
   const done = tasks.filter((x) => x.status === "done").length;
   const allDone = tasks.length > 0 && done === tasks.length;
   const pastDue = w?.project ? new Date(w.project.due_at) < new Date() : false;
@@ -152,105 +136,309 @@ function Workspace() {
         title={w?.project?.template.title ?? t.team.name}
         body={
           w?.project
-            ? `Due ${fmtDate(w.project.due_at)} · ${done}/${tasks.length} tasks done`
-            : undefined
+            ? `${t.team.name} · due ${fmtDate(w.project.due_at)} · ${done}/${tasks.length} tasks done`
+            : t.team.name
+        }
+        actions={
+          <Link
+            to="/billing"
+            hash="tokens"
+            className="inline-flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-bold text-primary hover:bg-primary/15"
+          >
+            <Coins className="h-4 w-4" /> {fmtTokens(wallet.data?.balance ?? 0)} tokens
+          </Link>
         }
       />
       {lapsed && <Notice tone="warn">Read-only: your plan has lapsed.</Notice>}
       {w?.project && <Progress value={(done / Math.max(1, tasks.length)) * 100} />}
 
-      <div className="flex gap-1 rounded-full bg-muted p-1 md:hidden" role="tablist">
-        {(["board", "chat", "team"] as const).map((k) => (
-          <button
-            key={k}
-            role="tab"
-            aria-selected={tab === k}
-            onClick={() => setTab(k)}
-            className={`flex-1 rounded-full px-3 py-2 text-sm font-bold capitalize ${tab === k ? "bg-background text-primary shadow" : "text-muted-foreground"}`}
-          >
-            {k}
-          </button>
-        ))}
+      <div
+        className="flex gap-1 overflow-x-auto rounded-2xl border border-border bg-muted/50 p-1.5"
+        role="tablist"
+        aria-label="Workspace"
+      >
+        {TABS.map((x) => {
+          const Icon = x.icon;
+          return (
+            <button
+              key={x.key}
+              role="tab"
+              aria-selected={tab === x.key}
+              onClick={() => navigate({ search: { tab: x.key }, replace: true })}
+              className={`inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 font-display text-sm font-bold transition-colors ${tab === x.key ? "bg-background text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <Icon className="h-4 w-4" /> {x.label}
+            </button>
+          );
+        })}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div
-          className={`flex flex-col gap-4 lg:col-span-2 ${tab === "board" ? "" : "hidden md:flex"}`}
-        >
-          <Card>
-            <CardTitle icon={Target}>Board</CardTitle>
-            {w?.project ? (
-              <Board tasks={tasks} />
-            ) : (
-              <EmptyState icon={Target} title="Next project starting soon" />
+      {tab === "board" && (
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="flex flex-col gap-4 lg:col-span-2">
+            <Card>
+              <CardTitle icon={Target}>Board</CardTitle>
+              {w?.project ? (
+                <Board tasks={tasks} />
+              ) : (
+                <EmptyState icon={Target} title="Next project starting soon" />
+              )}
+            </Card>
+            {w?.project && (
+              <Card>
+                <CardTitle icon={Flag}>Brief & milestones</CardTitle>
+                <p className="text-sm text-muted-foreground">{w.project.template.brief}</p>
+                <ol className="mt-4 flex flex-col gap-2">
+                  {w.milestones.map((m) => (
+                    <li
+                      key={m.id}
+                      className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
+                    >
+                      <span className="font-semibold">{m.title}</span>
+                      <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                        {fmtDate(m.due_at)}{" "}
+                        <Pill tone={m.status === "open" ? "muted" : "green"}>{m.status}</Pill>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+                <CiInfo projectId={w.project.id} repoUrl={w.project.repo_url} />
+              </Card>
             )}
-          </Card>
-          {w?.project && (
-            <Card>
-              <CardTitle icon={Flag}>Brief & milestones</CardTitle>
-              <p className="text-sm text-muted-foreground">{w.project.template.brief}</p>
-              <ol className="mt-4 flex flex-col gap-2">
-                {w.milestones.map((m) => (
-                  <li
-                    key={m.id}
-                    className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
-                  >
-                    <span className="font-semibold">{m.title}</span>
-                    <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                      {fmtDate(m.due_at)}{" "}
-                      <Pill tone={m.status === "open" ? "muted" : "green"}>{m.status}</Pill>
+            {w?.project && (allDone || pastDue) && !lapsed && (
+              <PeerReviews
+                projectId={w.project.id}
+                members={t.members.filter((m) => m.user_id && m.user_id !== me.user.id)}
+              />
+            )}
+            {w?.project?.level === 5 && !lapsed && <DemoDay projectId={w.project.id} />}
+            {w && w.results.length > 0 && (
+              <Card>
+                <CardTitle icon={Star}>Your project results</CardTitle>
+                <div className="flex flex-wrap gap-2">
+                  {w.results.map((r, i) => (
+                    <span key={r.project_instance_id} className="flex items-center gap-1.5 text-sm">
+                      P{i + 1} <ScoreBadge score={r.total} />
                     </span>
-                  </li>
-                ))}
-              </ol>
-              <CiInfo projectId={w.project.id} repoUrl={w.project.repo_url} />
-            </Card>
-          )}
-          {w?.project && (allDone || pastDue) && !lapsed && (
-            <PeerReviews
-              projectId={w.project.id}
-              members={t.members.filter((m) => m.user_id && m.user_id !== me.user.id)}
-            />
-          )}
-          {w?.project?.level === 5 && !lapsed && <DemoDay projectId={w.project.id} />}
-          {w && w.results.length > 0 && (
-            <Card>
-              <CardTitle icon={Star}>Your project results</CardTitle>
-              <div className="flex flex-wrap gap-2">
-                {w.results.map((r, i) => (
-                  <span key={r.project_instance_id} className="flex items-center gap-1.5 text-sm">
-                    P{i + 1} <ScoreBadge score={r.total} />
-                  </span>
-                ))}
-              </div>
-            </Card>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-4">
-          <div className={tab === "chat" ? "" : "hidden md:block"}>
-            <TeamChat teamId={t.team.id} members={t.members} myId={me.user.id} readOnly={lapsed} />
+                  ))}
+                </div>
+              </Card>
+            )}
           </div>
-          <div className={tab === "board" ? "" : "hidden md:block"}>
+          <div className="flex flex-col gap-4">
             {w?.project && !w.checkedInToday && !lapsed && <CheckIn />}
+            <HustlerPanel tasks={myTasks} />
           </div>
-          <div className={tab === "team" ? "" : "hidden md:block"}>
-            <Card>
-              <CardTitle icon={Users}>Collaboration tree</CardTitle>
+        </div>
+      )}
+
+      {tab === "squad" && (
+        <div className="flex flex-col gap-4">
+          <Card>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  Current squad
+                </div>
+                <div className="mt-0.5 font-display text-xl font-bold">{t.team.name}</div>
+                <div className="text-xs text-muted-foreground">
+                  {w?.project?.template.title ?? "Project starting soon"}
+                </div>
+              </div>
+              <Pill tone="primary">Active</Pill>
+            </div>
+            <p className="mt-3 text-sm text-muted-foreground">{t.team.persona.mission}</p>
+            <div className="mt-6">
               <TeamTree
-                teamName={t.team.name}
                 members={t.members.map((m) => ({
                   id: m.id,
-                  name: m.is_standin ? "Stand-in" : (m.profile?.full_name ?? "Teammate"),
+                  name: memberName(m),
                   role: roleName(m.role_id),
                   isYou: m.user_id === me.user.id,
                   isStandin: m.is_standin,
+                  owns: (w?.tasks ?? [])
+                    .filter(
+                      (x) =>
+                        x.assignee_member_id === m.id || (m.user_id && x.assignee_id === m.user_id),
+                    )
+                    .map((x) => x.title)
+                    .slice(0, 4),
                 }))}
               />
-            </Card>
+            </div>
+          </Card>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <TeamChat
+                teamId={t.team.id}
+                members={t.members}
+                myId={me.user.id}
+                readOnly={lapsed}
+              />
+            </div>
+            <Standups
+              hasProject={Boolean(w?.project)}
+              checkedIn={Boolean(w?.checkedInToday)}
+              lapsed={lapsed}
+            />
           </div>
         </div>
-      </div>
+      )}
+
+      {tab === "workstation" &&
+        (lapsed ? (
+          <Notice tone="warn">
+            The Workstation is paused while your plan is lapsed. Renew in Billing to keep building.
+          </Notice>
+        ) : (
+          <Workstation />
+        ))}
+
+      {tab === "deliverables" && (
+        <Card>
+          <CardTitle
+            icon={Upload}
+            aside={
+              <span className="text-xs text-muted-foreground">
+                {myTasks.filter((x) => x.status === "done").length} of {myTasks.length} approved
+              </span>
+            }
+          >
+            Your deliverables
+          </CardTitle>
+          {myTasks.length === 0 ? (
+            <EmptyState icon={ListChecks} title="No tasks assigned to you yet" />
+          ) : (
+            <div className="divide-y divide-border">
+              {myTasks.map((x) => {
+                const label =
+                  x.status === "done"
+                    ? "Approved"
+                    : x.status === "review"
+                      ? "Submitted"
+                      : x.status === "blocked"
+                        ? "Blocked"
+                        : "In progress";
+                const tone =
+                  x.status === "done"
+                    ? "green"
+                    : x.status === "review"
+                      ? "gold"
+                      : x.status === "blocked"
+                        ? "red"
+                        : "muted";
+                return (
+                  <div
+                    key={x.id}
+                    className="flex flex-wrap items-center justify-between gap-3 py-3.5"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-display text-sm font-bold">{x.title}</div>
+                      <div className="text-xs text-muted-foreground">Due {fmtDate(x.due_at)}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Pill tone={tone}>{label}</Pill>
+                      <Link
+                        to="/workspace/task/$taskId"
+                        params={{ taskId: x.id }}
+                        className={
+                          x.status === "done" || x.status === "review"
+                            ? "btn-duo-outline !py-1.5 !px-3 text-xs"
+                            : "btn-duo !py-1.5 !px-3 text-xs"
+                        }
+                      >
+                        {x.status === "done" || x.status === "review" ? "View" : "Submit"}
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      )}
+    </div>
+  );
+}
+
+type Checkin = {
+  id: string;
+  user_id: string;
+  checkin_date: string;
+  yesterday: string;
+  today: string;
+  blockers: string | null;
+  created_at: string;
+  profile: { full_name: string | null } | null;
+};
+
+/** This week's stand-ups from the whole squad, with meeting shortcuts (Frontend design). */
+function Standups({
+  hasProject,
+  checkedIn,
+  lapsed,
+}: {
+  hasProject: boolean;
+  checkedIn: boolean;
+  lapsed: boolean;
+}) {
+  const { data } = useQuery({
+    queryKey: ["team", "checkins"],
+    queryFn: () => api<Checkin[]>("/team/checkins"),
+  });
+  return (
+    <div className="flex flex-col gap-4">
+      {hasProject && !checkedIn && !lapsed && <CheckIn />}
+      <Card>
+        <CardTitle icon={CalendarCheck}>Stand-ups this week</CardTitle>
+        <div className="flex max-h-[300px] flex-col gap-3 overflow-y-auto">
+          {(data ?? []).length === 0 && (
+            <p className="text-sm text-muted-foreground">No stand-ups yet this week.</p>
+          )}
+          {(data ?? []).map((c) => (
+            <div key={c.id} className="flex gap-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-[11px] font-bold text-primary ring-2 ring-primary/25">
+                {new Date(c.checkin_date).toLocaleDateString("en-NG", { weekday: "short" })}
+              </div>
+              <div className="min-w-0 text-xs">
+                <div className="font-display text-sm font-bold">
+                  {(c.profile?.full_name ?? "Teammate").split(" ")[0]}
+                </div>
+                <div className="text-muted-foreground">
+                  <b className="text-foreground">Did:</b> {c.yesterday} ·{" "}
+                  <b className="text-foreground">Next:</b> {c.today}
+                  {c.blockers && (
+                    <>
+                      {" "}
+                      · <b className="text-[color:var(--fire)]">Blocked:</b> {c.blockers}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-5 flex flex-col gap-2">
+          <a
+            href="https://meet.google.com/new"
+            target="_blank"
+            rel="noreferrer"
+            className="btn-duo !py-2 !px-4 text-sm"
+          >
+            <Video className="h-4 w-4" /> Start a Google Meet{" "}
+            <ExternalLink className="ml-1 h-3 w-3 opacity-70" />
+          </a>
+          <a
+            href="https://calendar.google.com/calendar/u/0/r"
+            target="_blank"
+            rel="noreferrer"
+            className="btn-duo-outline !py-2 !px-4 text-sm"
+          >
+            <Calendar className="h-4 w-4" /> Open Google Calendar{" "}
+            <ExternalLink className="ml-1 h-3 w-3 opacity-70" />
+          </a>
+        </div>
+      </Card>
     </div>
   );
 }
@@ -380,7 +568,10 @@ function CheckIn() {
   const [f, setF] = useState({ yesterday: "", today: "", blockers: "" });
   const m = useMutation({
     mutationFn: () => api("/checkins", { body: { ...f, blockers: f.blockers || undefined } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["workspace"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["workspace"] });
+      void qc.invalidateQueries({ queryKey: ["team", "checkins"] });
+    },
   });
   return (
     <Card>

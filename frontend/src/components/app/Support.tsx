@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bot,
@@ -188,14 +188,17 @@ export function ScreenshotPicker({
 export function ReportForm({
   onDone,
   compact = false,
+  initial,
 }: {
   onDone?: (ticketId: string) => void;
   compact?: boolean;
+  /** Pre-filled from the help bot when it couldn't answer. */
+  initial?: { subject?: string; body?: string; category?: string };
 }) {
   const qc = useQueryClient();
-  const [category, setCategory] = useState<string>("bug");
-  const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
+  const [category, setCategory] = useState<string>(initial?.category ?? "bug");
+  const [subject, setSubject] = useState(initial?.subject ?? "");
+  const [body, setBody] = useState(initial?.body ?? "");
   const [shot, setShot] = useState<{ path: string; preview: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const m = useMutation({
@@ -224,7 +227,12 @@ export function ReportForm({
           A person from the Huzzler team will reply here and by email, usually within one working
           day.
         </p>
-        <Link to="/support" search={{ ticket: m.data.id }} className="btn-duo !py-2 !px-4 text-sm">
+        <Link
+          to="/support"
+          search={{ ticket: m.data.id }}
+          onClick={() => onDone?.(m.data.id)}
+          className="btn-duo !py-2 !px-4 text-sm"
+        >
           View the conversation
         </Link>
       </div>
@@ -437,11 +445,16 @@ type BotMsg = {
   related?: string[];
   source?: string;
   rated?: boolean;
+  /** The question this reply answers, used to pre-fill a report. */
+  question?: string;
+  failed?: boolean;
 };
 
 export function HelpWidget() {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"ask" | "report" | "reports">("ask");
+  const [prefill, setPrefill] = useState<{ subject?: string; body?: string; category?: string }>();
+  const navigate = useNavigate();
   const unread = useQuery({
     queryKey: ["support", "unread"],
     queryFn: () => api<{ unread: number }>("/support/unread"),
@@ -452,6 +465,7 @@ export function HelpWidget() {
     window.addEventListener("keydown", onKey);
     const openReport = () => {
       setOpen(true);
+      setPrefill(undefined);
       setTab("report");
     };
     window.addEventListener("huzzler:report-issue", openReport);
@@ -527,8 +541,33 @@ export function HelpWidget() {
             ))}
           </nav>
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
-            {tab === "ask" && <HelpBot onReport={() => setTab("report")} />}
-            {tab === "report" && <ReportForm compact />}
+            {tab === "ask" && (
+              <HelpBot
+                onReport={(question) => {
+                  setPrefill(
+                    question
+                      ? {
+                          category: "other",
+                          subject: question.slice(0, 140),
+                          body: `I asked the help bot: "${question}"\n\nWhat I need help with: `,
+                        }
+                      : undefined,
+                  );
+                  setTab("report");
+                }}
+              />
+            )}
+            {tab === "report" && (
+              <ReportForm
+                key={prefill?.subject ?? "blank"}
+                initial={prefill}
+                compact
+                onDone={(id) => {
+                  setOpen(false);
+                  navigate({ to: "/support", search: { ticket: id } });
+                }}
+              />
+            )}
             {tab === "reports" && <MyReportsList onPick={() => setOpen(false)} />}
           </div>
         </section>
@@ -537,7 +576,7 @@ export function HelpWidget() {
   );
 }
 
-function HelpBot({ onReport }: { onReport: () => void }) {
+function HelpBot({ onReport }: { onReport: (question?: string) => void }) {
   const [msgs, setMsgs] = useState<BotMsg[]>([
     {
       from: "bot",
@@ -556,17 +595,22 @@ function HelpBot({ onReport }: { onReport: () => void }) {
       api<{ id: string | null; answer: string; source: string; related: string[] }>("/help/ask", {
         body: { question },
       }),
-    onSuccess: (r) =>
+    onSuccess: (r, question) =>
       setMsgs((m) => [
         ...m,
-        { from: "bot", text: r.answer, id: r.id, related: r.related, source: r.source },
+        { from: "bot", text: r.answer, id: r.id, related: r.related, source: r.source, question },
       ]),
-    onError: (e) =>
+    onError: (e, question) =>
       setMsgs((m) => [
         ...m,
         {
           from: "bot",
-          text: e instanceof ApiError ? e.message : "Something went wrong. Try again.",
+          text:
+            e instanceof ApiError && e.status !== 0 && e.status < 500
+              ? e.message
+              : "I couldn't reach Huzzler just now. Try again, or report it and a person will help.",
+          question,
+          failed: true,
         },
       ]),
   });
@@ -629,12 +673,15 @@ function HelpBot({ onReport }: { onReport: () => void }) {
                 ) : (
                   <span>Thanks for the feedback</span>
                 )}
-                {m.source === "none" && (
-                  <button onClick={onReport} className="font-bold text-primary">
-                    Report an issue →
-                  </button>
-                )}
               </div>
+            )}
+            {m.from === "bot" && (m.source === "none" || m.failed) && (
+              <button
+                onClick={() => onReport(m.question)}
+                className="mt-1.5 text-xs font-bold text-primary hover:underline"
+              >
+                Report an issue →
+              </button>
             )}
             {m.related && m.related.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -703,7 +750,7 @@ function HelpBot({ onReport }: { onReport: () => void }) {
         </button>
       </form>
       <button
-        onClick={onReport}
+        onClick={() => onReport()}
         className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-primary"
       >
         <LifeBuoy className="h-3.5 w-3.5" /> Talk to a person instead

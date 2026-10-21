@@ -41,15 +41,34 @@ async function expect2xx(token: string | null, label: string, path: string, meth
   return r.data;
 }
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-async function until<T>(label: string, fn: () => Promise<T | null | undefined | false>, timeoutMs = 30_000): Promise<T | null> {
+async function until<T>(label: string, fn: () => Promise<T | null | undefined | false>, timeoutMs = 30_000, quiet = false): Promise<T | null> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const v = await fn();
     if (v) return v as T;
     await sleep(800);
   }
-  bad(`timed out waiting for: ${label}`);
+  if (!quiet) bad(`timed out waiting for: ${label}`);
   return null;
+}
+
+// Without an AI key (production), AI-graded work waits for a person. The test plays that person
+// through the real admin review queue.
+const REMOTE = !BASE.includes("localhost");
+let staffToken: string | null = null;
+async function adminToken() {
+  if (staffToken) return staffToken;
+  const r = await call(null, "/admin/auth/login", "POST", { username: env.ADMIN_USERNAME, password: env.ADMIN_PASSWORD });
+  staffToken = r.data?.access_token ?? null;
+  return staffToken;
+}
+async function humanGradePending(userId: string, kind: "test_submissions" | "deliverables") {
+  const { data } = await db.from(kind).select("id").eq("user_id", userId).in("status", ["awaiting_ai", "needs_review"]);
+  if (!data?.length) return 0;
+  const a = await adminToken();
+  const type = kind === "test_submissions" ? "test_submission" : "deliverable";
+  for (const row of data) await call(a, `/admin/grading/${type}/${row.id}/resolve`, "POST", { score: 85, feedback: "Graded by a reviewer (e2e)." });
+  return data.length;
 }
 
 async function makeUser(role: string, n: number) {
@@ -123,15 +142,23 @@ async function onboard(u: { id: string; token: string; role: string }, n: number
     await expect2xx(t, `T${no}: autosave draft`, `/onboarding/tests/${no}/draft`, "PUT", { draft: answers });
     await expect2xx(t, `T${no}: submit`, `/onboarding/tests/${no}/submit`, "POST", { answers, ai_declaration: true });
   }
-  const results = await until("attempt graded", async () => {
+  let results = await until("attempt graded", async () => {
     const r = await call(t, "/onboarding/results");
     return r.data?.result ? r.data : null;
-  }, 45_000);
+  }, REMOTE ? 15_000 : 45_000, REMOTE);
+  if (!results) {
+    const n = await humanGradePending(u.id, "test_submissions");
+    if (n) ok(`${n} written answer(s) graded through the admin review queue (no AI key)`);
+    results = await until("attempt graded after review", async () => {
+      const r = await call(t, "/onboarding/results");
+      return r.data?.result ? r.data : null;
+    }, 60_000);
+  }
   if (results) results.result.passed ? ok(`passed onboarding (${results.result.weighted_score}%)`) : bad("did not pass", results.result);
   const offers = await until("offers generated", async () => {
     const r = await call(t, "/offers");
     return Array.isArray(r.data) && r.data.length ? r.data : null;
-  });
+  }, REMOTE ? 150_000 : 30_000);
   return offers;
 }
 
@@ -164,20 +191,22 @@ async function main() {
     const a1 = await call(pm.token, `/offers/${o1[0].id}/respond`, "POST", { accept: true });
     a1.status === 200 ? ok("accept offer (user 1)") : bad("accept offer", a1);
     const pick2 = open2[0] ?? (await until("replacement offer", async () => (await call(tw.token, "/offers")).data.find((o: any) => o.status === "pending")));
+    // Accepting places people straight away, so give user 2 an offer from user 1's company first:
+    // they should join user 1's squad in its open seat.
+    const { data: acc1 } = await db.from("offers").select("archetype_id, persona_id, cohort_id").eq("user_id", pm.id).eq("status", "accepted").single();
+    if (pick2 && acc1) await db.from("offers").update({ archetype_id: acc1.archetype_id, persona_id: acc1.persona_id, cohort_id: acc1.cohort_id }).eq("id", pick2.id);
     if (pick2) {
       const a2 = await call(tw.token, `/offers/${pick2.id}/respond`, "POST", { accept: true });
       a2.status === 200 ? ok("accept offer (user 2)") : bad("accept offer 2", a2);
+      a2.data?.placed ? ok("user 2 placed on accept") : bad("user 2 not placed", a2.data);
     }
-    // Same archetype + waited past 72h so the stand-in rule lets a 2-person team start.
-    const { data: acc1 } = await db.from("offers").select("archetype_id, persona_id, cohort_id").eq("user_id", pm.id).eq("status", "accepted").single();
-    const old = new Date(Date.now() - 4 * 86_400_000).toISOString();
-    await db.from("offers").update({ archetype_id: acc1!.archetype_id, persona_id: acc1!.persona_id, cohort_id: acc1!.cohort_id, responded_at: old }).in("user_id", [pm.id, tw.id]).eq("status", "accepted");
-    await runMatching();
+    const [t1, t2] = await Promise.all([call(pm.token, "/team"), call(tw.token, "/team")]);
+    t1.data?.team?.id && t1.data.team.id === t2.data?.team?.id ? ok("both users are on the same squad") : bad("users on different squads", [t1.data?.team?.name, t2.data?.team?.name]);
   }
   const team = await until("team formed", async () => {
     const r = await call(pm.token, "/team");
     return r.data?.team ? r.data : null;
-  });
+  }, REMOTE ? 120_000 : 30_000);
   if (team) {
     created.teams.push(team.team.id);
     ok(`team "${team.team.name}" with ${team.members.length} seats (${team.members.filter((m: any) => m.is_standin).length} stand-ins)`);
@@ -197,7 +226,12 @@ async function main() {
     const m = await expect2xx(pm.token, "ask mentor", `/mentor/${myTask.id}`, "POST", { question: "What should a good spec include here?" });
     m?.reply ? ok(`mentor replied (${m.source})`) : bad("no mentor reply");
     await expect2xx(pm.token, "submit deliverable", `/tasks/${myTask.id}/deliverables`, "POST", { content: "Spec: problem, user story, 4 acceptance criteria and 2 non-goals. ".repeat(20), links: [], file_paths: [], ai_declaration: true });
-    await until("deliverable graded", async () => (await call(pm.token, `/tasks/${myTask.id}`)).data?.deliverables?.[0]?.status === "graded");
+    const graded = await until("deliverable graded", async () => (await call(pm.token, `/tasks/${myTask.id}`)).data?.deliverables?.[0]?.status === "graded", REMOTE ? 20_000 : 30_000, REMOTE);
+    if (!graded) {
+      const n = await humanGradePending(pm.id, "deliverables");
+      if (n) ok("deliverable graded through the admin review queue (no AI key)");
+      await until("deliverable graded after review", async () => (await call(pm.token, `/tasks/${myTask.id}`)).data?.deliverables?.[0]?.status === "graded", 60_000);
+    }
   } else bad("no task assigned to user 1");
   await expect2xx(pm.token, "daily check-in", "/checkins", "POST", { yesterday: "Read the brief", today: "Write the spec", blockers: "" });
   const dup = await call(pm.token, "/checkins", "POST", { yesterday: "x x", today: "y y" });
@@ -300,7 +334,8 @@ async function main() {
       const me = await expect2xx(a, "admin whoami", "/admin/whoami");
       const { data: adminProfile } = await db.from("profiles").select("is_protected").eq("id", me?.id).single();
       adminProfile?.is_protected ? ok("admin account is marked protected") : bad("admin not protected — run npm run seed after the migration");
-      const demote = await call(a, `/admin/users/${me?.id}/role`, "POST", { app_role: "user", reason: "e2e" });
+      // Staff roles change through the Team endpoint; the protected admin must keep "admin".
+      const demote = await call(a, `/admin/staff/${me?.id}`, "PATCH", { app_role: "moderator", reason: "e2e" });
       demote.status === 403 ? ok("API refuses to demote the admin") : bad("admin demotion allowed", demote.status);
       const suspend = await call(a, `/admin/users/${me?.id}/status`, "POST", { to: "SUSPENDED", reason: "e2e" });
       suspend.status === 403 ? ok("API refuses to suspend the admin") : bad("admin suspension allowed", suspend.status);

@@ -11,7 +11,6 @@ import { STATUSES, type JourneyStatus } from "../domain/journey.js";
 import { ROLE_IDS } from "../domain/constants.js";
 import { transition, getJourney } from "../services/journey.js";
 import { refundPayment } from "../services/payments.js";
-import { maybeFinalizeAttempt } from "../services/onboarding.js";
 import { runMatching } from "../services/teams.js";
 import { computeProjectResults } from "../services/projects.js";
 import { issueCertificate } from "../services/certification.js";
@@ -21,6 +20,9 @@ import { getMaintenance, setMaintenance } from "../lib/maintenance.js";
 import { Audience, audienceCount, CampaignInput, cancelSend, createCampaign, deleteCampaign, listCampaigns, previewHtml, sendTest, startSend, updateCampaign } from "../services/emailCampaigns.js";
 import { listTicketsForStaff, getTicketForStaff, replyAsStaff, updateTicket } from "../services/support.js";
 import { resetHelpCorpus } from "../services/help.js";
+import { answerAppeal, listAppeals, resolveGrade, reviewQueue } from "../services/grading.js";
+import { fundPool, grantTokens, paidMembers, poolSummary, updatePrice } from "../services/tokens.js";
+import { createInvite, InviteInput, listInvites, portalFor, resendInvite, revokeInvite, staffHome, STAFF_ROLES } from "../services/staff.js";
 
 // ---------------------------------------------------------------------------
 // Staff sign-in by username. The username -> email mapping stays server-side.
@@ -41,7 +43,7 @@ adminAuthRouter.post(
       throw fail;
     }
     await audit(profile.id, "admin.login", "profile", profile.id, {}, req.ip);
-    return { access_token: data.session.access_token, refresh_token: data.session.refresh_token };
+    return { access_token: data.session.access_token, refresh_token: data.session.refresh_token, app_role: profile.app_role, portal: portalFor(profile.app_role) };
   }),
 );
 
@@ -52,7 +54,12 @@ const moderators = requireRole("moderator");
 const reviewers = requireRole("content_reviewer");
 const partnerships = requireRole("partnerships");
 
-adminRouter.get("/whoami", staff, h(async (req) => ({ id: uid(req), role: req.user!.appRole, aal: req.user!.aal })));
+adminRouter.get("/whoami", staff, h(async (req) => {
+  const { data: p } = await db.from("profiles").select("full_name, username, staff_title").eq("id", uid(req)).single();
+  return { id: uid(req), role: req.user!.appRole, aal: req.user!.aal, full_name: p?.full_name ?? null, username: p?.username ?? null, staff_title: p?.staff_title ?? null };
+}));
+// Each staff member's own home: the queues that matter for their role.
+adminRouter.get("/home", staff, h(async (req) => staffHome(uid(req), req.user!.appRole)));
 
 // ---------------------------------------------------------------------------
 // Overview: funnel, revenue, AI cost, pass rates
@@ -61,10 +68,10 @@ adminRouter.get(
   "/overview",
   staff,
   h(async () => {
-    const counts = await Promise.all(
-      STATUSES.map(async (s) => [s, (await db.from("user_journey").select("user_id", { count: "exact", head: true }).eq("status", s)).count ?? 0] as const),
-    );
-    const byStatus = Object.fromEntries(counts) as Record<JourneyStatus, number>;
+    // One read of every status instead of a count query per status.
+    const { data: statuses } = await db.from("user_journey").select("status").limit(100000);
+    const byStatus = Object.fromEntries(STATUSES.map((s) => [s, 0])) as Record<JourneyStatus, number>;
+    for (const r of statuses ?? []) byStatus[r.status as JourneyStatus]++;
     const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
     const monthStart = new Date();
     monthStart.setUTCDate(1);
@@ -211,19 +218,24 @@ adminRouter.post(
 // ---------------------------------------------------------------------------
 // Staff (the Huzzler team): who works here and what each person can do
 // ---------------------------------------------------------------------------
-const STAFF_ROLES = ["admin", "moderator", "content_reviewer", "partnerships", "project_manager"] as const;
 
 adminRouter.get(
   "/staff",
   adminOnly,
   h(async () => {
     const { data } = await db.from("profiles").select("id, full_name, username, app_role, staff_title, is_protected, created_at, updated_at").neq("app_role", "user").is("deleted_at", null).order("app_role").order("full_name");
-    return Promise.all(
-      (data ?? []).map(async (p) => {
-        const { data: u } = await db.auth.admin.getUserById(p.id);
-        return { ...p, email: u.user?.email ?? null, last_sign_in_at: u.user?.last_sign_in_at ?? null, mfa: (u.user?.factors ?? []).some((f) => f.status === "verified") };
-      }),
-    );
+    const ids = new Set((data ?? []).map((p) => p.id));
+    // Staff are few; reading auth users in pages beats one request per person.
+    const users = new Map<string, { email?: string; last_sign_in_at?: string; factors?: Array<{ status: string }> }>();
+    for (let page = 1; page <= 20 && users.size < ids.size; page++) {
+      const { data: list } = await db.auth.admin.listUsers({ page, perPage: 1000 });
+      for (const u of list?.users ?? []) if (ids.has(u.id)) users.set(u.id, u as any);
+      if ((list?.users ?? []).length < 1000) break;
+    }
+    return (data ?? []).map((p) => {
+      const u = users.get(p.id);
+      return { ...p, email: u?.email ?? null, last_sign_in_at: u?.last_sign_in_at ?? null, mfa: (u?.factors ?? []).some((f) => f.status === "verified") };
+    });
   }),
 );
 
@@ -287,6 +299,12 @@ adminRouter.delete(
     await audit(uid(req), "staff.removed", "profile", req.params.id, { from: p.app_role, reason }, req.ip);
   }),
 );
+
+// Invites: no account needed. The person sets their username and password from the email link.
+adminRouter.get("/staff/invites", adminOnly, h(async () => listInvites()));
+adminRouter.post("/staff/invites", adminOnly, h(async (req) => createInvite(uid(req), parse(InviteInput, req.body), req.ip)));
+adminRouter.post("/staff/invites/:id/resend", adminOnly, h(async (req) => resendInvite(uid(req), parse(z.string().uuid(), req.params.id), req.ip)));
+adminRouter.delete("/staff/invites/:id", adminOnly, h(async (req) => revokeInvite(uid(req), parse(z.string().uuid(), req.params.id), req.ip)));
 
 async function assertAnotherAdmin(exceptId: string) {
   const { count } = await db.from("profiles").select("id", { count: "exact", head: true }).eq("app_role", "admin").neq("id", exceptId).is("deleted_at", null);
@@ -379,20 +397,10 @@ adminRouter.put(
 );
 
 // ---------------------------------------------------------------------------
-// Grading: review queue (borderline/flagged/failed AI), appeals
+// Grading (onboarding tests only): review queue and appeals. Project work is graded in the
+// AI PM portal.
 // ---------------------------------------------------------------------------
-adminRouter.get(
-  "/grading/review",
-  moderators,
-  h(async () => {
-    const [{ data: subs }, { data: dels }, { data: grades }] = await Promise.all([
-      db.from("test_submissions").select("id, user_id, test_no, answers, status, score, test_bank:test_bank_id(title, kind, role_id, content)").in("status", ["needs_review", "awaiting_ai"]).order("submitted_at").limit(100),
-      db.from("deliverables").select("id, user_id, content, links, status, score, task:task_id(title, description, role_id)").in("status", ["needs_review", "awaiting_ai"]).order("submitted_at").limit(100),
-      db.from("grades").select("id, subject_type, subject_id, user_id, score, criteria, feedback, flags, model, needs_review, created_at").eq("needs_review", true).eq("is_final", true).order("created_at").limit(200),
-    ]);
-    return { test_submissions: subs ?? [], deliverables: dels ?? [], flagged_grades: grades ?? [] };
-  }),
-);
+adminRouter.get("/grading/review", moderators, h(async () => reviewQueue("onboarding")));
 
 const Resolve = z.object({ score: z.number().min(0).max(100), feedback: z.string().max(4000).optional() });
 
@@ -400,68 +408,16 @@ const Resolve = z.object({ score: z.number().min(0).max(100), feedback: z.string
 adminRouter.post(
   "/grading/:subjectType/:subjectId/resolve",
   moderators,
-  h(async (req) => {
-    const { subjectType, subjectId } = req.params;
-    if (!["test_submission", "deliverable", "demo"].includes(subjectType)) throw notFound();
-    const b = parse(Resolve.extend({ user_id: z.string().uuid().optional() }), req.body);
-    const table = subjectType === "test_submission" ? "test_submissions" : subjectType === "deliverable" ? "deliverables" : null;
-    let userId = b.user_id;
-    if (table) {
-      const { data: row } = await db.from(table).select("user_id").eq("id", subjectId).single();
-      userId = row?.user_id;
-    }
-    if (!userId) throw badRequest("user_id required");
-    await db.from("grades").update({ is_final: false, needs_review: false }).eq("subject_type", subjectType).eq("subject_id", subjectId).eq("user_id", userId).eq("is_final", true);
-    await db.from("grades").insert({ subject_type: subjectType, subject_id: subjectId, user_id: userId, grader: "human", score: b.score, feedback: b.feedback ?? null, criteria: {}, next_steps: [], is_final: true });
-    if (table === "test_submissions") {
-      const { data: sub } = await db.from("test_submissions").update({ score: b.score, status: "graded" }).eq("id", subjectId).select("attempt_id").single();
-      if (sub) await maybeFinalizeAttempt(sub.attempt_id);
-    } else if (table === "deliverables") {
-      const { data: d } = await db.from("deliverables").update({ score: b.score, status: "graded" }).eq("id", subjectId).select("task_id, project_instance_id").single();
-      if (d) {
-        await db.from("team_tasks").update({ status: "done" }).eq("id", d.task_id);
-        await enqueue("compute_project_results", { instanceId: d.project_instance_id, onlyIfComplete: true });
-      }
-    }
-    await audit(uid(req), "grading.resolve", subjectType, subjectId, { score: b.score }, req.ip);
-  }),
+  h(async (req) => resolveGrade(uid(req), req.params.subjectType, req.params.subjectId, parse(Resolve.extend({ user_id: z.string().uuid().optional() }), req.body), req.ip)),
 );
 
-adminRouter.get(
-  "/appeals",
-  moderators,
-  h(async () => {
-    const { data } = await db.from("appeals").select("*, grade:grade_id(subject_type, subject_id, score, criteria, feedback, model, rubric_version), profile:user_id(full_name, username)").order("due_at").limit(200);
-    return data ?? [];
-  }),
-);
+adminRouter.get("/appeals", moderators, h(async () => listAppeals("onboarding")));
 adminRouter.post(
   "/appeals/:id",
   moderators,
-  h(async (req) => {
-    const b = parse(z.object({ status: z.enum(["upheld", "adjusted", "rejected"]), response: z.string().min(10).max(4000), new_score: z.number().min(0).max(100).optional() }), req.body);
-    const { data: appeal } = await db.from("appeals").select("*, grade:grade_id(*)").eq("id", req.params.id).single();
-    if (!appeal || appeal.status !== "open") throw badRequest("Appeal is not open");
-    await db.from("appeals").update({ status: b.status, response: b.response, new_score: b.new_score ?? null, resolved_by: uid(req), resolved_at: new Date().toISOString() }).eq("id", req.params.id);
-    if (b.status === "adjusted" && b.new_score !== undefined) {
-      const g = (appeal as any).grade;
-      await db.from("grades").update({ is_final: false }).eq("id", g.id);
-      await db.from("grades").insert({ ...g, id: undefined, created_at: undefined, updated_at: undefined, grader: "human", score: b.new_score, feedback: b.response, is_final: true, needs_review: false });
-      if (g.subject_type === "test_submission") {
-        const { data: sub } = await db.from("test_submissions").update({ score: b.new_score }).eq("id", g.subject_id).select("attempt_id").single();
-        // Re-evaluate the attempt with the adjusted score.
-        if (sub) {
-          await db.from("test_attempts").update({ status: "grading" }).eq("id", sub.attempt_id).in("status", ["failed"]);
-          const j = await getJourney(appeal.user_id);
-          if (j.status === "TESTS_FAILED") await maybeFinalizeAttempt(sub.attempt_id);
-        }
-      } else if (g.subject_type === "deliverable") {
-        await db.from("deliverables").update({ score: b.new_score }).eq("id", g.subject_id);
-      }
-    }
-    await notify(appeal.user_id, "appeal.resolved", "Your appeal has been answered", b.response.slice(0, 200));
-    await audit(uid(req), "appeal.resolve", "appeal", req.params.id, { status: b.status, new_score: b.new_score }, req.ip);
-  }),
+  h(async (req) =>
+    answerAppeal(uid(req), "onboarding", req.params.id, parse(z.object({ status: z.enum(["upheld", "adjusted", "rejected"]), response: z.string().min(10).max(4000), new_score: z.number().min(0).max(100).optional() }), req.body), req.ip),
+  ),
 );
 
 adminRouter.get(
@@ -538,6 +494,108 @@ adminRouter.post("/reports/:id", moderators, h(async (req) => {
 // ---------------------------------------------------------------------------
 // Opportunities
 // ---------------------------------------------------------------------------
+const listingRoles = requireRole("partnerships", "content_reviewer");
+const Listing = z.object({
+  name: z.string().trim().min(2).max(120),
+  title: z.string().trim().min(3).max(120),
+  archetype_id: z.enum(["web3_fintech", "saas_mobile", "data_driven", "infrastructure"]),
+  engagement_type: z.enum(["internship", "job"]),
+  location: z.string().trim().min(2).max(80),
+  compensation: z.string().trim().max(80).nullable().optional(),
+  stipend_tokens: z.number().int().min(0).max(100000),
+  duration_weeks: z.number().int().min(1).max(52),
+  logo_text: z.string().trim().max(3).nullable().optional(),
+  role_ids: z.array(z.enum(ROLE_IDS)).max(8).default([]),
+  mission: z.string().trim().min(10).max(300),
+  product_brief: z.string().trim().min(20).max(1500),
+  culture: z.string().trim().min(5).max(300),
+  status: z.enum(["draft", "approved", "retired"]).default("approved"),
+});
+
+/** Opportunity listings (company personas): what learners are offered after passing onboarding. */
+adminRouter.get("/listings", listingRoles, h(async () => {
+  const [{ data: listings }, { data: offers }] = await Promise.all([
+    db.from("company_personas").select("*").order("status").order("sort_order").order("name"),
+    db.from("offers").select("persona_id, status"),
+  ]);
+  const stats = new Map<string, Record<string, number>>();
+  for (const o of offers ?? []) {
+    const k = stats.get(o.persona_id) ?? {};
+    k[o.status] = (k[o.status] ?? 0) + 1;
+    stats.set(o.persona_id, k);
+  }
+  return (listings ?? []).map((l) => ({ ...l, offer_stats: stats.get(l.id) ?? {} }));
+}));
+adminRouter.post("/listings", listingRoles, h(async (req) => {
+  const b = parse(Listing, req.body);
+  const { data, error } = await db.from("company_personas").insert({ ...b, logo_text: b.logo_text || b.name.slice(0, 1).toUpperCase() }).select().single();
+  if (error) throw badRequest(error.message);
+  await audit(uid(req), "listing.create", "company_persona", data.id, { name: b.name }, req.ip);
+  return data;
+}));
+adminRouter.put("/listings/:id", listingRoles, h(async (req) => {
+  const b = parse(Listing.partial(), req.body);
+  const { data, error } = await db.from("company_personas").update(b).eq("id", parse(z.string().uuid(), req.params.id)).select().maybeSingle();
+  if (error) throw badRequest(error.message);
+  if (!data) throw notFound("Listing not found");
+  await audit(uid(req), "listing.update", "company_persona", req.params.id, { fields: Object.keys(b) }, req.ip);
+  return data;
+}));
+adminRouter.delete("/listings/:id", listingRoles, h(async (req) => {
+  const id = parse(z.string().uuid(), req.params.id);
+  const { count } = await db.from("offers").select("id", { count: "exact", head: true }).eq("persona_id", id);
+  // Listings that were already offered to someone are retired (kept for their offer history).
+  if (count) {
+    await db.from("company_personas").update({ status: "retired" }).eq("id", id);
+    await audit(uid(req), "listing.retire", "company_persona", id, { offers: count }, req.ip);
+    return { retired: true };
+  }
+  const { error } = await db.from("company_personas").delete().eq("id", id);
+  if (error) throw badRequest(error.message);
+  await audit(uid(req), "listing.delete", "company_persona", id, {}, req.ip);
+  return { deleted: true };
+}));
+
+/** Every offer sent to learners, newest first, with simple actions. */
+adminRouter.get("/offers", partnerships, h(async (req) => {
+  const status = typeof req.query.status === "string" && req.query.status ? req.query.status : null;
+  let q = db.from("offers").select("id, user_id, status, title, compensation, stipend_tokens, stipend_paid, match_score, expires_at, responded_at, created_at, persona:persona_id(name, logo_text), profile:user_id(full_name, username)").order("created_at", { ascending: false }).limit(200);
+  if (status) q = q.eq("status", status);
+  return (await q).data ?? [];
+}));
+adminRouter.post("/offers/:id/extend", partnerships, h(async (req) => {
+  const { hours } = parse(z.object({ hours: z.number().int().min(1).max(336) }), req.body);
+  const { data: o } = await db.from("offers").select("status, expires_at").eq("id", req.params.id).maybeSingle();
+  if (!o || !["pending", "expired"].includes(o.status)) throw badRequest("Only open or expired offers can be extended.");
+  const from = Math.max(Date.now(), new Date(o.expires_at).getTime());
+  await db.from("offers").update({ status: "pending", expires_at: new Date(from + hours * 3_600_000).toISOString() }).eq("id", req.params.id);
+  await audit(uid(req), "offer.extend", "offer", req.params.id, { hours }, req.ip);
+}));
+adminRouter.post("/offers/:id/withdraw", partnerships, h(async (req) => {
+  const { reason } = parse(z.object({ reason: z.string().trim().min(3).max(500) }), req.body);
+  const { data } = await db.from("offers").update({ status: "expired" }).eq("id", req.params.id).eq("status", "pending").select("user_id").maybeSingle();
+  if (!data) throw badRequest("Only open offers can be withdrawn.");
+  await notify(data.user_id, "offers.withdrawn", "An offer was withdrawn", "One of your opportunities is no longer available. We'll send another if you have none left.");
+  await enqueue("generate_offers", { userId: data.user_id });
+  await audit(uid(req), "offer.withdraw", "offer", req.params.id, { reason }, req.ip);
+}));
+
+// ---------------------------------------------------------------------------
+// Tokens: the funding pool admins top up and grant from, prices, purchases
+// ---------------------------------------------------------------------------
+adminRouter.get("/tokens", adminOnly, h(async () => poolSummary()));
+adminRouter.get("/tokens/members", adminOnly, h(async (req) => paidMembers(typeof req.query.q === "string" ? req.query.q : "")));
+adminRouter.post("/tokens/fund", adminOnly, h(async (req) => {
+  const b = parse(z.object({ amount: z.number().int().min(1).max(10_000_000), note: z.string().trim().min(3).max(200) }), req.body);
+  return fundPool(uid(req), b.amount, b.note, req.ip);
+}));
+adminRouter.post("/tokens/grant", adminOnly, h(async (req) => {
+  const b = parse(z.object({ amount: z.number().int().min(1).max(100_000), note: z.string().trim().max(200).default(""), user_id: z.string().uuid().optional(), all_paid: z.boolean().optional() }), req.body);
+  return grantTokens(uid(req), { user_id: b.user_id, all_paid: b.all_paid }, b.amount, b.note, req.ip);
+}));
+adminRouter.put("/tokens/prices/:action", adminOnly, h(async (req) => updatePrice(uid(req), req.params.action, parse(z.object({ cost: z.number().int().min(0).max(10_000) }), req.body).cost, req.ip)));
+
+// Hiring partners: real company requests for certified learners.
 adminRouter.get("/opportunities", partnerships, h(async () => {
   const { data } = await db.from("opportunities").select("*, candidates:opportunity_candidates(id, user_id, rank, fit_note, status, consent_at, profile:user_id(full_name, username))").order("created_at", { ascending: false });
   return data ?? [];

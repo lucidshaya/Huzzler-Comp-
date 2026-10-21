@@ -105,6 +105,33 @@ export async function startProject(teamId: string, level: number) {
   return { ...instance, title: tpl.title };
 }
 
+/**
+ * Someone joining a running project (an open seat, not a stand-in's) gets the template tasks for
+ * their role in it. Tasks that already exist for the role are left alone.
+ */
+export async function addRoleTasks(teamId: string, memberId: string, userId: string, roleId: string) {
+  const project = await currentProject(teamId);
+  if (!project || project.status !== "active") return 0;
+  const { data: tpl } = await db.from("project_templates").select("role_tasks").eq("id", project.template_id).single();
+  const wanted = ((tpl?.role_tasks ?? []) as TemplateTask[]).filter((t) => t.role_id === roleId);
+  if (!wanted.length) return 0;
+  const [{ data: existing }, { data: milestones }] = await Promise.all([
+    db.from("team_tasks").select("template_task_key").eq("project_instance_id", project.id),
+    db.from("milestones").select("id, key, due_at").eq("project_instance_id", project.id),
+  ]);
+  const have = new Set((existing ?? []).map((t) => t.template_task_key));
+  const mByKey = new Map((milestones ?? []).map((m) => [m.key, m]));
+  const rows = wanted
+    .filter((t) => !have.has(t.key))
+    .map((t, i) => ({
+      project_instance_id: project.id, milestone_id: mByKey.get(t.milestone_key)?.id ?? null, template_task_key: t.key, role_id: t.role_id,
+      assignee_id: userId, assignee_member_id: memberId, title: t.title, description: t.description, hints: t.hints.slice(0, HINTS_PER_TASK),
+      rubric_id: `${t.role_id}.project`, due_at: mByKey.get(t.milestone_key)?.due_at ?? project.due_at, sort_order: 100 + i, status: "todo",
+    }));
+  if (rows.length) must(await db.from("team_tasks").insert(rows).select("id"), "joiner tasks");
+  return rows.length;
+}
+
 export async function currentProject(teamId: string) {
   const { data } = await db.from("project_instances").select("*, template:template_id(title, brief, length_days, acceptance_tests, assets)").eq("team_id", teamId).order("level", { ascending: false }).limit(1).maybeSingle();
   return data;

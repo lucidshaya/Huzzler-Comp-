@@ -3,11 +3,12 @@ import { logger } from "../lib/logger.js";
 import { notify } from "../lib/notify.js";
 import { render } from "../lib/templates.js";
 import { formTeams, tzBandOf, type Candidate, type SquadTemplate } from "../domain/matching.js";
-import { STANDIN_AFTER_HOURS, ARCHETYPE_IDS } from "../domain/constants.js";
+import { STANDIN_AFTER_HOURS, ARCHETYPE_IDS, MAX_TEAM_SIZE } from "../domain/constants.js";
 import { projectStatus } from "../domain/journey.js";
 import { TEAM_WELCOME, STANDIN_REPLIES } from "../content/templates.js";
 import { getJourney, transition } from "./journey.js";
-import { startProject } from "./projects.js";
+import { addRoleTasks, startProject } from "./projects.js";
+import { recordDecision } from "../lib/decisions.js";
 
 export async function roleNames(): Promise<Map<string, string>> {
   const { data } = await db.from("roles").select("id, name");
@@ -102,35 +103,120 @@ export async function createTeam(archetypeId: string, members: Candidate[], miss
     render(TEAM_WELCOME, { team_name: team.name, company: persona!.name, mission: persona!.mission, roster, project_title: instance.title, due_date: new Date(instance.due_at).toDateString() }),
   );
   for (const m of members) await notify(m.userId, "team.placed", "You've been placed on a team", `Welcome to ${team.name}. Project 1 has started.`);
+  const seed = members[0];
+  await recordDecision({
+    kind: "squad_matching",
+    engine: "rules",
+    teamId: team.id,
+    subjectType: "team",
+    subjectId: team.id,
+    summary: `Formed ${team.name}: ${members.length} ${members.length === 1 ? "person" : "people"}${missingRoles.length ? ` + ${missingRoles.length} stand-in${missingRoles.length === 1 ? "" : "s"}` : ""} for ${persona!.name} (${archetypeId}).`,
+    reasoning: [
+      { label: "Seed", detail: `${pname.get(seed.userId)} (${names.get(seed.roleId)}) has waited longest, since ${seed.waitingSince.toISOString().slice(0, 10)}, so the squad is built around them.` },
+      ...members.slice(1).map((m) => ({
+        label: `${names.get(m.roleId)}`,
+        detail: `${pname.get(m.userId)}: score band ${m.scoreBand * 10}s vs seed ${seed.scoreBand * 10}s, ${m.tzBand === seed.tzBand ? "same time zone" : `time zone ${m.tzBand}`}, ${m.hoursPerWeek} h/week.`,
+        weight: Math.round((Math.abs(m.scoreBand - seed.scoreBand) * 3 + (m.tzBand === seed.tzBand ? 0 : 2) + Math.abs(m.hoursPerWeek - seed.hoursPerWeek) / 5) * 10) / 10,
+      })),
+      ...(missingRoles.length ? [{ label: "Stand-ins", detail: `No one was waiting for ${missingRoles.map((r) => names.get(r)).join(", ")}; clearly labelled stand-ins cover those seats until a real person is matched.` }] : []),
+    ],
+    confidence: Math.max(0.4, 1 - missingRoles.length * 0.12),
+  });
   logger.info({ teamId: team.id, size: members.length, standins: missingRoles.length }, "team formed");
   return team as { id: string; name: string };
 }
 
+type Seat = { id: string; team_id: string; role_id: string; teams: { archetype_id: string; score_band: number | null; current_level: number; status: string } | null };
+
+/** Puts a waiting candidate into a stand-in's seat and hands over the stand-in's open tasks. */
+async function fillSeat(seat: Seat, cand: Candidate) {
+  await db.from("team_members").update({ status: "replaced", left_at: new Date().toISOString() }).eq("id", seat.id);
+  const member = must(await db.from("team_members").insert({ team_id: seat.team_id, user_id: cand.userId, role_id: seat.role_id }).select().single(), "member");
+  await db.from("team_tasks").update({ assignee_id: cand.userId, assignee_member_id: member.id }).eq("assignee_member_id", seat.id).neq("status", "done");
+  await transition(cand.userId, "PLACED", "backfilled stand-in seat");
+  if ((seat.teams?.current_level ?? 0) >= 1) await transition(cand.userId, projectStatus(seat.teams!.current_level), "joined mid-project");
+  await postSystemMessage(seat.team_id, `🎉 A real teammate has joined and is taking over the stand-in's seat. Say hello!`);
+  await notify(cand.userId, "team.placed", "You've been placed on a team", "You're joining a team that has already started. Check the board for your tasks.");
+  await recordDecision({
+    kind: "squad_matching",
+    engine: "rules",
+    userId: cand.userId,
+    teamId: seat.team_id,
+    subjectType: "team",
+    subjectId: seat.team_id,
+    summary: `Moved a waiting ${seat.role_id.replace(/_/g, " ")} into a stand-in seat on an active squad.`,
+    reasoning: [
+      { label: "Open seat", detail: `The squad had a stand-in covering ${seat.role_id.replace(/_/g, " ")}; real people always replace stand-ins first.` },
+      { label: "Fit", detail: `Same company type (${cand.archetypeId}); candidate score band ${cand.scoreBand * 10}s vs squad ${(seat.teams?.score_band ?? 7) * 10}s.` },
+    ],
+    confidence: 0.8,
+  });
+}
+
+const openSeatsQuery = () =>
+  db.from("team_members").select("id, team_id, role_id, teams:team_id(archetype_id, score_band, current_level, status)").eq("is_standin", true).eq("status", "active");
+
 /** Replace stand-ins with real people from the same archetype and nearby score band. */
 export async function backfillStandins() {
-  const { data: seats } = await db.from("team_members").select("id, team_id, role_id, teams:team_id(archetype_id, score_band, current_level, status)").eq("is_standin", true).eq("status", "active");
+  const { data: seats } = await openSeatsQuery();
   if (!seats?.length) return 0;
   const pool = await loadPool();
   let filled = 0;
-  for (const seat of seats as any[]) {
+  for (const seat of seats as unknown as Seat[]) {
     if (seat.teams?.status !== "active") continue;
     const band = seat.teams.score_band ?? 7;
     const cand = pool
-      .filter((c) => c.roleId === seat.role_id && c.archetypeId === seat.teams.archetype_id && Math.abs(c.scoreBand - band) <= 1)
+      .filter((c) => c.roleId === seat.role_id && c.archetypeId === seat.teams!.archetype_id && Math.abs(c.scoreBand - band) <= 1)
       .sort((a, b) => a.waitingSince.getTime() - b.waitingSince.getTime())[0];
     if (!cand) continue;
     pool.splice(pool.indexOf(cand), 1);
-    await db.from("team_members").update({ status: "replaced", left_at: new Date().toISOString() }).eq("id", seat.id);
-    const member = must(await db.from("team_members").insert({ team_id: seat.team_id, user_id: cand.userId, role_id: seat.role_id }).select().single(), "member");
-    // Hand over the stand-in's open tasks.
-    await db.from("team_tasks").update({ assignee_id: cand.userId, assignee_member_id: member.id }).eq("assignee_member_id", seat.id).neq("status", "done");
-    await transition(cand.userId, "PLACED", "backfilled stand-in seat");
-    if (seat.teams.current_level >= 1) await transition(cand.userId, projectStatus(seat.teams.current_level), "joined mid-project");
-    await postSystemMessage(seat.team_id, `🎉 A real teammate has joined and is taking over the stand-in's seat. Say hello!`);
-    await notify(cand.userId, "team.placed", "You've been placed on a team", "You're joining a team that has already started. Check the board for your tasks.");
+    await fillSeat(seat, cand);
     filled++;
   }
   return filled;
+}
+
+const activeTeamOf = async (userId: string) =>
+  (await db.from("team_members").select("team_id").eq("user_id", userId).eq("status", "active").maybeSingle()).data?.team_id ?? null;
+
+/**
+ * Places someone who has just accepted an offer onto a squad straight away, so accepting takes them
+ * to their team workspace: an open stand-in seat for their role first, then normal matching, then a
+ * new squad that starts with stand-ins in the empty seats (replaced by real people as they arrive).
+ */
+export async function placeNow(userId: string): Promise<string | null> {
+  const existing = await activeTeamOf(userId);
+  if (existing) return existing;
+  const pool = await loadPool();
+  const me = pool.find((c) => c.userId === userId);
+  if (!me) return null;
+
+  const { data: seats } = await openSeatsQuery().eq("role_id", me.roleId);
+  const seat = ((seats ?? []) as unknown as Seat[])
+    .filter((x) => x.teams?.status === "active" && x.teams.archetype_id === me.archetypeId)
+    .sort((a, b) => Math.abs((a.teams!.score_band ?? 7) - me.scoreBand) - Math.abs((b.teams!.score_band ?? 7) - me.scoreBand))[0];
+  if (seat) {
+    await fillSeat(seat, me);
+    return seat.team_id;
+  }
+
+  await runMatching();
+  const matched = await activeTeamOf(userId);
+  if (matched) return matched;
+
+  const { data: tpl } = await db.from("squad_templates").select("template").eq("archetype_id", me.archetypeId).eq("active", true).order("version", { ascending: false }).limit(1).maybeSingle();
+  if (!tpl) return null;
+  const joined = await joinOpenSeat(me, tpl.template as SquadTemplate);
+  if (joined) return joined;
+  const { data: compat } = await db.from("role_archetype_compatibility").select("role_id").eq("archetype_id", me.archetypeId);
+  const others = (await loadPool()).filter((c) => c.archetypeId === me.archetypeId && c.userId !== userId);
+  const formed = formTeams([{ ...me, waitingSince: new Date(0) }, ...others], tpl.template as SquadTemplate, new Set((compat ?? []).map((c) => c.role_id)), {
+    allowStandins: () => true,
+    minRealMembers: 1,
+  }).find((t) => t.members.some((m) => m.userId === userId));
+  if (!formed) return null;
+  const team = await createTeam(me.archetypeId, formed.members, formed.missingRoles, await roleNames());
+  return team.id;
 }
 
 /**
@@ -178,4 +264,47 @@ export async function myTeam(userId: string) {
 export async function assertTeamMember(userId: string, teamId: string) {
   const { data } = await db.from("team_members").select("id, role_id").eq("team_id", teamId).eq("user_id", userId).eq("status", "active").maybeSingle();
   return data;
+}
+
+/**
+ * Puts a new arrival into an early-stage squad of their company type that has room for their role
+ * (an optional role nobody holds yet), so people who accept close together end up as teammates.
+ */
+async function joinOpenSeat(me: Candidate, template: SquadTemplate): Promise<string | null> {
+  const maxSize = Math.min(template.max_size ?? MAX_TEAM_SIZE, MAX_TEAM_SIZE);
+  if (!template.optional.includes(me.roleId)) return null;
+  const { data: teams } = await db
+    .from("teams")
+    .select("id, name, score_band, current_level, members:team_members(id, user_id, role_id, is_standin, status)")
+    .eq("archetype_id", me.archetypeId)
+    .eq("status", "active")
+    .lte("current_level", 1);
+  const open = ((teams ?? []) as any[])
+    .map((t) => ({ ...t, members: (t.members ?? []).filter((m: any) => m.status === "active") }))
+    .filter((t) => t.members.length < maxSize && !t.members.some((m: any) => m.role_id === me.roleId))
+    .sort((a, b) => Math.abs((a.score_band ?? 7) - me.scoreBand) - Math.abs((b.score_band ?? 7) - me.scoreBand) || b.members.filter((m: any) => !m.is_standin).length - a.members.filter((m: any) => !m.is_standin).length);
+  const team = open[0];
+  if (!team) return null;
+  const member = must(await db.from("team_members").insert({ team_id: team.id, user_id: me.userId, role_id: me.roleId }).select().single(), "member");
+  await transition(me.userId, "PLACED", `joined ${team.name}`);
+  if (team.current_level >= 1) await transition(me.userId, projectStatus(team.current_level), "joined mid-project");
+  const tasks = await addRoleTasks(team.id, member.id, me.userId, me.roleId);
+  const names = await roleNames();
+  await postSystemMessage(team.id, `🎉 A ${names.get(me.roleId) ?? "new"} has joined the squad${tasks ? ` and picked up ${tasks} task${tasks === 1 ? "" : "s"}` : ""}. Say hello!`);
+  await notify(me.userId, "team.placed", "You've been placed on a team", `Welcome to ${team.name}. Your tasks are on the board.`);
+  await recordDecision({
+    kind: "squad_matching",
+    engine: "rules",
+    userId: me.userId,
+    teamId: team.id,
+    subjectType: "team",
+    subjectId: team.id,
+    summary: `Added a ${names.get(me.roleId)} to ${team.name}, which had an open seat for that role.`,
+    reasoning: [
+      { label: "Open seat", detail: `${names.get(me.roleId)} is an optional role for ${me.archetypeId} squads and nobody on ${team.name} holds it yet (${team.members.length}/${maxSize} seats used).` },
+      { label: "Fit", detail: `Score band ${me.scoreBand * 10}s vs squad ${(team.score_band ?? 7) * 10}s; the squad is still on project ${Math.max(1, team.current_level)}.` },
+    ],
+    confidence: 0.75,
+  });
+  return team.id;
 }

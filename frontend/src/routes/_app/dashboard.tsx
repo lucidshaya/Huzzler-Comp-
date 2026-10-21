@@ -42,7 +42,11 @@ import {
 } from "@/components/app/ui";
 import { TeamTree } from "@/components/app/TeamTree";
 import { Board } from "@/components/app/Board";
-import { Heatmap } from "@/components/app/Heatmap";
+import {
+  IdentityPortfolio,
+  sampleIdentity,
+  type Identity,
+} from "@/components/app/IdentityPortfolio";
 
 export const Route = createFileRoute("/_app/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard · Huzzler" }] }),
@@ -138,13 +142,6 @@ const SAMPLE_TASKS = [
     isStandin: true,
   },
 ];
-const sampleHeat = (() => {
-  const out: Record<string, number> = {};
-  for (let i = 0; i < 140; i += 1)
-    if ((i * 7) % 5 < 2)
-      out[new Date(Date.now() - i * 86400000).toISOString().slice(0, 10)] = ((i * 3) % 4) + 1;
-  return out;
-})();
 
 function PreviewDashboard({ me }: { me: Me }) {
   useEffect(() => {
@@ -216,26 +213,20 @@ function PreviewDashboard({ me }: { me: Me }) {
         </Locked>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardTitle icon={Sparkles} aside={<Pill>Preview</Pill>}>
-            Activity (sample)
-          </CardTitle>
-          <Heatmap counts={sampleHeat} />
-        </Card>
-        <Card>
-          <CardTitle icon={Briefcase} aside={<Lock className="h-4 w-4 text-muted-foreground" />}>
-            Opportunities
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            After you're certified you can opt in to be recommended to partner companies. It's off
-            by default and you approve every company.
-          </p>
-          <Link to="/begin" className="btn-duo-outline mt-4 w-full !py-2 text-sm">
-            <Lock className="h-4 w-4" /> Locked
-          </Link>
-        </Card>
-      </div>
+      <IdentityPortfolio data={sampleIdentity()} preview />
+      <Card>
+        <CardTitle icon={Briefcase} aside={<Lock className="h-4 w-4 text-muted-foreground" />}>
+          Opportunities
+        </CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Pass onboarding to get simulated internship opportunities from partner companies, each
+          with a squad, a sprint and token stipend. After you're certified you can opt in to be
+          recommended to real employers.
+        </p>
+        <Link to="/begin" className="btn-duo-outline mt-4 w-full !py-2 text-sm sm:w-auto">
+          <Lock className="h-4 w-4" /> Locked
+        </Link>
+      </Card>
     </div>
   );
 }
@@ -271,6 +262,11 @@ function RealDashboard({ me }: { me: Me }) {
     queryKey: ["offers"],
     queryFn: () => api<Array<{ status: string }>>("/offers"),
     enabled: s === "OFFER_PENDING",
+  });
+  const identity = useQuery({
+    queryKey: ["identity"],
+    queryFn: () => api<Identity>("/me/identity"),
+    staleTime: 60_000,
   });
 
   const testsDone = tests.data?.tests.filter((t) => t.status === "graded").length ?? 0;
@@ -368,17 +364,17 @@ function RealDashboard({ me }: { me: Me }) {
               icon={Briefcase}
               title={
                 offers.data?.some((o) => o.status === "accepted")
-                  ? "Offer accepted — matching your team"
-                  : "Your offers are waiting"
+                  ? "Opportunity accepted — placing you on a squad"
+                  : "Your opportunities are waiting"
               }
               body={
                 offers.data?.some((o) => o.status === "accepted")
-                  ? "We're matching you with teammates in the other roles. You'll be notified when your team starts."
-                  : "Accept within 72 hours."
+                  ? "We're placing you with teammates now. You'll land in your team workspace."
+                  : "Accept one within 72 hours to join a squad."
               }
               action={
-                <Link to="/offers" className="btn-duo !py-2 !px-4 text-sm">
-                  View offers
+                <Link to="/opportunities" className="btn-duo !py-2 !px-4 text-sm">
+                  View opportunities
                 </Link>
               }
             />
@@ -391,6 +387,12 @@ function RealDashboard({ me }: { me: Me }) {
           )}
         </Card>
       </div>
+
+      {identity.data ? (
+        <IdentityPortfolio data={identity.data} />
+      ) : identity.isLoading ? (
+        <div className="skeleton h-80 rounded-2xl" />
+      ) : null}
     </div>
   );
 }

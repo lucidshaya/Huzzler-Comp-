@@ -1,4 +1,5 @@
 import nodemailer, { type Transporter } from "nodemailer";
+import { waitUntil } from "@vercel/functions";
 import { db } from "./supabase.js";
 import { env } from "../config/env.js";
 import { logger } from "./logger.js";
@@ -28,7 +29,7 @@ ${cta ? `<p style="margin:24px 0 0"><a href="${escapeHtml(cta.url)}" style="disp
 }
 
 let transporter: Transporter | null = null;
-const smtpReady = () => Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS);
+export const smtpReady = () => Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS);
 function smtp(): Transporter {
   transporter ??= nodemailer.createTransport({
     host: env.SMTP_HOST,
@@ -39,38 +40,66 @@ function smtp(): Transporter {
   return transporter;
 }
 
+/** True when at least one email provider is configured (Gmail SMTP or Resend). */
+export const emailReady = () => smtpReady() || Boolean(env.RESEND_API_KEY);
+
+export type MailOpts = { replyTo?: string; text?: string; headers?: Record<string, string> };
+
 /**
- * Sends email via SMTP (Gmail: fourtechonoliges@gmail.com with an App Password), else Resend, else logs it.
- * Never throws: an email failure must not break the action that triggered it.
+ * Sends one email via SMTP (Gmail: fourtechonoliges@gmail.com with an App Password), else Resend.
+ * Returns the outcome instead of throwing, so callers that care (bulk email) can record failures.
  */
-export async function sendEmail(to: string, subject: string, html: string, opts: { replyTo?: string } = {}) {
+export async function deliverEmail(to: string, subject: string, html: string, opts: MailOpts = {}): Promise<{ ok: true } | { ok: false; error: string; retryable: boolean }> {
   try {
     if (smtpReady()) {
-      await smtp().sendMail({ from: env.EMAIL_FROM, to, subject, html, replyTo: opts.replyTo ?? env.SUPPORT_EMAIL });
-      return;
+      await smtp().sendMail({ from: env.EMAIL_FROM, to, subject, html, text: opts.text, headers: opts.headers, replyTo: opts.replyTo ?? env.SUPPORT_EMAIL });
+      return { ok: true };
     }
     if (env.RESEND_API_KEY) {
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ from: env.EMAIL_FROM, to, subject, html, reply_to: opts.replyTo ?? env.SUPPORT_EMAIL }),
+        body: JSON.stringify({ from: env.EMAIL_FROM, to, subject, html, text: opts.text, headers: opts.headers, reply_to: opts.replyTo ?? env.SUPPORT_EMAIL }),
       });
-      if (!res.ok) logger.error({ status: res.status, subject }, "email send failed");
-      return;
+      if (res.ok) return { ok: true };
+      const body = await res.text().catch(() => "");
+      return { ok: false, error: `${res.status}: ${body.slice(0, 300)}`, retryable: res.status === 429 || res.status >= 500 };
     }
     logger.info({ to, subject }, "email (not sent: SMTP/Resend not configured)");
+    return { ok: false, error: "Email isn't configured", retryable: false };
   } catch (err) {
-    logger.error({ err: String(err), subject }, "email send failed");
+    const message = String((err as Error)?.message ?? err);
+    // Gmail rate limits (421/454) and connection drops are worth retrying; bad addresses (5xx) aren't.
+    const code = Number((err as { responseCode?: number })?.responseCode ?? 0);
+    return { ok: false, error: message.slice(0, 300), retryable: !code || code < 500 };
   }
 }
 
+/** Fire-and-forget email for user-facing actions. Never throws. */
+export async function sendEmail(to: string, subject: string, html: string, opts: MailOpts = {}) {
+  const r = await deliverEmail(to, subject, html, opts);
+  if (!r.ok && r.error !== "Email isn't configured") logger.error({ error: r.error, subject }, "email send failed");
+  return r;
+}
+
 export async function emailUser(userId: string, subject: string, html: string) {
-  const { data } = await db.auth.admin.getUserById(userId);
-  if (data.user?.email) await sendEmail(data.user.email, subject, html);
+  try {
+    const { data } = await db.auth.admin.getUserById(userId);
+    if (data.user?.email) await sendEmail(data.user.email, subject, html);
+  } catch (err) {
+    logger.error({ err: String(err), subject }, "emailUser failed");
+  }
+}
+
+/** Runs slow side effects (emails, staff pings) after the response; on Vercel waitUntil keeps them alive. */
+export function later(work: Promise<unknown>) {
+  waitUntil(work.catch((err) => logger.error({ err: String(err) }, "background task failed")));
 }
 
 /** In-app notification to every active staff member who handles support. */
 export async function notifyStaff(type: string, title: string, body: string, data: Record<string, unknown> = {}) {
   const { data: staff } = await db.from("profiles").select("id").in("app_role", ["admin", "moderator"]).is("deleted_at", null);
-  for (const s of staff ?? []) await notify(s.id, type, title, body, data);
+  if (!staff?.length) return;
+  const { error } = await db.from("notifications").insert(staff.map((s) => ({ user_id: s.id, type, title, body, data })));
+  if (error) logger.error({ err: error, type }, "staff notification insert failed");
 }

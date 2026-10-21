@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
 import { StaffLogin } from "@/components/staff/StaffLogin";
 
 export const Route = createFileRoute("/aipm/login")({
@@ -6,5 +7,10 @@ export const Route = createFileRoute("/aipm/login")({
   head: () => ({
     meta: [{ title: "AI PM sign in · Huzzler" }, { name: "robots", content: "noindex" }],
   }),
-  component: () => <StaffLogin portal="aipm" />,
+  validateSearch: z.object({ username: z.string().max(64).optional() }),
+  component: AipmLogin,
 });
+
+function AipmLogin() {
+  return <StaffLogin portal="aipm" initialUsername={Route.useSearch().username} />;
+}

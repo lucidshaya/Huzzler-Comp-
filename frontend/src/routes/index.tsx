@@ -4,6 +4,7 @@ import heroImg from "@/assets/hero.png";
 import gatewayImg from "@/assets/gateway.png";
 import studioImg from "@/assets/studio.png";
 import identityImg from "@/assets/identity.png";
+import { IntroVideo } from "@/components/app/IntroVideo";
 import {
   Code2,
   Palette,
@@ -387,6 +388,9 @@ function Index() {
             with AI-assisted grading and a mentor when you're stuck. You leave with a certificate
             and a portfolio that prove you can ship.
           </p>
+        </div>
+        <div className="mt-14 md:mt-20">
+          <IntroVideo />
         </div>
       </section>
 

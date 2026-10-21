@@ -16,6 +16,7 @@ import {
 import { removeMember } from "../services/teams.js";
 import { cancelSubscription } from "../services/payments.js";
 import { clearAuthCache } from "../middleware/auth.js";
+import { identity } from "../services/identity.js";
 
 export const meRouter = Router();
 
@@ -72,6 +73,8 @@ meRouter.post("/begin-onboarding", h(async (req) => beginOnboarding(uid(req))));
 meRouter.post("/guardian", h(async (req) =>
   requestGuardianConsent(uid(req), parse(z.object({ guardian_name: z.string().min(2).max(80), guardian_email: z.string().email(), guardian_phone: z.string().optional(), relationship: z.string().min(2).max(40) }), req.body)),
 ));
+
+meRouter.get("/identity", h(async (req) => identity(uid(req))));
 
 meRouter.get("/notifications", h(async (req) => {
   const { data } = await db.from("notifications").select("*").eq("user_id", uid(req)).order("created_at", { ascending: false }).limit(50);
