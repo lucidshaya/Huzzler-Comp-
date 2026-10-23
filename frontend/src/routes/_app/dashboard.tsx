@@ -7,6 +7,7 @@ import {
   Briefcase,
   ClipboardCheck,
   Eye,
+  FileText,
   Lock,
   MessageSquareText,
   Sparkles,
@@ -154,6 +155,7 @@ function PreviewDashboard({ me }: { me: Me }) {
         chip={`${roleName(me.profile.role_id)} · Preview`}
         title="This is what your Huzzler journey looks like."
         body="Everything below is sample data so you can see how it works. Begin onboarding to make it yours."
+        actions={<ResumeButton />}
       />
       <Notice>
         <span className="flex items-center gap-2 font-semibold">
@@ -278,6 +280,7 @@ function RealDashboard({ me }: { me: Me }) {
       <PageHeader
         chip={`${roleName(me.profile.role_id)} · ${STATUS_LABEL[s]}`}
         title={`Hi ${me.profile.full_name?.split(" ")[0] ?? "there"} 👋`}
+        actions={<ResumeButton />}
       />
       <NextStepCard me={me} />
 
@@ -484,6 +487,20 @@ function DailyQuests({
         })}
       </ul>
     </Card>
+  );
+}
+
+/** Small shortcut to Profile → AI résumé. */
+function ResumeButton() {
+  return (
+    <Link
+      to="/profile"
+      search={{ tab: "resume" }}
+      className="group inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3.5 py-1.5 text-xs font-bold text-primary transition-colors hover:bg-primary/15"
+    >
+      <FileText className="h-3.5 w-3.5" /> Build your résumé now
+      <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+    </Link>
   );
 }
 

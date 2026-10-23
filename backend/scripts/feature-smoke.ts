@@ -166,7 +166,7 @@ async function opportunitiesAndWorkspace(u: { id: string; token: string }, admin
 
   console.log("\n▶ Tokens & Workstation");
   const w0 = await expect2xx<any>(u.token, "wallet", "/billing/tokens");
-  w0?.prices?.length === 5 && w0?.packs?.length === 3 ? ok(`balance ${w0.balance}, ${w0.packs.length} packs, ${w0.prices.length} prices`) : bad("wallet shape", w0);
+  w0?.prices?.length >= 6 && w0?.packs?.length === 3 ? ok(`balance ${w0.balance}, ${w0.packs.length} packs, ${w0.prices.length} prices`) : bad("wallet shape", w0);
   await expect2xx(admin, "grant 300 tokens to the learner", "/admin/tokens/grant", "POST", { user_id: u.id, amount: 300, note: "smoke" });
   const ws0 = await expect2xx<any>(u.token, "Workstation state", "/workstation");
   const start = ws0?.balance ?? 0;
@@ -189,6 +189,30 @@ async function opportunitiesAndWorkspace(u: { id: string; token: string }, admin
   console.log("\n▶ Identity portfolio");
   const id = await expect2xx<any>(u.token, "GET /me/identity", "/me/identity");
   id?.badges?.length && id.heatmap && Object.values(id.heatmap).some((d: any) => d.workstation > 0) ? ok(`${id.badges.length} badges, today's Workstation runs on the heatmap`) : bad("identity shape", id);
+}
+
+async function resumeBuilder(u: { id: string; token: string }, admin: string) {
+  console.log("\n▶ Profile → AI résumé");
+  await expect2xx(admin, "grant 120 tokens for the résumé", "/admin/tokens/grant", "POST", { user_id: u.id, amount: 120, note: "smoke résumé" });
+  const s0 = await expect2xx<any>(u.token, "GET /cv", "/cv");
+  s0?.cost > 0 ? ok(`draft costs ${s0.cost} tokens; balance ${s0.balance}`) : bad("no résumé price", s0);
+  const w = await call<any>(u.token, "/billing/tokens");
+  w.data?.prices?.some((p: any) => p.action === "cv_generate") ? ok("résumé price listed in Billing") : bad("résumé price missing from Billing");
+  const g = await expect2xx<any>(u.token, "draft my résumé", "/cv/generate", "POST", { target_role: "Junior Platform Engineer", background: "BSc Computer Science, University of Lagos, 2022 – 2026" });
+  if (g) {
+    g.balance === s0.balance - s0.cost ? ok(`charged ${g.charged} tokens (${g.engine}); balance ${g.balance}`) : bad("résumé charge wrong", { before: s0.balance, after: g.balance });
+    g.cv?.full_name && g.cv?.experience?.length ? ok(`résumé: "${g.cv.headline}" with ${g.cv.experience.length} role(s), ${g.cv.projects.length} project(s)`) : bad("résumé content thin", g.cv);
+    g.cv?.education?.[0]?.school === "University of Lagos" ? ok("education taken from the user's notes") : bad("education", g.cv?.education);
+    const edited = { ...g.cv, headline: "Edited headline" };
+    await expect2xx(u.token, "save edits (free)", "/cv", "PUT", { content: edited });
+    const s1 = await call<any>(u.token, "/cv");
+    s1.data?.cv?.headline === "Edited headline" && s1.data.balance === g.balance ? ok("edit saved without charging") : bad("edit not saved / charged", s1.data);
+  }
+  await db.from("token_wallets").update({ balance: 10 }).eq("user_id", u.id);
+  const broke = await call(u.token, "/cv/generate", "POST", {});
+  broke.status === 402 && broke.data?.code === "INSUFFICIENT_TOKENS" ? ok("not enough tokens → 402, nothing charged") : bad("insufficient tokens not enforced", broke);
+  const after = await call<any>(u.token, "/cv");
+  after.data?.balance === 10 ? ok("balance untouched after refusal") : bad("balance changed", after.data?.balance);
 }
 
 async function adminSide(admin: string) {
@@ -221,7 +245,7 @@ async function adminSide(admin: string) {
   }
   await expect2xx(admin, "offer pipeline", "/admin/offers");
   const tk = await expect2xx<any>(admin, "token pool", "/admin/tokens");
-  tk?.prices?.length === 5 ? ok(`pool ${tk.pool.balance}, ${tk.paid_users} paid members`) : bad("token summary", tk);
+  tk?.prices?.length >= 6 ? ok(`pool ${tk.pool.balance}, ${tk.paid_users} paid members`) : bad("token summary", tk);
   const price = tk?.prices?.[0];
   if (price) {
     await expect2xx(admin, "change a price", `/admin/tokens/prices/${price.action}`, "PUT", { cost: price.cost + 1 });
@@ -275,6 +299,7 @@ async function cleanup() {
   for (const i of created.invites) await db.from("staff_invites").delete().eq("id", i);
   for (const u of created.users) {
     await db.from("ai_decisions").delete().eq("user_id", u);
+    await db.from("cv_documents").delete().eq("user_id", u);
     await db.from("help_queries").delete().eq("user_id", u);
     await db.from("offers").delete().eq("user_id", u);
     await db.from("audit_logs").delete().eq("actor_id", u);
@@ -297,7 +322,10 @@ try {
   const admin = await adminToken();
   const u = await makeUser(1);
   await supportAndHelp(u, admin);
-  if (await migrationApplied()) await opportunitiesAndWorkspace(u, admin);
+  if (await migrationApplied()) {
+    await opportunitiesAndWorkspace(u, admin);
+    await resumeBuilder(u, admin);
+  }
   else console.log("\n▶ Skipping opportunities/tokens/workstation: migration 20261021000001 isn't applied yet");
   await adminSide(admin);
 } catch (err) {

@@ -123,6 +123,9 @@ meRouter.get("/privacy/export", h(async (req, res) => {
     certifications: await t("certifications"),
     portfolio_items: await t("portfolio_items"),
     notifications: await t("notifications"),
+    token_ledger: await t("token_ledger"),
+    token_purchases: (await t("token_purchases")).map(({ raw, ...p }: any) => p),
+    resume: await t("cv_documents"),
   };
   res.setHeader("Content-Disposition", `attachment; filename="huzzler-data-${id}.json"`);
   return data;

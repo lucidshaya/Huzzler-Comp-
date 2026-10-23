@@ -34,7 +34,8 @@ const CODE_ACTIONS: Record<string, Action> = {
   MFA_REQUIRED: { label: "Verify with your authenticator", to: "/admin/login" },
   SUSPENDED: { label: "Contact support", href: "mailto:support@huzzler.app" },
   HINTS_FIRST: { label: "Unlock the hints", run: "reload" },
-  PAYMENT_INIT_FAILED: { label: "Check your account details", to: "/settings" },
+  PAYMENT_INIT_FAILED: { label: "Check your account details", to: "/profile" },
+  INSUFFICIENT_TOKENS: { label: "Top up tokens", to: "/billing" },
   PAYMENT_PROVIDER_DOWN: { label: "Try again", run: "retry" },
 };
 

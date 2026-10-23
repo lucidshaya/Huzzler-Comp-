@@ -14,6 +14,7 @@ import { teamRouter } from "./routes/team.js";
 import { supportRouter } from "./routes/support.js";
 import { adminRouter, adminAuthRouter } from "./routes/admin.js";
 import { aipmRouter } from "./routes/aipm.js";
+import { cvRouter } from "./routes/cv.js";
 import { requireAuth } from "./middleware/auth.js";
 import { maintenanceGate } from "./lib/maintenance.js";
 
@@ -36,6 +37,7 @@ export function createApp() {
   app.use(["/api/support", "/api/help"], limiter(60_000, 30));
   app.use(["/api/admin/auth", "/api/guardian", "/api/invites"], limiter(15 * 60_000, 20));
   app.use("/api/workstation/run", limiter(60_000, 20));
+  app.use("/api/cv/generate", limiter(60_000, 5));
 
   app.get("/health", (_req, res) => res.json({ ok: true }));
   app.use("/api", publicRouter);
@@ -47,6 +49,7 @@ export function createApp() {
   app.use("/api/onboarding", onboardingRouter);
   app.use("/api/admin", adminRouter);
   app.use("/api/aipm", aipmRouter);
+  app.use("/api/cv", cvRouter);
   app.use("/api", supportRouter);
   app.use("/api", teamRouter);
 

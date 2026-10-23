@@ -21,6 +21,7 @@ import { Route as AppCertificateRouteImport } from './routes/_app/certificate'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppOffersRouteImport } from './routes/_app/offers'
 import { Route as AppOpportunitiesRouteImport } from './routes/_app/opportunities'
+import { Route as AppProfileRouteImport } from './routes/_app/profile'
 import { Route as AppResultsRouteImport } from './routes/_app/results'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppSupportRouteImport } from './routes/_app/support'
@@ -95,6 +96,11 @@ const AppOffersRoute = AppOffersRouteImport.update({
 const AppOpportunitiesRoute = AppOpportunitiesRouteImport.update({
   id: '/opportunities',
   path: '/opportunities',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppProfileRoute = AppProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
   getParentRoute: () => AppRoute,
 } as any)
 const AppResultsRoute = AppResultsRouteImport.update({
@@ -190,6 +196,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AppDashboardRoute
   '/offers': typeof AppOffersRoute
   '/opportunities': typeof AppOpportunitiesRoute
+  '/profile': typeof AppProfileRoute
   '/results': typeof AppResultsRoute
   '/settings': typeof AppSettingsRoute
   '/support': typeof AppSupportRoute
@@ -219,6 +226,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AppDashboardRoute
   '/offers': typeof AppOffersRoute
   '/opportunities': typeof AppOpportunitiesRoute
+  '/profile': typeof AppProfileRoute
   '/results': typeof AppResultsRoute
   '/settings': typeof AppSettingsRoute
   '/support': typeof AppSupportRoute
@@ -250,6 +258,7 @@ export interface FileRoutesById {
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/offers': typeof AppOffersRoute
   '/_app/opportunities': typeof AppOpportunitiesRoute
+  '/_app/profile': typeof AppProfileRoute
   '/_app/results': typeof AppResultsRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/support': typeof AppSupportRoute
@@ -281,6 +290,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/offers'
     | '/opportunities'
+    | '/profile'
     | '/results'
     | '/settings'
     | '/support'
@@ -310,6 +320,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/offers'
     | '/opportunities'
+    | '/profile'
     | '/results'
     | '/settings'
     | '/support'
@@ -340,6 +351,7 @@ export interface FileRouteTypes {
     | '/_app/dashboard'
     | '/_app/offers'
     | '/_app/opportunities'
+    | '/_app/profile'
     | '/_app/results'
     | '/_app/settings'
     | '/_app/support'
@@ -460,6 +472,13 @@ declare module '@tanstack/react-router' {
       path: '/opportunities'
       fullPath: '/opportunities'
       preLoaderRoute: typeof AppOpportunitiesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/profile': {
+      id: '/_app/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof AppProfileRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/results': {
@@ -584,6 +603,7 @@ interface AppRouteChildren {
   AppDashboardRoute: typeof AppDashboardRoute
   AppOffersRoute: typeof AppOffersRoute
   AppOpportunitiesRoute: typeof AppOpportunitiesRoute
+  AppProfileRoute: typeof AppProfileRoute
   AppResultsRoute: typeof AppResultsRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppSupportRoute: typeof AppSupportRoute
@@ -600,6 +620,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppDashboardRoute: AppDashboardRoute,
   AppOffersRoute: AppOffersRoute,
   AppOpportunitiesRoute: AppOpportunitiesRoute,
+  AppProfileRoute: AppProfileRoute,
   AppResultsRoute: AppResultsRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppSupportRoute: AppSupportRoute,

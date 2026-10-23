@@ -10,7 +10,8 @@ export type AiFeature =
   | "content_batch"
   | "aipm_wbs"
   | "help_bot"
-  | "workstation";
+  | "workstation"
+  | "cv_builder";
 
 export type FeatureConfig = { model: string; maxTokens: number; effort: "low" | "medium" | "high" };
 
@@ -28,6 +29,7 @@ const DEFAULTS: Record<AiFeature, FeatureConfig> = {
   aipm_wbs: { model: "claude-haiku-5-5", maxTokens: 8000, effort: "medium" },
   help_bot: { model: "claude-haiku-5-5", maxTokens: 1200, effort: "low" },
   workstation: { model: "claude-haiku-5-5", maxTokens: 2500, effort: "low" },
+  cv_builder: { model: "claude-haiku-5-5", maxTokens: 4000, effort: "medium" },
 };
 
 let cache: { at: number; overrides: Partial<Record<AiFeature, Partial<FeatureConfig>>> } | null = null;

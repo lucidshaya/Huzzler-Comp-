@@ -634,3 +634,26 @@
     animation: none;
   }
 }
+
+/* Profile → AI résumé: print only the résumé sheet ("Download PDF" uses the browser's Save as PDF). */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+  body:has(#cv-print) {
+    background: #fff !important;
+  }
+  body:has(#cv-print) * {
+    visibility: hidden;
+  }
+  body:has(#cv-print) #cv-print,
+  body:has(#cv-print) #cv-print * {
+    visibility: visible;
+  }
+  body:has(#cv-print) #cv-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}

@@ -231,7 +231,7 @@ export function nextStep(me: Me): { label: string; to: string; hint: string } {
         hint: "Your work is saved. Renew to pick up where you left off.",
       };
     default:
-      return { label: "Contact support", to: "/settings", hint: "Your account needs attention." };
+      return { label: "Contact support", to: "/support", hint: "Your account needs attention." };
   }
 }
 

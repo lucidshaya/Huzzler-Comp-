@@ -35,3 +35,33 @@ export const HelpReply = z.object({
   answered_from_reference: z.boolean(),
 });
 export type HelpReply = z.infer<typeof HelpReply>;
+
+const CvEntry = z.object({ title: z.string(), organisation: z.string(), period: z.string(), bullets: z.array(z.string()) });
+
+/** What the model drafts. Contact details and certifications are filled in by the server from verified records. */
+export const CvDraft = z.object({
+  headline: z.string(),
+  summary: z.string(),
+  skills: z.array(z.string()),
+  experience: z.array(CvEntry),
+  projects: z.array(z.object({ name: z.string(), context: z.string(), bullets: z.array(z.string()), link: z.string() })),
+  education: z.array(z.object({ school: z.string(), qualification: z.string(), period: z.string() })),
+});
+export type CvDraft = z.infer<typeof CvDraft>;
+
+const line = (max: number) => z.string().trim().max(max);
+const bullets = z.array(line(300)).max(10);
+
+/** The stored, user-editable résumé. */
+export const CvContent = z.object({
+  full_name: line(80),
+  headline: line(160),
+  contact: z.object({ email: line(120), phone: line(30), location: line(80), links: z.array(line(200)).max(6) }),
+  summary: line(1200),
+  skills: z.array(line(60)).max(30),
+  experience: z.array(z.object({ title: line(120), organisation: line(120), period: line(60), bullets })).max(10),
+  projects: z.array(z.object({ name: line(120), context: line(200), bullets, link: line(200) })).max(12),
+  education: z.array(z.object({ school: line(120), qualification: line(120), period: line(60) })).max(6),
+  certifications: z.array(z.object({ name: line(160), issuer: line(80), code: line(40), url: line(200) })).max(10),
+});
+export type CvContent = z.infer<typeof CvContent>;

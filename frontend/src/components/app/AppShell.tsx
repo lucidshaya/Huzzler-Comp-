@@ -9,7 +9,7 @@ import {
   Users,
   Award,
   Wallet,
-  Settings,
+  UserRound,
   Menu,
   X,
   Bell,
@@ -75,7 +75,7 @@ function navFor(me: Me): NavItem[] {
     { to: "/certificate", label: "Certificate", short: "Certificate", icon: Award, locked: !paid },
     { to: "/billing", label: "Billing", short: "Billing", icon: Wallet },
     { to: "/support", label: "Help & support", short: "Help", icon: LifeBuoy },
-    { to: "/settings", label: "Settings", short: "Settings", icon: Settings },
+    { to: "/profile", label: "Profile", short: "Profile", icon: UserRound },
   ];
 }
 
@@ -141,7 +141,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
     nav[0],
     nav.find((n) => n.to === "/begin") ?? nav.find((n) => n.to === "/tests")!,
     nav.find((n) => n.to === "/workspace")!,
-    nav.find((n) => n.to === "/settings")!,
+    nav.find((n) => n.to === "/profile")!,
   ];
 
   return (
@@ -401,11 +401,11 @@ function AccountMenu({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
           </div>
           <Link
             role="menuitem"
-            to="/settings"
+            to="/profile"
             onClick={() => setOpen(false)}
             className="mt-1 flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-semibold hover:bg-muted"
           >
-            <Settings className="h-4 w-4" /> Settings & privacy
+            <UserRound className="h-4 w-4" /> Profile & résumé
           </Link>
           <Link
             role="menuitem"
