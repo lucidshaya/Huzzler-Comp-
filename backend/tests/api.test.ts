@@ -32,6 +32,10 @@ describe("HTTP layer", () => {
     expect((await request(app).post("/api/webhooks/paystack").set("x-paystack-signature", "bad").send({ event: "x" })).status).toBe(401);
     expect((await request(app).get("/api/me")).status).toBe(401);
     expect((await request(app).get("/api/admin/overview")).status).toBe(401);
+    expect((await request(app).get("/api/cv")).status).toBe(401);
+    expect((await request(app).post("/api/cv/generate").send({})).status).toBe(401);
+    expect((await request(app).get("/api/tokens")).status).toBe(401);
+    expect((await request(app).post("/api/tokens/purchase").send({ pack_id: "starter" })).status).toBe(401);
     expect((await request(app).post("/api/admin/auth/login").send({ username: "a" })).status).toBe(400);
   });
 });
@@ -95,5 +99,35 @@ describe("route wrapper", () => {
     app.get("/void", h(async () => undefined));
     expect((await request(app).get("/null")).body).toBeNull();
     expect((await request(app).get("/void")).body).toEqual({ ok: true });
+  });
+});
+
+describe("CV builder", () => {
+  const cv = {
+    full_name: "Ada Obi",
+    headline: "Software Engineer",
+    contact: { email: "ada@example.com", phone: "", location: "Lagos", links: [] },
+    summary: "Ships things.",
+    skills: ["TypeScript"],
+    experience: [{ title: "Software Engineer (simulated internship)", organisation: "Huzzler", period: "Jan 2026 – Present", bullets: ["Built search"] }],
+    projects: [],
+    education: [],
+    certifications: [],
+  };
+
+  it("accepts a well-formed CV and rejects oversized or malformed ones", async () => {
+    const { CvContent } = await import("../src/ai/schemas.js");
+    expect(CvContent.safeParse(cv).success).toBe(true);
+    expect(CvContent.safeParse({ ...cv, summary: "x".repeat(1201) }).success).toBe(false);
+    expect(CvContent.safeParse({ ...cv, skills: Array(31).fill("x") }).success).toBe(false);
+    expect(CvContent.safeParse({ ...cv, contact: undefined }).success).toBe(false);
+  });
+
+  it("routes token top-up references away from the plan payment flow", async () => {
+    const { TOKEN_REF_PREFIX } = await import("../src/services/tokens.js");
+    expect(TOKEN_REF_PREFIX).toBe("hz_t_");
+    // Plan references are hz_o_ / hz_m_; they must never collide with the token prefix.
+    expect("hz_o_abc".startsWith(TOKEN_REF_PREFIX)).toBe(false);
+    expect("hz_m_abc".startsWith(TOKEN_REF_PREFIX)).toBe(false);
   });
 });

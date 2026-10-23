@@ -7,7 +7,8 @@ export type AiFeature =
   | "mentor_chat"
   | "integrity_review"
   | "demo_grading"
-  | "content_batch";
+  | "content_batch"
+  | "cv_builder";
 
 export type FeatureConfig = { model: string; maxTokens: number; effort: "low" | "medium" | "high" };
 
@@ -22,6 +23,7 @@ const DEFAULTS: Record<AiFeature, FeatureConfig> = {
   integrity_review: { model: "claude-haiku-5-5", maxTokens: 2000, effort: "low" },
   demo_grading: { model: "claude-haiku-5-5", maxTokens: 6000, effort: "medium" },
   content_batch: { model: "claude-haiku-5-5", maxTokens: 16000, effort: "medium" },
+  cv_builder: { model: "claude-haiku-5-5", maxTokens: 4000, effort: "medium" },
 };
 
 let cache: { at: number; overrides: Partial<Record<AiFeature, Partial<FeatureConfig>>> } | null = null;

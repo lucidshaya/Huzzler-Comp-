@@ -10,6 +10,7 @@ import { hasPaidAccess, PAID_STATUSES } from "../domain/journey.js";
 import { paystack, type PaystackTransaction } from "./paystack.js";
 import { getJourney, transition } from "./journey.js";
 import { getProfile } from "./profile.js";
+import { TOKEN_REF_PREFIX, applyTokenPurchase, verifyTokenPurchase } from "./tokens.js";
 
 type PlanId = "one_time" | "monthly";
 const DAY = 86_400_000;
@@ -73,6 +74,7 @@ const planCodeOf = (t: PaystackTransaction) => (typeof t.plan === "string" ? t.p
  */
 export async function applySuccessfulCharge(tx: PaystackTransaction, via: "verify" | "webhook") {
   if (tx.status !== "success") return { applied: false, reason: tx.status };
+  if (tx.reference.startsWith(TOKEN_REF_PREFIX)) return applyTokenPurchase(tx, via);
 
   let { data: payment } = await db.from("payments").select("*").eq("reference", tx.reference).maybeSingle();
 
@@ -158,6 +160,7 @@ async function userForCustomer(customerCode: string, metaUserId?: string): Promi
 }
 
 export async function verifyPayment(userId: string, reference: string) {
+  if (reference.startsWith(TOKEN_REF_PREFIX)) return verifyTokenPurchase(userId, reference);
   const { data: payment } = await db.from("payments").select("user_id, status").eq("reference", reference).maybeSingle();
   if (!payment || payment.user_id !== userId) throw notFound("Payment not found");
   if (payment.status === "success") return { status: "success" };

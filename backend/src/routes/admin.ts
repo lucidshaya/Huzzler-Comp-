@@ -11,6 +11,7 @@ import { STATUSES, type JourneyStatus } from "../domain/journey.js";
 import { ROLE_IDS } from "../domain/constants.js";
 import { transition, getJourney } from "../services/journey.js";
 import { refundPayment } from "../services/payments.js";
+import { grantTokens } from "../services/tokens.js";
 import { maybeFinalizeAttempt } from "../services/onboarding.js";
 import { runMatching } from "../services/teams.js";
 import { computeProjectResults } from "../services/projects.js";
@@ -186,6 +187,15 @@ adminRouter.post(
     const b = parse(z.object({ role_id: z.enum(ROLE_IDS).optional(), app_role: z.enum(["user", "admin", "moderator", "content_reviewer", "partnerships"]).optional(), reason: z.string().min(3) }), req.body);
     await db.from("profiles").update({ ...(b.role_id ? { role_id: b.role_id } : {}), ...(b.app_role ? { app_role: b.app_role } : {}) }).eq("id", req.params.id);
     await audit(uid(req), "user.change_role", "profile", req.params.id, b, req.ip);
+  }),
+);
+
+adminRouter.post(
+  "/users/:id/tokens",
+  adminOnly,
+  h(async (req) => {
+    const { amount, note } = parse(z.object({ amount: z.number().int().min(1).max(100_000), note: z.string().min(3).max(200) }), req.body);
+    return grantTokens(uid(req), req.params.id, amount, note);
   }),
 );
 

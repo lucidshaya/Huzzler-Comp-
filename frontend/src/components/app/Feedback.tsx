@@ -28,6 +28,7 @@ const CODE_ACTIONS: Record<string, Action> = {
   MFA_REQUIRED: { label: "Verify with your authenticator", to: "/admin/login" },
   SUSPENDED: { label: "Contact support", href: "mailto:support@huzzler.app" },
   HINTS_FIRST: { label: "Unlock the hints", run: "reload" },
+  INSUFFICIENT_TOKENS: { label: "Top up tokens", to: "/cv" },
 };
 
 export function resolveError(error: unknown): Resolved {

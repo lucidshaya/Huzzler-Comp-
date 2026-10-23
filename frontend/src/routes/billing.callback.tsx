@@ -18,6 +18,7 @@ function Callback() {
   const qc = useQueryClient();
   const [state, setState] = useState<"checking" | "success" | "pending" | "failed">("checking");
   const [msg, setMsg] = useState("");
+  const [kind, setKind] = useState<"plan" | "tokens">(ref?.startsWith("hz_t_") ? "tokens" : "plan");
 
   useEffect(() => {
     if (!ref) {
@@ -28,7 +29,10 @@ function Callback() {
     let tries = 0;
     const check = async () => {
       try {
-        const r = await api<{ status: string }>("/billing/verify", { body: { reference: ref } });
+        const r = await api<{ status: string; kind?: "tokens" }>("/billing/verify", {
+          body: { reference: ref },
+        });
+        if (r.kind === "tokens") setKind("tokens");
         if (r.status === "success") {
           setState("success");
           qc.invalidateQueries();
@@ -63,8 +67,9 @@ function Callback() {
             <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary" />
             <h1 className="mt-4 font-display text-xl font-bold">Waiting for your bank</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Bank transfers and USSD can take a few minutes. We'll unlock your account as soon as
-              Paystack confirms — you can leave this page.
+              Bank transfers and USSD can take a few minutes. We'll{" "}
+              {kind === "tokens" ? "add your tokens" : "unlock your account"} as soon as Paystack
+              confirms — you can leave this page.
             </p>
             <Link to="/dashboard" className="btn-duo-outline mt-6">
               Go to dashboard
@@ -74,13 +79,27 @@ function Callback() {
         {state === "success" && (
           <>
             <CheckCircle2 className="mx-auto h-12 w-12 text-[color:var(--brand-green)]" />
-            <h1 className="mt-4 font-display text-2xl font-bold">You're in!</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Payment confirmed. A receipt is on its way to your email.
-            </p>
-            <Link to="/tests" className="btn-duo mt-6">
-              Start onboarding tests
-            </Link>
+            {kind === "tokens" ? (
+              <>
+                <h1 className="mt-4 font-display text-2xl font-bold">Tokens added</h1>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Payment confirmed. Your new tokens are in your wallet.
+                </p>
+                <Link to="/cv" className="btn-duo mt-6">
+                  Back to CV builder
+                </Link>
+              </>
+            ) : (
+              <>
+                <h1 className="mt-4 font-display text-2xl font-bold">You're in!</h1>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Payment confirmed. A receipt is on its way to your email.
+                </p>
+                <Link to="/tests" className="btn-duo mt-6">
+                  Start onboarding tests
+                </Link>
+              </>
+            )}
           </>
         )}
         {state === "failed" && (
@@ -90,7 +109,7 @@ function Callback() {
             <p className="mt-2 text-sm text-muted-foreground">
               {msg} You haven't been charged twice — try again when you're ready.
             </p>
-            <Link to="/begin" className="btn-duo mt-6">
+            <Link to={kind === "tokens" ? "/cv" : "/begin"} className="btn-duo mt-6">
               Try again
             </Link>
           </>

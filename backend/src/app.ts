@@ -12,6 +12,7 @@ import { billingRouter } from "./routes/billing.js";
 import { onboardingRouter } from "./routes/onboarding.js";
 import { teamRouter } from "./routes/team.js";
 import { adminRouter, adminAuthRouter } from "./routes/admin.js";
+import { cvRouter, tokensRouter } from "./routes/cv.js";
 import { requireAuth } from "./middleware/auth.js";
 
 export function createApp() {
@@ -28,7 +29,8 @@ export function createApp() {
 
   const limiter = (windowMs: number, limit: number) => rateLimit({ windowMs, limit, standardHeaders: "draft-7", legacyHeaders: false });
   app.use("/api", limiter(60_000, 300));
-  app.use(["/api/billing", "/api/webhooks"], limiter(60_000, 30));
+  app.use(["/api/billing", "/api/webhooks", "/api/tokens/purchase"], limiter(60_000, 30));
+  app.use("/api/cv/generate", limiter(60_000, 5));
   app.use("/api/mentor", limiter(60_000, 20));
   app.use(["/api/admin/auth", "/api/guardian"], limiter(15 * 60_000, 20));
 
@@ -39,6 +41,8 @@ export function createApp() {
   app.use("/api/me", meRouter);
   app.use("/api/billing", billingRouter);
   app.use("/api/onboarding", onboardingRouter);
+  app.use("/api/tokens", tokensRouter);
+  app.use("/api/cv", cvRouter);
   app.use("/api/admin", adminRouter);
   app.use("/api", teamRouter);
 

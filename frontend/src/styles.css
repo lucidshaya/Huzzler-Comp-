@@ -310,3 +310,13 @@
   .hz-squish, .hz-orbit, .hz-orbit-slow, .hz-halo, .hz-indeterminate, .skeleton::after { animation: none; }
   .hz-draw { animation: none; stroke-dashoffset: 0; fill-opacity: 1; }
 }
+
+/* CV builder: print only the CV sheet (the page's "Download PDF" uses the browser's Save as PDF). */
+@media print {
+  @page { margin: 14mm; }
+  body:has(#cv-print) { background: #fff !important; }
+  body:has(#cv-print) * { visibility: hidden; }
+  body:has(#cv-print) #cv-print,
+  body:has(#cv-print) #cv-print * { visibility: visible; }
+  body:has(#cv-print) #cv-print { position: absolute; left: 0; top: 0; width: 100%; }
+}

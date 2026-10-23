@@ -18,6 +18,7 @@ import { Route as SetupRouteImport } from './routes/setup'
 import { Route as AppBeginRouteImport } from './routes/_app/begin'
 import { Route as AppBillingRouteImport } from './routes/_app/billing'
 import { Route as AppCertificateRouteImport } from './routes/_app/certificate'
+import { Route as AppCvRouteImport } from './routes/_app/cv'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppOffersRouteImport } from './routes/_app/offers'
 import { Route as AppResultsRouteImport } from './routes/_app/results'
@@ -75,6 +76,11 @@ const AppBillingRoute = AppBillingRouteImport.update({
 const AppCertificateRoute = AppCertificateRouteImport.update({
   id: '/certificate',
   path: '/certificate',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCvRoute = AppCvRouteImport.update({
+  id: '/cv',
+  path: '/cv',
   getParentRoute: () => AppRoute,
 } as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
@@ -157,6 +163,7 @@ export interface FileRoutesByFullPath {
   '/begin': typeof AppBeginRoute
   '/billing': typeof AppBillingRoute
   '/certificate': typeof AppCertificateRoute
+  '/cv': typeof AppCvRoute
   '/dashboard': typeof AppDashboardRoute
   '/offers': typeof AppOffersRoute
   '/results': typeof AppResultsRoute
@@ -181,6 +188,7 @@ export interface FileRoutesByTo {
   '/begin': typeof AppBeginRoute
   '/billing': typeof AppBillingRoute
   '/certificate': typeof AppCertificateRoute
+  '/cv': typeof AppCvRoute
   '/dashboard': typeof AppDashboardRoute
   '/offers': typeof AppOffersRoute
   '/results': typeof AppResultsRoute
@@ -207,6 +215,7 @@ export interface FileRoutesById {
   '/_app/begin': typeof AppBeginRoute
   '/_app/billing': typeof AppBillingRoute
   '/_app/certificate': typeof AppCertificateRoute
+  '/_app/cv': typeof AppCvRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/offers': typeof AppOffersRoute
   '/_app/results': typeof AppResultsRoute
@@ -233,6 +242,7 @@ export interface FileRouteTypes {
     | '/begin'
     | '/billing'
     | '/certificate'
+    | '/cv'
     | '/dashboard'
     | '/offers'
     | '/results'
@@ -257,6 +267,7 @@ export interface FileRouteTypes {
     | '/begin'
     | '/billing'
     | '/certificate'
+    | '/cv'
     | '/dashboard'
     | '/offers'
     | '/results'
@@ -282,6 +293,7 @@ export interface FileRouteTypes {
     | '/_app/begin'
     | '/_app/billing'
     | '/_app/certificate'
+    | '/_app/cv'
     | '/_app/dashboard'
     | '/_app/offers'
     | '/_app/results'
@@ -376,6 +388,13 @@ declare module '@tanstack/react-router' {
       path: '/certificate'
       fullPath: '/certificate'
       preLoaderRoute: typeof AppCertificateRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/cv': {
+      id: '/_app/cv'
+      path: '/cv'
+      fullPath: '/cv'
+      preLoaderRoute: typeof AppCvRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/dashboard': {
@@ -483,6 +502,7 @@ interface AppRouteChildren {
   AppBeginRoute: typeof AppBeginRoute
   AppBillingRoute: typeof AppBillingRoute
   AppCertificateRoute: typeof AppCertificateRoute
+  AppCvRoute: typeof AppCvRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppOffersRoute: typeof AppOffersRoute
   AppResultsRoute: typeof AppResultsRoute
@@ -497,6 +517,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppBeginRoute: AppBeginRoute,
   AppBillingRoute: AppBillingRoute,
   AppCertificateRoute: AppCertificateRoute,
+  AppCvRoute: AppCvRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppOffersRoute: AppOffersRoute,
   AppResultsRoute: AppResultsRoute,

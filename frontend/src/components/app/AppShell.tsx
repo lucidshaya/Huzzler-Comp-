@@ -9,6 +9,7 @@ import {
   Users,
   Award,
   Wallet,
+  FileText,
   Settings,
   Menu,
   X,
@@ -53,6 +54,7 @@ function navFor(me: Me): NavItem[] {
       locked: !(onTeam(s) || s === "CERTIFIED" || s === "LAPSED"),
     },
     { to: "/certificate", label: "Certificate", icon: Award, locked: !paid },
+    { to: "/cv", label: "CV builder", icon: FileText },
     { to: "/billing", label: "Billing", icon: Wallet },
     { to: "/settings", label: "Settings", icon: Settings },
   ];
