@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { SITE_HOST } from "@/lib/site";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ArrowRight, CheckCircle2, ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -146,7 +147,7 @@ function ProfileStep({ onDone }: { onDone: () => void }) {
             autoComplete="name"
           />
         </Field>
-        <Field label="Username" hint="Used for your public portfolio: huzzler.app/u/username">
+        <Field label="Username" hint={`Used for your public portfolio: ${SITE_HOST}/u/username`}>
           <input
             className={inputCls}
             value={form.username}

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { SUPPORT_EMAIL } from "@/lib/site";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Download, FileCheck2, IdCard, ShieldCheck, Trash2, UserCircle2 } from "lucide-react";
@@ -172,7 +173,7 @@ export function AccountSettings() {
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
           We never sell your personal data. Companies only see your profile if you approve each one.
-          Questions: contact our Data Protection Officer at dpo@huzzler.app.
+          Questions: contact our Data Protection Officer at {SUPPORT_EMAIL}.
         </p>
         <button onClick={exportData} className="btn-duo-outline mt-4 !py-2 !px-4 text-sm">
           <Download className="h-4 w-4" /> Download my data (JSON)

@@ -132,7 +132,7 @@ export async function deleteCampaign(actorId: string, id: string) {
 }
 
 export function previewHtml(subject: string, body: string) {
-  return renderEmail(subject, body, "Ada", "https://huzzler.app/unsubscribe-preview").html;
+  return renderEmail(subject, body, "Ada", `${env.APP_URL}/unsubscribe-preview`).html;
 }
 
 export async function sendTest(actorId: string, id: string) {

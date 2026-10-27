@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { SUPPORT_EMAIL } from "@/lib/site";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { AlertTriangle, ArrowRight, Clock, LockKeyhole, RefreshCw, WifiOff, X } from "lucide-react";
 import { ApiError, SESSION_EXPIRED_EVENT } from "@/lib/api";
@@ -32,7 +33,7 @@ const CODE_ACTIONS: Record<string, Action> = {
   DEADLINE_PASSED: { label: "Back to your tests", to: "/tests" },
   NOT_ELIGIBLE: { label: "Go to dashboard", to: "/dashboard" },
   MFA_REQUIRED: { label: "Verify with your authenticator", to: "/admin/login" },
-  SUSPENDED: { label: "Contact support", href: "mailto:support@huzzler.app" },
+  SUSPENDED: { label: "Contact support", href: `mailto:${SUPPORT_EMAIL}` },
   HINTS_FIRST: { label: "Unlock the hints", run: "reload" },
   PAYMENT_INIT_FAILED: { label: "Check your account details", to: "/profile" },
   INSUFFICIENT_TOKENS: { label: "Top up tokens", to: "/billing" },

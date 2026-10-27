@@ -21,7 +21,7 @@ docs/       decisions and runbooks
 
    To change the schema: `npm run db:new -- <name>`, write the SQL in the new file, then `npm run db:push`. Once the repo secret `SUPABASE_DB_URL` is set, merging to `main` applies new migrations automatically (`.github/workflows/db-migrate.yml`).
 2. **Auth settings** (Supabase → Authentication):
-   - Site URL `http://localhost:4001`; add `http://localhost:4001/callback` to redirect URLs (plus your production URL later).
+   - Site URL `https://huzzler.tech`; redirect URLs as listed under Deploying (local development uses `http://localhost:4001/**`).
    - Enable the Google provider (needs a Google OAuth client).
    - Phone OTP: configure an SMS provider (Termii/Twilio), then set `REQUIRE_PHONE_OTP=true` in `backend/.env`.
    - MFA → enable TOTP (used for admin two-factor).
@@ -47,25 +47,27 @@ One repo, two Vercel projects, one database:
 
 | Vercel project | Root directory | URL |
 | --- | --- | --- |
-| `huzzlerr` (web) | `frontend` | https://huzzlerr.vercel.app |
-| `huzzlerr-api` (API) | `backend` | https://huzzlerr-api.vercel.app |
+| `huzzler-app` (web) | `frontend` | https://huzzler.tech (also https://huzzler-app.vercel.app) |
+| `huzzler-api` (API) | `backend` | https://huzzler-api.vercel.app |
 
-Both deploy from `main`; preview deployments come from other branches.
+Both deploy from `main` of the `live` remote (github.com/lucidshaya/Huzzler-Comp-); preview deployments come from other branches.
 
 **Web project** (framework auto-detected; Nitro builds for Vercel). Environment variables:
-`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_PAYSTACK_PUBLIC_KEY`, `VITE_API_URL=https://huzzlerr-api.vercel.app`.
+`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_PAYSTACK_PUBLIC_KEY`, `VITE_API_URL=https://huzzler-api.vercel.app`, and optionally `VITE_SITE_URL` (defaults to `https://huzzler.tech`; used for share previews and canonical links).
 
 **API project** (`backend/vercel.json`: the Express app runs as one function, `api/index.js`). Environment variables: everything in `backend/.env.example`, with
-`APP_URL=https://huzzlerr.vercel.app`, `API_URL=https://huzzlerr-api.vercel.app`, `CORS_ORIGINS=https://huzzlerr.vercel.app`, and `CRON_SECRET` (`openssl rand -hex 32`). Leave `AI_MOCK` unset.
+`APP_URL=https://huzzler.tech` (links in emails, invites, Paystack's return page, certificate links), `API_URL=https://huzzler-api.vercel.app`, `CORS_ORIGINS=https://huzzler.tech,https://www.huzzler.tech,https://huzzler-app.vercel.app`, and `CRON_SECRET` (`openssl rand -hex 32`). Leave `AI_MOCK` unset. After changing a variable, redeploy the project.
 
 **Background jobs.** The API writes jobs to the `jobs` table and starts running them immediately. pg_cron (migration `20261018000003_jobs.sql`) enqueues the recurring jobs and calls `POST /api/jobs/drain` every minute for delayed and retried work. Give it the API's address and secret once, in the Supabase SQL editor:
 ```sql
-select vault.create_secret('https://huzzlerr-api.vercel.app', 'huzzler_api_url');
+select vault.create_secret('https://huzzler-api.vercel.app', 'huzzler_api_url');
 select vault.create_secret('<same value as CRON_SECRET>', 'huzzler_cron_secret');
 ```
 Failed jobs stay in `jobs` with `last_error`; `npm run jobs:drain` runs due jobs from your machine when debugging.
 
-**After the first deploy:** add `https://huzzlerr.vercel.app` as the Supabase Auth Site URL and `https://huzzlerr.vercel.app/callback` as a redirect URL, and set the Paystack webhook to `https://huzzlerr-api.vercel.app/api/webhooks/paystack`.
+**Supabase Auth → URL Configuration:** Site URL `https://huzzler.tech`; redirect URLs `https://huzzler.tech/**`, `https://www.huzzler.tech/**`, `https://huzzler-app.vercel.app/**`, `http://localhost:4001/**`. Google and GitHub sign-in use the callback `https://wszohrtiiwugtsehumrt.supabase.co/auth/v1/callback`.
+
+**Paystack:** webhook URL `https://huzzler-api.vercel.app/api/webhooks/paystack`. Payments return to `https://huzzler.tech/billing/callback` (from `APP_URL`).
 
 ## Maintenance mode
 

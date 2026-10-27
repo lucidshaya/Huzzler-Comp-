@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { absolute } from "@/lib/site";
 import { Award, BadgeCheck } from "lucide-react";
 import { API_URL } from "@/lib/api";
 import { Heatmap } from "@/components/app/Heatmap";
@@ -37,7 +38,7 @@ export const Route = createFileRoute("/u/$username")({
         { property: "og:title", content: title },
         { property: "og:description", content: desc },
         { property: "og:type", content: "profile" },
-        { property: "og:image", content: "/og-image.png" },
+        { property: "og:image", content: absolute("/og-image.png") },
       ],
     };
   },

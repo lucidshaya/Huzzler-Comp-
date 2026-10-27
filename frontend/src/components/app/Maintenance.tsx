@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { SUPPORT_EMAIL } from "@/lib/site";
 import { useRouterState } from "@tanstack/react-router";
 import { Clock, RefreshCw, Wrench } from "lucide-react";
 import { isStaffBrowser, useSiteStatus } from "@/lib/siteStatus";
@@ -86,10 +87,10 @@ function MaintenanceScreen({
         <p className="text-xs text-white/40">
           Questions?{" "}
           <a
-            href="mailto:support@huzzler.app"
+            href={`mailto:${SUPPORT_EMAIL}`}
             className="font-semibold text-white/60 underline hover:text-white"
           >
-            support@huzzler.app
+            {SUPPORT_EMAIL}
           </a>
         </p>
       </div>

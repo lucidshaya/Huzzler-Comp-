@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { absolute } from "@/lib/site";
 import { BadgeCheck, XCircle } from "lucide-react";
 import { API_URL } from "@/lib/api";
 
@@ -32,7 +33,7 @@ export const Route = createFileRoute("/verify/$certId")({
         { name: "description", content: desc },
         { property: "og:title", content: title },
         { property: "og:description", content: desc },
-        { property: "og:image", content: "/og-image.png" },
+        { property: "og:image", content: absolute("/og-image.png") },
         { name: "twitter:card", content: "summary_large_image" },
       ],
     };

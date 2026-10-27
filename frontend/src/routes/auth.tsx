@@ -5,6 +5,7 @@ import { ButtonSpinner } from "@/components/app/Loader";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { safeNext } from "@/lib/api";
+import { absolute } from "@/lib/site";
 
 export const Route = createFileRoute("/auth")({
   validateSearch: z.object({
@@ -22,9 +23,9 @@ export const Route = createFileRoute("/auth")({
           "Create your Huzzler account or sign in. Prove your skills, join a real team and earn a verifiable certificate.",
       },
       { property: "og:title", content: "Get started · Huzzler" },
-      { property: "og:image", content: "/og-image.png" },
+      { property: "og:image", content: absolute("/og-image.png") },
     ],
-    links: [{ rel: "canonical", href: "/auth" }],
+    links: [{ rel: "canonical", href: absolute("/auth") }],
   }),
   component: AuthPage,
 });
