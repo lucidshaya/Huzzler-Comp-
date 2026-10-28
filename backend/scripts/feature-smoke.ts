@@ -55,6 +55,7 @@ async function makeUser(n: number) {
   const { data, error } = await db.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: `Feature Test ${n}` } });
   if (error) throw error;
   created.users.push(data.user!.id);
+  await db.from("profiles").update({ is_test: true }).eq("id", data.user!.id); // never matched with real people
   const { data: s, error: e2 } = await anon.auth.signInWithPassword({ email, password });
   if (e2) throw e2;
   return { id: data.user!.id, email, token: s.session!.access_token };

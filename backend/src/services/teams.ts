@@ -28,7 +28,7 @@ export async function loadPool(): Promise<Candidate[]> {
   const [{ data: journeys }, { data: active }, { data: profiles }, { data: results }] = await Promise.all([
     db.from("user_journey").select("user_id, status").in("user_id", ids),
     db.from("team_members").select("user_id").in("user_id", ids).eq("status", "active"),
-    db.from("profiles").select("id, hours_per_week, timezone").in("id", ids),
+    db.from("profiles").select("id, hours_per_week, timezone, is_test").in("id", ids),
     db.from("test_results").select("user_id, weighted_score, passed").in("user_id", ids).eq("passed", true),
   ]);
   const pending = new Set((journeys ?? []).filter((j) => j.status === "OFFER_PENDING").map((j) => j.user_id));
@@ -45,6 +45,7 @@ export async function loadPool(): Promise<Candidate[]> {
       tzBand: tzBandOf(prof.get(o.user_id)?.timezone),
       scoreBand: Math.floor((score.get(o.user_id) ?? 70) / 10),
       waitingSince: new Date(o.responded_at ?? Date.now()),
+      isTest: Boolean(prof.get(o.user_id)?.is_test),
     }));
 }
 
@@ -120,18 +121,22 @@ export async function runMatching() {
   const names = await roleNames();
   let formed = 0;
   for (const archetype of ARCHETYPE_IDS) {
-    const candidates = pool.filter((c) => c.archetypeId === archetype);
-    if (!candidates.length) continue;
+    const inArchetype = pool.filter((c) => c.archetypeId === archetype);
+    if (!inArchetype.length) continue;
     const { data: tpl } = await db.from("squad_templates").select("template").eq("archetype_id", archetype).eq("active", true).order("version", { ascending: false }).limit(1).single();
     const { data: compat } = await db.from("role_archetype_compatibility").select("role_id").eq("archetype_id", archetype);
-    const teams = formTeams(candidates, tpl!.template as SquadTemplate, new Set((compat ?? []).map((c) => c.role_id)), {
-      allowStandins: (seed) => Date.now() - seed.waitingSince.getTime() > STANDIN_AFTER_HOURS * 3_600_000,
-    });
-    const taken = new Set(teams.flatMap((t) => t.members.map((m) => m.userId)));
-    for (const t of teams) {
-      const reviewed = await aiReviewSquad(archetype, t, candidates, taken, names);
-      await createTeam(archetype, reviewed.members, t.missingRoles, names, reviewed.decision);
-      formed++;
+    // Test accounts and real people are matched separately.
+    for (const candidates of [inArchetype.filter((c) => !c.isTest), inArchetype.filter((c) => c.isTest)]) {
+      if (!candidates.length) continue;
+      const teams = formTeams(candidates, tpl!.template as SquadTemplate, new Set((compat ?? []).map((c) => c.role_id)), {
+        allowStandins: (seed) => Date.now() - seed.waitingSince.getTime() > STANDIN_AFTER_HOURS * 3_600_000,
+      });
+      const taken = new Set(teams.flatMap((t) => t.members.map((m) => m.userId)));
+      for (const t of teams) {
+        const reviewed = await aiReviewSquad(archetype, t, candidates, taken, names);
+        await createTeam(archetype, reviewed.members, t.missingRoles, names, reviewed.decision);
+        formed++;
+      }
     }
   }
   return formed;
@@ -155,7 +160,8 @@ export async function createTeam(archetypeId: string, members: Candidate[], miss
     ...missingRoles.map((r) => ({ team_id: team.id, user_id: null, role_id: r, is_standin: true, standin_name: `Huzzler stand-in (${names.get(r)})` })),
   ];
   ok(await db.from("team_members").insert(rows), "team members");
-  for (const m of members) await transition(m.userId, "PLACED", `placed on ${team.name}`);
+  // People re-seated mid-journey (already PLACED / PROJECT_n) keep their journey status.
+  for (const m of members) if ((await getJourney(m.userId)).status === "OFFER_PENDING") await transition(m.userId, "PLACED", `placed on ${team.name}`);
 
   const instance = await startProject(team.id, 1);
   const { data: profiles } = await db.from("profiles").select("id, full_name").in("id", members.map((m) => m.userId));
@@ -236,7 +242,7 @@ export async function backfillStandins() {
   const pool = await loadPool();
   let filled = 0;
   for (const cand of pool.sort((a, b) => a.waitingSince.getTime() - b.waitingSince.getTime())) {
-    const seat = await bestSeat(cand.roleId, { archetypeId: cand.archetypeId, scoreBand: cand.scoreBand });
+    const seat = await bestSeat(cand.roleId, { archetypeId: cand.archetypeId, scoreBand: cand.scoreBand, isTest: cand.isTest });
     if (!seat) continue;
     await fillSeat(seat, cand);
     filled++;
@@ -244,20 +250,28 @@ export async function backfillStandins() {
   return filled;
 }
 
-/** Active real (non-stand-in) members per active team. */
-async function realCounts() {
-  const { data } = await db.from("team_members").select("team_id").eq("status", "active").eq("is_standin", false);
+/** Active real (non-stand-in) members per team, counted for real people or for test accounts. */
+async function realCounts(isTest = false) {
+  const { data } = await db.from("team_members").select("team_id, profile:user_id(is_test)").eq("status", "active").eq("is_standin", false);
   const counts = new Map<string, number>();
-  for (const m of data ?? []) counts.set(m.team_id, (counts.get(m.team_id) ?? 0) + 1);
+  const other = new Set<string>();
+  for (const m of (data ?? []) as unknown as Array<{ team_id: string; profile: { is_test: boolean } | null }>) {
+    if (Boolean(m.profile?.is_test) === isTest) counts.set(m.team_id, (counts.get(m.team_id) ?? 0) + 1);
+    else other.add(m.team_id);
+  }
+  // A squad with any member of the other kind is never offered.
+  for (const t of other) counts.set(t, -1);
   return counts;
 }
+
+const isTestUser = async (userId: string) => Boolean((await db.from("profiles").select("is_test").eq("id", userId).maybeSingle()).data?.is_test);
 
 /**
  * The best stand-in seat for a role: on a squad with the most real people (never an all-stand-in
  * squad), preferring the same company type, the given project level, and the closest score band.
  */
-async function bestSeat(roleId: string, prefer: { archetypeId?: string; level?: number; scoreBand?: number; excludeTeam?: string }) {
-  const [{ data: seats }, counts] = await Promise.all([openSeatsQuery().eq("role_id", roleId), realCounts()]);
+async function bestSeat(roleId: string, prefer: { archetypeId?: string; level?: number; scoreBand?: number; excludeTeam?: string; isTest?: boolean }) {
+  const [{ data: seats }, counts] = await Promise.all([openSeatsQuery().eq("role_id", roleId), realCounts(Boolean(prefer.isTest))]);
   const options = ((seats ?? []) as unknown as Seat[]).filter(
     (x) => x.teams?.status === "active" && x.team_id !== prefer.excludeTeam && (counts.get(x.team_id) ?? 0) > 0 && (prefer.level === undefined || x.teams.current_level === prefer.level),
   );
@@ -299,10 +313,60 @@ async function moveIntoSeat(seat: Seat, userId: string, fromTeam: string | null,
   });
 }
 
+/**
+ * Makes sure someone who is placed (journey PLACED / PROJECT_n) is on a squad: a stand-in seat on a
+ * squad with real people at their project level, else any seat for their role with real people,
+ * else a new squad for the company they accepted. Returns the team id (null if they aren't placed).
+ */
+export async function ensureSeated(userId: string): Promise<string | null> {
+  const current = await activeTeamOf(userId);
+  if (current) return current;
+  const j = await getJourney(userId);
+  if (!PLACED_STATES.includes(j.status)) return null;
+  const { data: prof } = await db.from("profiles").select("role_id, hours_per_week, timezone").eq("id", userId).single();
+  const role = prof?.role_id as string | null;
+  if (!role) return null;
+  const level = Math.max(1, levelOf(j.status));
+  const isTest = await isTestUser(userId);
+  const seat = (await bestSeat(role, { level, isTest })) ?? (await bestSeat(role, { isTest }));
+  if (seat) {
+    await moveIntoSeat(seat, userId, null, "They were placed but had no active squad.");
+    return seat.team_id;
+  }
+  // No seat anywhere: a new squad for the company they accepted, stand-ins in the other seats.
+  const { data: offer } = await db.from("offers").select("archetype_id, role_id").eq("user_id", userId).eq("status", "accepted").order("responded_at", { ascending: false }).limit(1).maybeSingle();
+  if (!offer) return null;
+  const { data: tpl } = await db.from("squad_templates").select("template").eq("archetype_id", offer.archetype_id).eq("active", true).order("version", { ascending: false }).limit(1).maybeSingle();
+  if (!tpl) return null;
+  const { data: compat } = await db.from("role_archetype_compatibility").select("role_id").eq("archetype_id", offer.archetype_id);
+  const me: Candidate = { userId, roleId: role, archetypeId: offer.archetype_id, hoursPerWeek: prof?.hours_per_week ?? 10, tzBand: tzBandOf(prof?.timezone), scoreBand: 7, waitingSince: new Date(0), isTest };
+  const formed = formTeams([me], tpl.template as SquadTemplate, new Set((compat ?? []).map((c) => c.role_id)), { allowStandins: () => true, minRealMembers: 1 })[0];
+  if (!formed) return null;
+  const team = await createTeam(offer.archetype_id, formed.members, formed.missingRoles, await roleNames());
+  logger.warn({ userId, teamId: team.id }, "placed user had no squad; started a new one");
+  return team.id;
+}
+
+/**
+ * Someone with more than one active membership (shouldn't happen) breaks every "my team" lookup.
+ * Keep the newest, mark the rest as left.
+ */
+async function dedupeMemberships() {
+  const { data } = await db.from("team_members").select("id, user_id, joined_at").eq("status", "active").eq("is_standin", false).order("joined_at", { ascending: false });
+  const seen = new Set<string>();
+  for (const m of data ?? []) {
+    if (!m.user_id) continue;
+    if (seen.has(m.user_id)) {
+      await db.from("team_members").update({ status: "left", left_at: new Date().toISOString() }).eq("id", m.id);
+      logger.warn({ userId: m.user_id, memberId: m.id }, "duplicate active membership closed");
+    } else seen.add(m.user_id);
+  }
+}
+
 /** Closes a squad nobody real is left in (its stand-ins and open project go with it). */
 async function disbandIfEmpty(teamId: string) {
-  const counts = await realCounts();
-  if ((counts.get(teamId) ?? 0) > 0) return;
+  const { count } = await db.from("team_members").select("id", { count: "exact", head: true }).eq("team_id", teamId).eq("status", "active").eq("is_standin", false);
+  if ((count ?? 0) > 0) return;
   await db.from("teams").update({ status: "disbanded" }).eq("id", teamId).eq("status", "active");
   await db.from("team_members").update({ status: "left", left_at: new Date().toISOString() }).eq("team_id", teamId).eq("status", "active");
   await db.from("project_instances").update({ status: "completed" }).eq("team_id", teamId).eq("status", "active");
@@ -321,6 +385,7 @@ const levelOf = (status: string) => (status.startsWith("PROJECT_") ? Number(stat
  */
 export async function consolidateSquads() {
   let moved = 0;
+  await dedupeMemberships();
   const { data: placed } = await db.from("user_journey").select("user_id, status").in("status", PLACED_STATES);
   const { data: active } = await db.from("team_members").select("user_id, team_id, role_id, joined_at").eq("status", "active").eq("is_standin", false);
   const teamOf = new Map((active ?? []).map((m) => [m.user_id, m]));
@@ -331,23 +396,19 @@ export async function consolidateSquads() {
     const { data: profs } = await db.from("profiles").select("id, role_id").in("id", orphans.map((o) => o.user_id));
     const roleOf = new Map((profs ?? []).map((p) => [p.id, p.role_id as string | null]));
     for (const o of orphans) {
-      const role = roleOf.get(o.user_id);
-      if (!role) continue;
-      const seat = await bestSeat(role, { level: Math.max(1, levelOf(o.status)) });
-      if (!seat) continue;
-      await moveIntoSeat(seat, o.user_id, null, "They were placed but had no active squad.");
-      moved++;
+      if (!roleOf.get(o.user_id)) continue;
+      if (await ensureSeated(o.user_id)) moved++;
     }
   }
 
   // 2. Solo squads: merge the newer one into the older one.
   const { data: teams } = await db.from("teams").select("id, current_level, created_at, archetype_id").eq("status", "active").order("created_at");
   for (const t of (teams ?? []).slice().reverse()) {
-    const counts = await realCounts();
-    if ((counts.get(t.id) ?? 0) !== 1) continue;
-    const solo = (await db.from("team_members").select("user_id, role_id").eq("team_id", t.id).eq("status", "active").eq("is_standin", false).single()).data;
+    const { data: reals } = await db.from("team_members").select("user_id, role_id").eq("team_id", t.id).eq("status", "active").eq("is_standin", false);
+    if ((reals ?? []).length !== 1) continue;
+    const solo = reals![0];
     if (!solo?.user_id) continue;
-    const seat = await bestSeat(solo.role_id, { level: t.current_level, archetypeId: t.archetype_id, excludeTeam: t.id });
+    const seat = await bestSeat(solo.role_id, { level: t.current_level, archetypeId: t.archetype_id, excludeTeam: t.id, isTest: await isTestUser(solo.user_id) });
     if (!seat || !seat.teams || seat.teams.current_level !== t.current_level) continue;
     await moveIntoSeat(seat, solo.user_id, t.id, "They were the only real person in their squad; this squad already has real people at the same project.");
     await disbandIfEmpty(t.id);
@@ -358,7 +419,7 @@ export async function consolidateSquads() {
 }
 
 const activeTeamOf = async (userId: string) =>
-  (await db.from("team_members").select("team_id").eq("user_id", userId).eq("status", "active").maybeSingle()).data?.team_id ?? null;
+  (await db.from("team_members").select("team_id").eq("user_id", userId).eq("status", "active").order("joined_at", { ascending: false }).limit(1).maybeSingle()).data?.team_id ?? null;
 
 /**
  * Places someone who has just accepted an offer onto a squad straight away, so accepting takes them
@@ -373,7 +434,7 @@ export async function placeNow(userId: string): Promise<string | null> {
   if (!me) return null;
 
   // A stand-in seat on a squad that already has real people comes first, whatever the company type.
-  const seat = await bestSeat(me.roleId, { archetypeId: me.archetypeId, scoreBand: me.scoreBand });
+  const seat = await bestSeat(me.roleId, { archetypeId: me.archetypeId, scoreBand: me.scoreBand, isTest: me.isTest });
   if (seat) {
     await fillSeat(seat, me);
     return seat.team_id;
@@ -388,7 +449,7 @@ export async function placeNow(userId: string): Promise<string | null> {
   const joined = await joinOpenSeat(me, tpl.template as SquadTemplate);
   if (joined) return joined;
   const { data: compat } = await db.from("role_archetype_compatibility").select("role_id").eq("archetype_id", me.archetypeId);
-  const others = (await loadPool()).filter((c) => c.archetypeId === me.archetypeId && c.userId !== userId);
+  const others = (await loadPool()).filter((c) => c.archetypeId === me.archetypeId && c.userId !== userId && Boolean(c.isTest) === Boolean(me.isTest));
   const formed = formTeams([{ ...me, waitingSince: new Date(0) }, ...others], tpl.template as SquadTemplate, new Set((compat ?? []).map((c) => c.role_id)), {
     allowStandins: () => true,
     minRealMembers: 1,
@@ -403,7 +464,7 @@ export async function placeNow(userId: string): Promise<string | null> {
  * real person from the same score band is matched. Progress is kept.
  */
 export async function removeMember(userId: string, reason: string, opts: { journeyTo?: "OFFER_PENDING" | null } = {}) {
-  const { data: m } = await db.from("team_members").select("*").eq("user_id", userId).eq("status", "active").maybeSingle();
+  const { data: m } = await db.from("team_members").select("*").eq("user_id", userId).eq("status", "active").order("joined_at", { ascending: false }).limit(1).maybeSingle();
   if (!m) return;
   const names = await roleNames();
   await db.from("team_members").update({ status: reason === "lapsed" ? "lapsed" : "removed", left_at: new Date().toISOString() }).eq("id", m.id);
@@ -431,7 +492,12 @@ export async function maybeStandinReply(teamId: string, body: string) {
 }
 
 export async function myTeam(userId: string) {
-  const { data: m } = await db.from("team_members").select("team_id, role_id").eq("user_id", userId).eq("status", "active").maybeSingle();
+  let { data: m } = await db.from("team_members").select("team_id, role_id").eq("user_id", userId).eq("status", "active").order("joined_at", { ascending: false }).limit(1).maybeSingle();
+  // Placed but without a squad (e.g. their squad was closed): seat them now rather than showing
+  // "not on a team" until the next matching run.
+  if (!m && (await ensureSeated(userId).catch((err) => (logger.error({ err: String(err), userId }, "ensureSeated failed"), null)))) {
+    m = (await db.from("team_members").select("team_id, role_id").eq("user_id", userId).eq("status", "active").order("joined_at", { ascending: false }).limit(1).maybeSingle()).data;
+  }
   if (!m) return null;
   const [{ data: team }, { data: members }] = await Promise.all([
     db.from("teams").select("*, persona:persona_id(name, logo_url, mission, product_brief, culture)").eq("id", m.team_id).single(),
@@ -441,7 +507,7 @@ export async function myTeam(userId: string) {
 }
 
 export async function assertTeamMember(userId: string, teamId: string) {
-  const { data } = await db.from("team_members").select("id, role_id").eq("team_id", teamId).eq("user_id", userId).eq("status", "active").maybeSingle();
+  const { data } = await db.from("team_members").select("id, role_id").eq("team_id", teamId).eq("user_id", userId).eq("status", "active").order("joined_at", { ascending: false }).limit(1).maybeSingle();
   return data;
 }
 
@@ -454,13 +520,15 @@ async function joinOpenSeat(me: Candidate, template: SquadTemplate): Promise<str
   if (!template.optional.includes(me.roleId)) return null;
   const { data: teams } = await db
     .from("teams")
-    .select("id, name, score_band, current_level, members:team_members(id, user_id, role_id, is_standin, status)")
+    .select("id, name, score_band, current_level, members:team_members(id, user_id, role_id, is_standin, status, profile:user_id(is_test))")
     .eq("archetype_id", me.archetypeId)
     .eq("status", "active")
     .lte("current_level", 1);
   const open = ((teams ?? []) as any[])
     .map((t) => ({ ...t, members: (t.members ?? []).filter((m: any) => m.status === "active") }))
     .filter((t) => t.members.length < maxSize && !t.members.some((m: any) => m.role_id === me.roleId))
+    // Test accounts and real people never share a squad.
+    .filter((t) => t.members.every((m: any) => m.is_standin || Boolean(m.profile?.is_test) === Boolean(me.isTest)))
     .sort((a, b) => Math.abs((a.score_band ?? 7) - me.scoreBand) - Math.abs((b.score_band ?? 7) - me.scoreBand) || b.members.filter((m: any) => !m.is_standin).length - a.members.filter((m: any) => !m.is_standin).length);
   if (!open[0]) return null;
   const names0 = await roleNames();

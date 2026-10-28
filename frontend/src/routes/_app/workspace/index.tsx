@@ -95,6 +95,26 @@ function Workspace() {
   }, [team.data?.team?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (team.isLoading || ws.isLoading || !me) return <WorkspaceSkeleton />;
+  const placed = me.journey.status === "PLACED" || me.journey.status.startsWith("PROJECT_");
+  if (!team.data?.team && placed)
+    return (
+      <EmptyState
+        icon={Users}
+        title="Setting up your squad"
+        body="You're placed, and we're seating you with your teammates now. This usually takes a few seconds."
+        action={
+          <button
+            onClick={() => {
+              void team.refetch();
+              void ws.refetch();
+            }}
+            className="btn-duo !py-2 !px-4 text-sm"
+          >
+            Try again
+          </button>
+        }
+      />
+    );
   if (!team.data?.team)
     return (
       <EmptyState

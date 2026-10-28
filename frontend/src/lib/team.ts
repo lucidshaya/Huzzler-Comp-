@@ -52,6 +52,8 @@ export const useTeam = (enabled = true) =>
     queryFn: () => api<TeamData>("/team"),
     enabled,
     staleTime: 30_000,
+    // Not on a squad yet (or being re-seated): check again shortly instead of waiting for a reload.
+    refetchInterval: (q) => (q.state.data ? false : 10_000),
   });
 export const useWorkspace = (enabled = true) =>
   useQuery({

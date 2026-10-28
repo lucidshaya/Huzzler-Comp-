@@ -8,6 +8,8 @@ export type Candidate = {
   tzBand: string;      // e.g. "UTC+1"
   scoreBand: number;   // onboarding weighted score / 10, floored
   waitingSince: Date;
+  /** Automated test account: only ever matched with other test accounts. */
+  isTest?: boolean;
 };
 
 export type SquadTemplate = { required: Record<string, number>; optional: string[]; max_size?: number };

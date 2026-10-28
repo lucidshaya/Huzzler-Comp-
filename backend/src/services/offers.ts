@@ -118,7 +118,7 @@ export async function listOffers(userId: string) {
   const [{ data }, j, { data: member }] = await Promise.all([
     db.from("offers").select(OFFER_SELECT).eq("user_id", userId).order("created_at", { ascending: false }),
     getJourney(userId),
-    db.from("team_members").select("team_id, team:team_id(name, status)").eq("user_id", userId).eq("status", "active").maybeSingle(),
+    db.from("team_members").select("team_id, team:team_id(name, status)").eq("user_id", userId).eq("status", "active").order("joined_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
   const team = (member as any)?.team ?? null;
   return (data ?? []).map((o: any) => ({

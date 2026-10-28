@@ -10,7 +10,7 @@ import { peerScore, projectTotal, reliabilityScore, round2 } from "../domain/gra
 import { projectStatus } from "../domain/journey.js";
 import { PROJECT_INTRO, STANDUP_SUMMARY, NUDGE_OVERDUE } from "../content/templates.js";
 import { transition, getJourney } from "./journey.js";
-import { postSystemMessage, removeMember, assertTeamMember } from "./teams.js";
+import { postSystemMessage, removeMember, assertTeamMember, ensureSeated } from "./teams.js";
 import { gradeSubjectWithAi } from "./aiGrading.js";
 import { checkSimilarity } from "./integrity.js";
 import { enqueue } from "../jobs/queue.js";
@@ -140,7 +140,8 @@ export async function currentProject(teamId: string) {
 }
 
 export async function workspace(userId: string) {
-  const { data: m } = await db.from("team_members").select("team_id").eq("user_id", userId).eq("status", "active").maybeSingle();
+  const teamId = await ensureSeated(userId).catch(() => null);
+  const m = teamId ? { team_id: teamId } : null;
   if (!m) return null;
   const project = await currentProject(m.team_id);
   if (!project) return { project: null, milestones: [], tasks: [] };
@@ -262,7 +263,7 @@ async function maybeCloseMilestones(instanceId: string) {
 }
 
 export async function submitCheckin(userId: string, input: { yesterday: string; today: string; blockers?: string }) {
-  const { data: m } = await db.from("team_members").select("team_id").eq("user_id", userId).eq("status", "active").maybeSingle();
+  const { data: m } = await db.from("team_members").select("team_id").eq("user_id", userId).eq("status", "active").order("joined_at", { ascending: false }).limit(1).maybeSingle();
   if (!m) throw forbidden("You're not on a team yet.");
   const project = await currentProject(m.team_id);
   if (!project || project.status !== "active") throw conflict("No active project.");
@@ -478,7 +479,7 @@ export async function runInactivityCheck() {
 
 /** After a monthly plan lapses: team is told now, the role is backfilled 3 days later. */
 export async function handleLapsedMember(userId: string) {
-  const { data: m } = await db.from("team_members").select("team_id").eq("user_id", userId).eq("status", "active").maybeSingle();
+  const { data: m } = await db.from("team_members").select("team_id").eq("user_id", userId).eq("status", "active").order("joined_at", { ascending: false }).limit(1).maybeSingle();
   if (!m) return;
   await postSystemMessage(m.team_id, "A teammate's access is paused (plan lapsed). If they don't renew in 3 days, a stand-in takes over their role.");
 }

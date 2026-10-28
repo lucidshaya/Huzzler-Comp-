@@ -30,7 +30,7 @@ export type Context = { teamId: string | null; project: string; brief: string; t
 
 async function contextFor(userId: string): Promise<Context> {
   const [{ data: m }, { data: profile }] = await Promise.all([
-    db.from("team_members").select("team_id").eq("user_id", userId).eq("status", "active").maybeSingle(),
+    db.from("team_members").select("team_id").eq("user_id", userId).eq("status", "active").order("joined_at", { ascending: false }).limit(1).maybeSingle(),
     db.from("profiles").select("role_id").eq("id", userId).single(),
   ]);
   if (!m) return { teamId: null, project: "your project", brief: "", tasks: [], roleId: profile?.role_id ?? null };
