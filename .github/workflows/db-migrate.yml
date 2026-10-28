@@ -14,10 +14,18 @@ jobs:
   migrate:
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: backend } }
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v1
+      # Without the secret there's nothing to connect to: say so instead of failing every push.
+      # Migrations are then applied by hand (npm run db:push or the Supabase SQL editor).
+      - if: env.SUPABASE_DB_URL == ''
+        working-directory: .
+        run: echo "::warning title=Migrations not applied::Set the repo secret SUPABASE_DB_URL (Supabase -> Connect -> Session pooler) to apply migrations on merge."
+      - if: env.SUPABASE_DB_URL != ''
+        uses: actions/checkout@v4
+      - if: env.SUPABASE_DB_URL != ''
+        uses: supabase/setup-cli@v1
         with: { version: latest }
-      - run: supabase db push --db-url "$SUPABASE_DB_URL" --include-all
-        env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      - if: env.SUPABASE_DB_URL != ''
+        run: supabase db push --db-url "$SUPABASE_DB_URL" --include-all

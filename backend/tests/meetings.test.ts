@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeAll, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
-beforeAll(() => {
+// Set before the dynamic import below: env is validated when the module graph loads.
+vi.hoisted(() => {
   process.env.SUPABASE_URL ??= "https://example.supabase.co";
   process.env.SUPABASE_ANON_KEY ??= "anon_key_for_tests_0000000000";
   process.env.SUPABASE_SERVICE_ROLE_KEY ??= "service_key_for_tests_000000000";
