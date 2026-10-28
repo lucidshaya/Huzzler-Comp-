@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { audit } from "../lib/audit.js";
 import { z } from "zod";
 import { h, parse, uid } from "./util.js";
 import { SUPPORT_CATEGORIES, createTicket, listMyTickets, getMyTicket, replyAsUser, screenshotUploadUrl } from "../services/support.js";
@@ -10,6 +11,25 @@ export const supportRouter = Router();
 
 const Attachment = z.string().max(300).regex(/^[0-9a-f-]{36}\/support\/[0-9a-f-]{36}\.(png|jpe?g|webp|gif)$/i, "Invalid attachment").optional();
 
+// Crashes in the browser, reported by the app so we can see the real error (stack, page, browser).
+supportRouter.post(
+  "/client-errors",
+  h(async (req) => {
+    const b = parse(
+      z.object({
+        message: z.string().max(1000),
+        stack: z.string().max(4000).optional(),
+        where: z.string().max(80),
+        url: z.string().max(500),
+        ua: z.string().max(300).optional(),
+      }),
+      req.body,
+    );
+    req.log?.warn({ clientError: b, userId: uid(req) }, "client error");
+    await audit(uid(req), "client.error", "page", b.url.slice(0, 200), { ...b });
+    return { ok: true };
+  }),
+);
 supportRouter.post("/support/upload-url", h(async (req) => screenshotUploadUrl(uid(req), parse(z.object({ ext: z.string().max(5) }), req.body).ext)));
 supportRouter.get("/support/tickets", h(async (req) => listMyTickets(uid(req))));
 supportRouter.post(

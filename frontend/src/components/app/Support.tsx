@@ -17,6 +17,7 @@ import { api, ApiError } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { ErrorNote } from "./Feedback";
 import { ButtonSpinner } from "./Loader";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { fmtDateTime, inputCls, Pill } from "./ui";
 
 export const CATEGORIES = [
@@ -162,7 +163,7 @@ export function ScreenshotPicker({
           onClick={() => run(capturePage, "screen.png")}
           className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-dashed border-border text-sm font-semibold hover:border-primary hover:text-primary disabled:opacity-50"
         >
-          {busy ? <ButtonSpinner /> : <Camera className="h-4 w-4" />} Capture screen
+          {busy ? <ButtonSpinner /> : <Camera className="h-4 w-4" />} <span>Capture screen</span>
         </button>
         <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-border text-sm font-semibold hover:border-primary hover:text-primary">
           <ImagePlus className="h-4 w-4" /> Upload image
@@ -296,7 +297,7 @@ export function ReportForm({
         disabled={m.isPending || uploading || subject.trim().length < 3 || body.trim().length < 10}
         className="btn-duo !py-2.5 disabled:opacity-50"
       >
-        {m.isPending ? <ButtonSpinner /> : <Send className="h-4 w-4" />} Send report
+        {m.isPending ? <ButtonSpinner /> : <Send className="h-4 w-4" />} <span>Send report</span>
       </button>
     </form>
   );
@@ -452,7 +453,42 @@ type BotMsg = {
   failed?: boolean;
 };
 
+/** The floating help bubble. A crash inside it stays inside the panel instead of taking down the page. */
 export function HelpWidget() {
+  return (
+    <ErrorBoundary
+      where="help_widget"
+      fallback={(reset) => (
+        <div
+          role="alert"
+          className="fixed bottom-[88px] right-4 z-50 w-[300px] rounded-2xl border border-border bg-background p-4 shadow-2xl md:bottom-6 md:right-6"
+        >
+          <div className="font-display text-sm font-bold">Help hit a snag</div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            We've logged it. Reopen help, or report the problem from the Help &amp; support page.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <button onClick={reset} className="btn-duo !py-1.5 !px-3 text-xs">
+              Reopen help
+            </button>
+            <Link
+              to="/support"
+              search={{ new: true }}
+              onClick={reset}
+              className="btn-duo-outline !py-1.5 !px-3 text-xs"
+            >
+              Help &amp; support
+            </Link>
+          </div>
+        </div>
+      )}
+    >
+      <HelpWidgetPanel />
+    </ErrorBoundary>
+  );
+}
+
+function HelpWidgetPanel() {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"ask" | "report" | "reports">("ask");
   const [prefill, setPrefill] = useState<{ subject?: string; body?: string; category?: string }>();

@@ -4,6 +4,7 @@ import { notify } from "../lib/notify.js";
 import { badRequest, notFound } from "../lib/errors.js";
 import { enqueue } from "../jobs/queue.js";
 import { getJourney } from "./journey.js";
+import { PASS_MARK } from "../domain/constants.js";
 import { maybeFinalizeAttempt } from "./onboarding.js";
 
 // Human grading, split by where it happens: onboarding tests are graded in Admin, project work
@@ -74,15 +75,39 @@ export async function answerAppeal(actorId: string, scope: Scope, appealId: stri
     if (g.subject_type === "test_submission") {
       const { data: sub } = await db.from("test_submissions").update({ score: b.new_score }).eq("id", g.subject_id).select("attempt_id").single();
       // Re-evaluate the attempt with the adjusted score.
-      if (sub) {
-        await db.from("test_attempts").update({ status: "grading" }).eq("id", sub.attempt_id).in("status", ["failed"]);
-        const j = await getJourney(appeal.user_id);
-        if (j.status === "TESTS_FAILED") await maybeFinalizeAttempt(sub.attempt_id);
-      }
+      if (sub) await applyAdjustedTestScore(appeal.user_id, sub.attempt_id, g.subject_id, b.new_score);
     } else if (g.subject_type === "deliverable") {
       await db.from("deliverables").update({ score: b.new_score }).eq("id", g.subject_id);
     }
   }
   await notify(appeal.user_id, "appeal.resolved", "Your appeal has been answered", b.response.slice(0, 200));
   await audit(actorId, "appeal.resolve", "appeal", appealId, { status: b.status, new_score: b.new_score }, ip);
+}
+
+/**
+ * After an appeal changes an onboarding test score: if that attempt is still the latest and failed,
+ * re-evaluate it (it may now pass). If a retake has already started, a raised score carries into it
+ * instead, as long as that test hasn't been started there yet.
+ */
+async function applyAdjustedTestScore(userId: string, attemptId: string, submissionId: string, score: number) {
+  const { data: latest } = await db.from("test_attempts").select("id, status").eq("user_id", userId).order("attempt_no", { ascending: false }).limit(1).single();
+  if (!latest) return;
+  if (latest.id === attemptId) {
+    const j = await getJourney(userId);
+    if (latest.status === "failed" && j.status === "TESTS_FAILED") {
+      await db.from("test_attempts").update({ status: "grading" }).eq("id", attemptId).eq("status", "failed");
+      await maybeFinalizeAttempt(attemptId);
+    }
+    return;
+  }
+  if (score < PASS_MARK || latest.status !== "in_progress") return;
+  const { data: old } = await db.from("test_submissions").select("test_no, test_bank_id").eq("id", submissionId).single();
+  if (!old) return;
+  await db
+    .from("test_submissions")
+    .update({ test_bank_id: old.test_bank_id, carried_over: true, score, status: "graded" })
+    .eq("attempt_id", latest.id)
+    .eq("test_no", old.test_no)
+    .eq("status", "not_started");
+  await maybeFinalizeAttempt(latest.id);
 }

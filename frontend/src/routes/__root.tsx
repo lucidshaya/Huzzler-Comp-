@@ -16,6 +16,7 @@ import { SessionExpiredDialog, resolveError, goToSignIn } from "../components/ap
 import { HzToaster } from "../components/app/Toast";
 import { DialogHost } from "../components/app/Dialogs";
 import { MaintenanceGate } from "../components/app/Maintenance";
+import { installClientErrorReporting, reportClientError } from "../lib/clientErrors";
 
 function NotFoundComponent() {
   return (
@@ -44,6 +45,7 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    reportClientError(error, "root_error_page");
   }, [error]);
 
   const r = resolveError(error);
@@ -146,6 +148,7 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  useEffect(() => installClientErrorReporting(), []);
 
   return (
     <QueryClientProvider client={queryClient}>

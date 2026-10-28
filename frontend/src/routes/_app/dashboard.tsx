@@ -1,8 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query";
+import { hzToast } from "@/components/app/Toast";
 import {
   ArrowRight,
+  RefreshCw,
   Award,
   Briefcase,
   ClipboardCheck,
@@ -155,7 +157,7 @@ function PreviewDashboard({ me }: { me: Me }) {
         chip={`${roleName(me.profile.role_id)} · Preview`}
         title="This is what your Huzzler journey looks like."
         body="Everything below is sample data so you can see how it works. Begin onboarding to make it yours."
-        actions={<ResumeButton />}
+        actions={<DashboardActions />}
       />
       <Notice>
         <span className="flex items-center gap-2 font-semibold">
@@ -280,7 +282,7 @@ function RealDashboard({ me }: { me: Me }) {
       <PageHeader
         chip={`${roleName(me.profile.role_id)} · ${STATUS_LABEL[s]}`}
         title={`Hi ${me.profile.full_name?.split(" ")[0] ?? "there"} 👋`}
-        actions={<ResumeButton />}
+        actions={<DashboardActions />}
       />
       <NextStepCard me={me} />
 
@@ -487,6 +489,42 @@ function DailyQuests({
         })}
       </ul>
     </Card>
+  );
+}
+
+function DashboardActions() {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <RefreshButton />
+      <ResumeButton />
+    </div>
+  );
+}
+
+/** Reloads everything on the dashboard (journey, tests, team, tokens) without a full page reload. */
+function RefreshButton() {
+  const qc = useQueryClient();
+  const fetching = useIsFetching() > 0;
+  const [spin, setSpin] = useState(false);
+  const run = async () => {
+    setSpin(true);
+    try {
+      await qc.invalidateQueries();
+      hzToast.success("Dashboard is up to date");
+    } finally {
+      setSpin(false);
+    }
+  };
+  return (
+    <button
+      onClick={() => void run()}
+      disabled={spin}
+      aria-label="Refresh dashboard"
+      title="Refresh"
+      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-1.5 text-xs font-bold text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:opacity-70"
+    >
+      <RefreshCw className={`h-3.5 w-3.5 ${spin || fetching ? "animate-spin" : ""}`} /> Refresh
+    </button>
   );
 }
 

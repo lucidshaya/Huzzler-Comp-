@@ -249,8 +249,9 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
             id="main"
             className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-6 md:px-8 md:pb-12 md:pt-10"
           >
-            {/* Re-keyed per page so each page eases in when you navigate. */}
-            <div key={pathname} className="hz-page">
+            {/* Re-keyed per section (first path segment) so each section eases in, without
+                remounting a section's own sub-pages (e.g. workspace tabs) and losing their state. */}
+            <div key={pathname.split("/")[1] ?? ""} className="hz-page">
               {children}
             </div>
           </main>
@@ -391,6 +392,7 @@ function AccountMenu({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label="Account menu"
+        data-tour="account-menu"
         className="flex h-11 items-center gap-1.5 rounded-full border border-border bg-card pl-1 pr-2 hover:border-primary"
       >
         <span className="grid h-9 w-9 place-items-center rounded-full bg-primary font-display text-sm font-bold text-primary-foreground">

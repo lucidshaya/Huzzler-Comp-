@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -66,12 +67,30 @@ function TestsOverview() {
   const start = useMutation({
     mutationFn: () => api("/onboarding/start", { method: "POST" }),
     onSuccess: () => {
+      // A retake has new submissions: drop test pages cached from the previous attempt.
+      qc.removeQueries({ queryKey: ["test"] });
       qc.invalidateQueries({ queryKey: ["onboarding"] });
       refresh();
     },
   });
+  // The server repairs stuck attempts when this loads; pick up any journey change it made.
+  const attemptStatus = data?.attempt?.status;
+  const journeyStatus = me?.journey.status;
+  const synced = useRef(false);
+  useEffect(() => {
+    if (synced.current) return;
+    if (journeyStatus === "TESTING" && (attemptStatus === "passed" || attemptStatus === "failed")) {
+      synced.current = true;
+      void refresh();
+    }
+  }, [attemptStatus, journeyStatus, refresh]);
   if (isLoading || !me) return <ListPageSkeleton rows={5} label="Loading your tests" />;
   const j = me.journey;
+  // attempts_used counts finished attempts (an admin can reset it); attempt_no only ever grows.
+  const attemptLabel = Math.min(
+    MAX_TEST_ATTEMPTS,
+    j.status === "TESTING" ? j.attempts_used + 1 : Math.max(1, j.attempts_used),
+  );
   const retakeOpen =
     j.status === "TESTS_FAILED" &&
     j.attempts_used < MAX_TEST_ATTEMPTS &&
@@ -173,7 +192,7 @@ function TestsOverview() {
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
       <PageHeader
-        chip={`Attempt ${data.attempt.attempt_no} of ${MAX_TEST_ATTEMPTS}`}
+        chip={`Attempt ${attemptLabel} of ${MAX_TEST_ATTEMPTS}`}
         title="Your onboarding tests"
         body="Pass mark: 70% weighted average, with no test below 50%."
         actions={
@@ -194,6 +213,19 @@ function TestsOverview() {
       )}
       {j.status === "TESTS_FAILED" && !retakeOpen && j.next_attempt_at && (
         <Notice tone="warn">Your retake opens on {fmtDate(j.next_attempt_at)}.</Notice>
+      )}
+      {j.status === "TESTS_FAILED" && j.attempts_used >= MAX_TEST_ATTEMPTS && (
+        <Notice tone="warn">
+          You've used all {MAX_TEST_ATTEMPTS} attempts in your plan. See your feedback in{" "}
+          <Link to="/results" className="font-bold underline">
+            Results
+          </Link>
+          , or{" "}
+          <Link to="/support" search={{ new: true }} className="font-bold underline">
+            contact support
+          </Link>{" "}
+          if you think something went wrong.
+        </Notice>
       )}
       <div className="flex flex-col gap-3">
         {data.tests.map((t) => {

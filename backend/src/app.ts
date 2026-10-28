@@ -34,7 +34,7 @@ export function createApp() {
   app.use("/api", limiter(60_000, 300));
   app.use(["/api/billing", "/api/webhooks"], limiter(60_000, 30));
   app.use("/api/mentor", limiter(60_000, 20));
-  app.use(["/api/support", "/api/help"], limiter(60_000, 30));
+  app.use(["/api/support", "/api/help", "/api/client-errors"], limiter(60_000, 30));
   app.use(["/api/admin/auth", "/api/guardian", "/api/invites"], limiter(15 * 60_000, 20));
   app.use("/api/workstation/run", limiter(60_000, 20));
   app.use("/api/cv/generate", limiter(60_000, 5));

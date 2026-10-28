@@ -47,11 +47,61 @@ export async function currentAttempt(userId: string) {
   return data;
 }
 
+/**
+ * Repairs attempt states left by older versions or admin overrides, so nobody is stuck:
+ * - an attempt with no tests (its creation failed half-way) is removed;
+ * - an attempt whose tests are all graded (e.g. every test carried over) is finalised;
+ * - a journey that says "testing" while the latest attempt already finished is brought in line.
+ */
+export async function reconcileAttempts(userId: string) {
+  try {
+    return await reconcile(userId);
+  } catch (err) {
+    logger.error({ err: String(err), userId }, "attempt reconcile failed");
+    return currentAttempt(userId);
+  }
+}
+
+async function reconcile(userId: string) {
+  let attempt = await currentAttempt(userId);
+  if (!attempt) return null;
+  if (attempt.status === "in_progress") {
+    const { count } = await db.from("test_submissions").select("id", { count: "exact", head: true }).eq("attempt_id", attempt.id);
+    if (!count) {
+      await db.from("test_attempts").delete().eq("id", attempt.id);
+      logger.warn({ userId, attemptId: attempt.id }, "removed an attempt with no tests");
+      attempt = await currentAttempt(userId);
+      if (!attempt) return null;
+    }
+  }
+  if (attempt.status === "in_progress" || attempt.status === "grading") {
+    await maybeFinalizeAttempt(attempt.id);
+    attempt = await currentAttempt(userId);
+  }
+  const j = await getJourney(userId);
+  if (attempt && j.status === "TESTING" && (attempt.status === "passed" || attempt.status === "failed")) {
+    if (attempt.status === "passed") {
+      await transition(userId, "TESTS_PASSED", "repaired: latest attempt passed", { extra: { attempts_used: Math.max(1, j.attempts_used) } });
+      await enqueue("generate_offers", { userId });
+    } else {
+      await transition(userId, "TESTS_FAILED", "repaired: latest attempt failed", { extra: { attempts_used: Math.max(1, j.attempts_used) } });
+    }
+  }
+  return attempt;
+}
+
 export async function startAttempt(userId: string) {
+  await reconcileAttempts(userId);
   const j = await getJourney(userId);
   const profile = await getProfile(userId);
   if (!profile.role_id) throw badRequest("Choose a field first.");
   const prev = await currentAttempt(userId);
+
+  // A retake that was created but never switched the journey to testing: carry on with it.
+  if (prev?.status === "in_progress" && (j.status === "PAID" || j.status === "TESTS_FAILED")) {
+    if (j.status === "TESTS_FAILED") await transition(userId, "TESTING", `attempt ${prev.attempt_no} resumed`);
+    return prev;
+  }
 
   if (j.status === "PAID") {
     if (prev) return prev;
@@ -78,22 +128,30 @@ export async function startAttempt(userId: string) {
     }
   }
 
-  const rows = [];
-  for (const testNo of TEST_NOS) {
-    const c = carried.get(testNo);
-    rows.push(
-      c
-        ? { attempt_id: attempt.id, user_id: userId, test_no: testNo, test_bank_id: c.test_bank_id, carried_over: true, score: c.score, status: "graded" }
-        : { attempt_id: attempt.id, user_id: userId, test_no: testNo, test_bank_id: await pickTestVersion(profile.role_id, testNo, userId, prevBankIds), carried_over: false, score: null, status: "not_started" },
-    );
+  try {
+    const rows = [];
+    for (const testNo of TEST_NOS) {
+      const c = carried.get(testNo);
+      rows.push(
+        c
+          ? { attempt_id: attempt.id, user_id: userId, test_no: testNo, test_bank_id: c.test_bank_id, carried_over: true, score: c.score, status: "graded" }
+          : { attempt_id: attempt.id, user_id: userId, test_no: testNo, test_bank_id: await pickTestVersion(profile.role_id, testNo, userId, prevBankIds), carried_over: false, score: null, status: "not_started" },
+      );
+    }
+    ok(await db.from("test_submissions").insert(rows), "submissions");
+  } catch (err) {
+    // Never leave an empty attempt behind: it would block the next retake.
+    await db.from("test_attempts").delete().eq("id", attempt.id);
+    throw err;
   }
-  ok(await db.from("test_submissions").insert(rows), "submissions");
   await transition(userId, "TESTING", `attempt ${attemptNo} started`);
-  return attempt;
+  // Everything carried over (e.g. scores raised on appeal): nothing left to take, so finish now.
+  if (carried.size === TEST_NOS.length) await maybeFinalizeAttempt(attempt.id);
+  return (await currentAttempt(userId)) ?? attempt;
 }
 
 export async function attemptOverview(userId: string) {
-  const attempt = await currentAttempt(userId);
+  const attempt = await reconcileAttempts(userId);
   if (!attempt) return null;
   const { data: subs } = await db
     .from("test_submissions")
@@ -363,7 +421,10 @@ export async function maybeFinalizeAttempt(attemptId: string) {
   );
 
   const j = await getJourney(attempt.user_id);
-  const attemptsUsed = Math.max(j.attempts_used, attempt.attempt_no);
+  // Counted from the journey (an admin can reset it), not from attempt_no, which only ever grows.
+  // Re-finalising after an appeal doesn't use up another attempt.
+  const refinalised = Boolean(attempt.completed_at);
+  const attemptsUsed = refinalised ? Math.max(1, j.attempts_used) : j.attempts_used + 1;
   if (outcome.passed) {
     await transition(attempt.user_id, "TESTS_PASSED", `passed with ${outcome.weighted}`, { extra: { attempts_used: attemptsUsed } });
     await notify(attempt.user_id, "onboarding.passed", "You're verified!", `You passed onboarding with ${outcome.weighted}%. Your job offers are on the way.`);
@@ -372,8 +433,9 @@ export async function maybeFinalizeAttempt(attemptId: string) {
     const canRetake = attemptsUsed < MAX_ATTEMPTS;
     // The first failure gets an immediate retry; later ones wait.
     const waitDays = attemptsUsed === 1 ? 0 : RETAKE_WAIT_DAYS;
+    const nextAt = refinalised ? j.next_attempt_at : canRetake && waitDays ? new Date(Date.now() + waitDays * DAY).toISOString() : null;
     await transition(attempt.user_id, "TESTS_FAILED", `scored ${outcome.weighted}`, {
-      extra: { attempts_used: attemptsUsed, next_attempt_at: canRetake && waitDays ? new Date(Date.now() + waitDays * DAY).toISOString() : null },
+      extra: { attempts_used: attemptsUsed, next_attempt_at: nextAt },
     });
     await notify(
       attempt.user_id,

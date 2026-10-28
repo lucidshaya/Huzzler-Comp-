@@ -8,10 +8,40 @@ import { hasPaid, type Me } from "@/lib/journey";
 // on a phone) is shown centred instead.
 
 const SEEN_KEY = "hz-tour-v1";
+const NEWS_KEY = "hz-whatsnew-v1";
 export const START_TOUR_EVENT = "hz:start-tour";
 export const startTour = () => window.dispatchEvent(new Event(START_TOUR_EVENT));
 
 type Step = { target?: string; title: string; body: string };
+
+/** People who joined before these features get a short "What's new" instead of the welcome tour. */
+const NEWCOMER = ["REGISTERED", "PREVIEW", "PAID"];
+const isNewcomer = (me: Me) => NEWCOMER.includes(me.journey.status);
+
+function whatsNew(me: Me): Step[] {
+  const first = me.profile.full_name?.split(" ")[0];
+  return [
+    {
+      title: `What's new${first ? `, ${first}` : ""}`,
+      body: "A few things changed since you last visited. Everything you've done so far (tests, team, projects and tokens) is kept exactly as it was.",
+    },
+    {
+      target: "nav-profile",
+      title: "Profile & ATS résumé builder",
+      body: "Your badges and activity now live in Profile, next to a new ATS résumé builder: write section by section, tailor to a job post, pick a design and download a PDF.",
+    },
+    {
+      target: "tokens",
+      title: "Tokens",
+      body: "AI tools like the résumé redraft are paid from your token balance. Writing, editing and downloading are free.",
+    },
+    {
+      target: "account-menu",
+      title: "Tour any time",
+      body: "Want the full walkthrough? Open your account menu and choose “Take the tour”.",
+    },
+  ];
+}
 
 function stepsFor(me: Me): Step[] {
   const paid = hasPaid(me.journey.status) || me.journey.status === "LAPSED";
@@ -74,18 +104,21 @@ export function GuidedTour({ me }: { me: Me }) {
   const [open, setOpen] = useState(false);
   const [i, setI] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
-  const steps = stepsFor(me);
+  const [full, setFull] = useState(() => isNewcomer(me));
+  const steps = full ? stepsFor(me) : whatsNew(me);
   const step = steps[i];
 
   useEffect(() => {
     let seen = true;
     try {
-      seen = localStorage.getItem(SEEN_KEY) === "1";
+      // Either tour counts as seen; existing users only see "What's new" once.
+      seen = localStorage.getItem(SEEN_KEY) === "1" || localStorage.getItem(NEWS_KEY) === "1";
     } catch {
       /* storage blocked: don't auto-open */
     }
     const t = seen ? null : setTimeout(() => setOpen(true), 900);
     const replay = () => {
+      setFull(true);
       setI(0);
       setOpen(true);
     };
@@ -118,6 +151,7 @@ export function GuidedTour({ me }: { me: Me }) {
     setOpen(false);
     try {
       localStorage.setItem(SEEN_KEY, "1");
+      localStorage.setItem(NEWS_KEY, "1");
     } catch {
       /* ignore */
     }
