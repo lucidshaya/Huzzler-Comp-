@@ -87,6 +87,37 @@ export function GradingView() {
     onSuccess: () => done("Appeal answered. The learner has been notified."),
     onError: hzToast.fromError,
   });
+  const confirmTeam = useMutation({
+    mutationFn: ({ id, ...body }: { id: string; score: number; note?: string }) =>
+      api(`/aipm/projects/${id}/team-review`, { body }),
+    onSuccess: () => done("Team score saved. The project results are being worked out."),
+    onError: hzToast.fromError,
+  });
+  const reviewTeam = async (p: any) => {
+    const v = await hzForm({
+      title: `Team score for ${p.team?.name ?? "this squad"}`,
+      body: "Keep the AI's proposal or change it. This becomes the project's team outcome score.",
+      confirmLabel: "Save team score",
+      fields: [
+        {
+          name: "score",
+          label: "Team score (0–100)",
+          type: "number",
+          required: true,
+          min: 0,
+          max: 100,
+          defaultValue: String(p.team_outcome_score ?? p.team_review?.score ?? ""),
+        },
+        { name: "note", label: "Note (optional)", type: "textarea", maxLength: 1000 },
+      ],
+    });
+    if (v)
+      confirmTeam.mutate({
+        id: p.id,
+        score: Number(v.score),
+        note: String(v.note).trim() || undefined,
+      });
+  };
   const grade = async (type: string, id: string, user_id?: string, current?: number | null) => {
     const v = await hzForm({
       title: "Record the final grade",
@@ -158,6 +189,8 @@ export function GradingView() {
   const dels: any[] = data?.deliverables ?? [];
   const flagged: any[] = data?.flagged_grades ?? [];
   const appeals: any[] = data?.appeals ?? [];
+  const reviews: any[] = data?.team_reviews ?? [];
+  const pendingReviews = reviews.filter((r) => r.pending).length;
   return (
     <div className="flex flex-col gap-8">
       <Header
@@ -170,7 +203,7 @@ export function GradingView() {
           </button>
         }
       />
-      <ErrorNote error={error ?? resolve.error ?? answer.error} />
+      <ErrorNote error={error ?? resolve.error ?? answer.error ?? confirmTeam.error} />
       {isLoading ? (
         <CardSkeleton />
       ) : (
@@ -258,6 +291,76 @@ export function GradingView() {
             )}
           </section>
           <section className="card-duo p-6">
+            <div className="mb-1 flex items-center gap-2 font-display text-base font-bold">
+              <Users className="h-4 w-4 text-primary" /> AI team reviews ({pendingReviews} waiting)
+            </div>
+            <p className="mb-4 text-xs text-muted-foreground">
+              When a project closes, the AI reviews the squad's work as a whole and proposes the
+              team score. Confident reviews apply on their own; the rest wait up to 72 hours for
+              you.
+            </p>
+            {reviews.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No team reviews yet.</p>
+            ) : (
+              <div className="divide-y divide-border">
+                {reviews.map((p) => {
+                  const r = p.team_review;
+                  return (
+                    <details key={p.id} className="py-3" open={p.pending}>
+                      <summary className="flex cursor-pointer flex-wrap items-center gap-2 text-sm">
+                        <b>{p.team?.name ?? "Squad"}</b>
+                        <span className="text-muted-foreground">
+                          {p.template?.title ?? `Project ${p.level}`} · {fmtDateTime(r.proposed_at)}
+                        </span>
+                        <ScoreBadge score={r.score} />
+                        <Pill
+                          tone={p.pending ? "gold" : r.status === "confirmed" ? "green" : "muted"}
+                        >
+                          {p.pending
+                            ? "needs you"
+                            : r.status === "confirmed"
+                              ? "confirmed"
+                              : "applied"}
+                        </Pill>
+                        <span className="text-xs text-muted-foreground">
+                          confidence {Math.round((r.confidence ?? 0) * 100)}%
+                        </span>
+                      </summary>
+                      <div className="mt-2 flex flex-col gap-2 text-sm">
+                        <p>{r.summary}</p>
+                        {r.reason && <p className="text-xs text-[color:var(--gold)]">{r.reason}</p>}
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {(r.criteria ?? []).map((c: any) => (
+                            <div key={c.name} className="rounded-lg bg-muted/50 p-2 text-xs">
+                              <b className="capitalize">{String(c.name).replace(/_/g, " ")}</b>{" "}
+                              {c.score} · <span className="text-muted-foreground">{c.note}</span>
+                            </div>
+                          ))}
+                        </div>
+                        {r.strengths && (
+                          <p className="text-xs">
+                            <b>Strengths:</b> {r.strengths}
+                          </p>
+                        )}
+                        {r.gaps && (
+                          <p className="text-xs">
+                            <b>Gaps:</b> {r.gaps}
+                          </p>
+                        )}
+                        <button
+                          onClick={() => reviewTeam(p)}
+                          className={`${p.pending ? "btn-duo" : "btn-duo-outline"} w-fit !py-1.5 !px-4 text-xs`}
+                        >
+                          {p.pending ? "Confirm / override" : "Change team score"}
+                        </button>
+                      </div>
+                    </details>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+          <section className="card-duo p-6">
             <div className="mb-4 flex items-center gap-2 font-display text-base font-bold">
               <Scale className="h-4 w-4 text-primary" /> Appeals on project work
             </div>
@@ -312,6 +415,8 @@ const KINDS = [
   { key: "grading", label: "Grading", queue: "grader" },
   { key: "wbs", label: "Briefs → WBS", queue: "wbs-router" },
   { key: "offer_ranking", label: "Opportunity ranking", queue: "offer-ranker" },
+  { key: "team_review", label: "Team reviews", queue: "team-review" },
+  { key: "test_generation", label: "Test pool", queue: "test-pool" },
 ];
 const queueOf = (k: string) => KINDS.find((x) => x.key === k)?.queue ?? k;
 const ENGINE: Record<string, { label: string; tone: "green" | "gold" | "muted" }> = {
@@ -329,6 +434,10 @@ const FEATURE_LABEL: Record<string, string> = {
   help_bot: "Help bot",
   workstation: "Workstation",
   integrity_review: "Integrity",
+  squad_matching: "Squad matching",
+  team_review: "Team reviews",
+  test_generation: "Test pool",
+  cv_builder: "Résumé builder",
 };
 
 export function AiView() {

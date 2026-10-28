@@ -15,7 +15,7 @@ export type SquadTemplate = { required: Record<string, number>; optional: string
 export type FormedTeam = { archetypeId: string; members: Candidate[]; missingRoles: string[] };
 
 /** Distance between two candidates: keep skill levels, time zones and availability close. */
-function distance(a: Candidate, b: Candidate): number {
+export function distance(a: Candidate, b: Candidate): number {
   return Math.abs(a.scoreBand - b.scoreBand) * 3 + (a.tzBand === b.tzBand ? 0 : 2) + Math.abs(a.hoursPerWeek - b.hoursPerWeek) / 5;
 }
 

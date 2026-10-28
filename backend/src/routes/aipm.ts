@@ -4,6 +4,8 @@ import { h, parse, uid } from "./util.js";
 import { requireRole } from "../middleware/auth.js";
 import { badRequest } from "../lib/errors.js";
 import { answerAppeal, listAppeals, resolveGrade, reviewQueue } from "../services/grading.js";
+import { confirmTeamReview, teamReviews } from "../services/projects.js";
+import { EditInput, editVersion, GenerateInput, generateTests, getVersion, poolOverview, setVersionStatus } from "../services/testPool.js";
 import {
   activity,
   aiStatus,
@@ -55,7 +57,14 @@ aipmRouter.post("/teams/:id/report", h(async (req) => createReport(uid(req), req
 aipmRouter.get("/activity", h(async () => activity()));
 
 // Project grading (deliverables and demo day) lives here, next to the squads; onboarding grading stays in Admin.
-aipmRouter.get("/grading", h(async () => ({ ...(await reviewQueue("projects")), appeals: await listAppeals("projects") })));
+aipmRouter.get("/grading", h(async () => ({ ...(await reviewQueue("projects")), appeals: await listAppeals("projects"), team_reviews: await teamReviews() })));
+aipmRouter.post(
+  "/projects/:id/team-review",
+  h(async (req) => {
+    const b = parse(z.object({ score: z.number().min(0).max(100), note: z.string().trim().max(1000).optional() }), req.body);
+    return confirmTeamReview(uid(req), parse(z.string().uuid(), req.params.id), b.score, b.note);
+  }),
+);
 aipmRouter.post(
   "/grading/:subjectType/:subjectId/resolve",
   h(async (req) => {
@@ -71,6 +80,13 @@ aipmRouter.post(
 );
 
 // How the AI PM thinks: engine status, the decision log, and a dry run of squad matching.
+// Onboarding test pool: AI drafts new versions from a PM's idea; a person approves before learners see them.
+aipmRouter.get("/test-pool", h(async () => poolOverview()));
+aipmRouter.post("/test-pool/generate", h(async (req) => generateTests(uid(req), parse(GenerateInput, req.body))));
+aipmRouter.get("/test-pool/:id", h(async (req) => getVersion(req.params.id)));
+aipmRouter.put("/test-pool/:id", h(async (req) => editVersion(uid(req), req.params.id, parse(EditInput, req.body))));
+aipmRouter.post("/test-pool/:id/status", h(async (req) => setVersionStatus(uid(req), req.params.id, parse(z.object({ status: z.enum(["draft", "approved", "retired"]) }), req.body).status)));
+
 aipmRouter.get("/ai/status", h(async () => aiStatus()));
 aipmRouter.get("/ai/decisions", h(async (req) => decisions(typeof req.query.kind === "string" && req.query.kind ? req.query.kind : undefined)));
 aipmRouter.get("/ai/matching-preview", h(async () => matchingPreview()));

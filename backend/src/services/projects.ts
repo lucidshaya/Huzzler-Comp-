@@ -14,6 +14,8 @@ import { postSystemMessage, removeMember, assertTeamMember } from "./teams.js";
 import { gradeSubjectWithAi } from "./aiGrading.js";
 import { checkSimilarity } from "./integrity.js";
 import { enqueue } from "../jobs/queue.js";
+import { audit } from "../lib/audit.js";
+import { pmWindowOver, reviewTeamProject, type TeamReview } from "./teamReview.js";
 
 const DAY = 86_400_000;
 
@@ -378,8 +380,33 @@ export async function computeProjectResults(instanceId: string, onlyIfComplete =
     return scores.reduce((a, b) => a + b, 0) / scores.length;
   };
   const teamDeliverableAvg = userIds.length ? userIds.map(deliverableAvg).reduce((a, b) => a + b, 0) / userIds.length : 0;
-  // Team outcome: CI acceptance tests when reported; otherwise the team's average deliverable score.
-  const teamScore = pi.team_outcome_score !== null ? Number(pi.team_outcome_score) : teamDeliverableAvg;
+  // Team outcome: CI acceptance tests or a PM-confirmed score when set; otherwise the AI team review
+  // (when the key is set), falling back to the team's average deliverable score.
+  let teamScore: number;
+  if (pi.team_outcome_score !== null) {
+    teamScore = Number(pi.team_outcome_score);
+  } else {
+    let review = (pi.team_review as TeamReview | null) ?? null;
+    if (!review) {
+      review = await reviewTeamProject(instanceId, teamDeliverableAvg).catch((err) => {
+        logger.error({ err: String(err), instanceId }, "team review failed; using the deliverable average");
+        return null;
+      });
+      if (review) await db.from("project_instances").update({ team_review: review }).eq("id", instanceId);
+      if (review?.status === "needs_pm") await notifyPms(pi.team_id, pi.level, review);
+    }
+    if (review?.status === "needs_pm" && !pmWindowOver(review)) {
+      // Wait for a PM in AI PM → Project grading. Reopen so their confirmation (or a run after the
+      // window) can close the project.
+      await db.from("project_instances").update({ status: "active" }).eq("id", instanceId).eq("status", "grading");
+      return;
+    }
+    teamScore = review ? review.score : teamDeliverableAvg;
+    if (review) {
+      const settled: TeamReview = review.status === "needs_pm" ? { ...review, status: "applied", reason: `${review.reason ?? "Needed a PM"}; no PM confirmed within the window, so the AI score was applied.` } : review;
+      await db.from("project_instances").update({ team_outcome_score: teamScore, team_review: settled }).eq("id", instanceId);
+    }
+  }
 
   const { data: checkins } = await db.from("checkins").select("user_id").eq("project_instance_id", instanceId);
   const checkinDays = Math.max(1, Math.round((Math.min(Date.now(), new Date(pi.due_at).getTime()) - new Date(pi.started_at).getTime()) / DAY) - Math.floor(((new Date(pi.due_at).getTime() - new Date(pi.started_at).getTime()) / DAY / 7) * 2));
@@ -467,4 +494,38 @@ export async function finalizeOverdueProjects() {
   const cutoff = new Date(Date.now() - 3 * DAY).toISOString();
   const { data } = await db.from("project_instances").select("id").eq("status", "active").lt("due_at", cutoff);
   for (const p of data ?? []) await computeProjectResults(p.id, false);
+}
+
+/** Tells project managers (and admins) that a team review needs their confirmation. */
+async function notifyPms(teamId: string, level: number, review: TeamReview) {
+  const [{ data: staff }, { data: team }] = await Promise.all([
+    db.from("profiles").select("id").in("app_role", ["admin", "project_manager"]).is("deleted_at", null),
+    db.from("teams").select("name").eq("id", teamId).single(),
+  ]);
+  for (const s of staff ?? []) await notify(s.id, "team_review.needs_pm", "Team review needs you", `${team?.name ?? "A squad"} project ${level}: AI proposes ${review.score}/100. ${review.reason ?? ""}`.trim(), { teamId });
+}
+
+/** A PM confirms or overrides the AI's team score; the project then closes with that score. */
+export async function confirmTeamReview(actorId: string, instanceId: string, score: number, note?: string) {
+  const { data: pi } = await db.from("project_instances").select("id, status, team_review").eq("id", instanceId).maybeSingle();
+  if (!pi) throw notFound("project");
+  if (pi.status === "completed") throw conflict("This project is already closed.");
+  const review = pi.team_review as TeamReview | null;
+  const updated = review ? { ...review, status: "confirmed" as const, confirmed_by: actorId, ...(note ? { pm_note: note } : {}), ...(score !== review.score ? { pm_score: score } : {}) } : null;
+  await db.from("project_instances").update({ team_outcome_score: score, team_review: updated }).eq("id", instanceId);
+  if (review && score !== review.score) await db.from("ai_decisions").update({ status: "overridden" }).eq("kind", "team_review").eq("subject_id", instanceId);
+  await audit(actorId, "aipm.team_review_confirmed", "project_instance", instanceId, { score, ai_score: review?.score ?? null });
+  await computeProjectResults(instanceId, false);
+  return { score };
+}
+
+/** Team reviews waiting for a PM, plus the latest applied ones for context. */
+export async function teamReviews() {
+  const { data } = await db
+    .from("project_instances")
+    .select("id, level, status, due_at, team_review, team_outcome_score, team:team_id(id, name), template:template_id(title)")
+    .not("team_review", "is", null)
+    .order("updated_at", { ascending: false })
+    .limit(40);
+  return (data ?? []).map((p: any) => ({ ...p, pending: p.team_review?.status === "needs_pm" && p.status !== "completed" }));
 }

@@ -1,7 +1,7 @@
 import { db } from "./supabase.js";
 import { logger } from "./logger.js";
 
-export type DecisionKind = "squad_matching" | "grading" | "wbs" | "offer_ranking" | "task_routing" | "workstation";
+export type DecisionKind = "squad_matching" | "grading" | "wbs" | "offer_ranking" | "task_routing" | "workstation" | "test_generation" | "team_review";
 export type DecisionStep = { label: string; detail: string; weight?: number };
 
 /**

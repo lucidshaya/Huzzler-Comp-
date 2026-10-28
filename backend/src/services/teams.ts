@@ -2,7 +2,8 @@ import { db, must, ok } from "../lib/supabase.js";
 import { logger } from "../lib/logger.js";
 import { notify } from "../lib/notify.js";
 import { render } from "../lib/templates.js";
-import { formTeams, tzBandOf, type Candidate, type SquadTemplate } from "../domain/matching.js";
+import { distance, formTeams, tzBandOf, type Candidate, type FormedTeam, type SquadTemplate } from "../domain/matching.js";
+import { chooseOpenSeat, chooseSquad, type AiDecision, type PersonSummary } from "../ai/matching.js";
 import { STANDIN_AFTER_HOURS, ARCHETYPE_IDS, MAX_TEAM_SIZE } from "../domain/constants.js";
 import { projectStatus } from "../domain/journey.js";
 import { TEAM_WELCOME, STANDIN_REPLIES } from "../content/templates.js";
@@ -47,7 +48,68 @@ export async function loadPool(): Promise<Candidate[]> {
     }));
 }
 
-/** Plain SQL + code squad matching (no AI). Run on accept and on a schedule. */
+/** Names and onboarding scores for the people the AI matcher is choosing between. */
+async function summaries(cands: Candidate[], seed: Candidate, names: Map<string, string>): Promise<Map<string, PersonSummary>> {
+  const ids = [...new Set(cands.map((c) => c.userId))];
+  const [{ data: profiles }, { data: results }] = await Promise.all([
+    db.from("profiles").select("id, full_name").in("id", ids),
+    db.from("test_results").select("user_id, weighted_score").in("user_id", ids).eq("passed", true),
+  ]);
+  const pn = new Map((profiles ?? []).map((p) => [p.id, (p.full_name ?? "Unnamed").split(" ").slice(0, 2).join(" ")]));
+  const sc = new Map((results ?? []).map((r) => [r.user_id, Math.round(Number(r.weighted_score))]));
+  return new Map(
+    cands.map((c) => [
+      c.userId,
+      {
+        user_id: c.userId,
+        name: pn.get(c.userId) ?? "Unnamed",
+        role: names.get(c.roleId) ?? c.roleId,
+        onboarding_score: sc.get(c.userId) ?? null,
+        timezone: c.tzBand,
+        hours_per_week: c.hoursPerWeek,
+        waiting_days: Math.floor((Date.now() - c.waitingSince.getTime()) / 86_400_000),
+        distance: Math.round(distance(seed, c) * 10) / 10,
+      },
+    ]),
+  );
+}
+
+/**
+ * Lets the AI choose between valid alternatives for each seat of a squad the rules engine formed.
+ * The seed (longest waiting) stays; each other seat may swap to one of the two next-closest people
+ * for the same role who aren't placed in another squad this round. Returns the (possibly changed)
+ * members and the AI's reasoning, or the original squad when there's nothing to choose or no AI.
+ */
+async function aiReviewSquad(archetype: string, t: FormedTeam, pool: Candidate[], taken: Set<string>, names: Map<string, string>): Promise<{ members: Candidate[]; decision?: AiDecision }> {
+  const [seed, ...rest] = t.members;
+  if (!rest.length) return { members: t.members };
+  const seats = rest.map((m, i) => {
+    const alternatives = pool
+      .filter((c) => c.roleId === m.roleId && c.userId !== m.userId && !taken.has(c.userId))
+      .sort((a, b) => distance(seed, a) - distance(seed, b))
+      .slice(0, 2);
+    return { seat: `S${i + 1}`, member: m, options: [m, ...alternatives] };
+  });
+  if (!seats.some((s) => s.options.length > 1)) return { members: t.members };
+  const people = await summaries([seed, ...seats.flatMap((s) => s.options)], seed, names);
+  const choice = await chooseSquad({
+    archetype,
+    seed: people.get(seed.userId)!,
+    seats: seats.map((s) => ({ seat: s.seat, role: names.get(s.member.roleId) ?? s.member.roleId, options: s.options.map((o) => people.get(o.userId)!) })),
+  });
+  if (!choice) return { members: t.members };
+  const members = [seed, ...seats.map((s) => s.options.find((o) => o.userId === choice.picks.get(s.seat)) ?? s.member)];
+  for (const s of seats) {
+    const picked = choice.picks.get(s.seat);
+    if (picked && picked !== s.member.userId) {
+      taken.delete(s.member.userId); // back in the pool for a later squad
+      taken.add(picked);
+    }
+  }
+  return { members, decision: choice.decision };
+}
+
+/** Squad matching: the rules engine forms valid squads; the AI (when the key is set) chooses between valid alternatives. Run on accept and on a schedule. */
 export async function runMatching() {
   // First fill stand-in seats on existing teams with real people.
   await backfillStandins();
@@ -63,15 +125,17 @@ export async function runMatching() {
     const teams = formTeams(candidates, tpl!.template as SquadTemplate, new Set((compat ?? []).map((c) => c.role_id)), {
       allowStandins: (seed) => Date.now() - seed.waitingSince.getTime() > STANDIN_AFTER_HOURS * 3_600_000,
     });
+    const taken = new Set(teams.flatMap((t) => t.members.map((m) => m.userId)));
     for (const t of teams) {
-      await createTeam(archetype, t.members, t.missingRoles, names);
+      const reviewed = await aiReviewSquad(archetype, t, candidates, taken, names);
+      await createTeam(archetype, reviewed.members, t.missingRoles, names, reviewed.decision);
       formed++;
     }
   }
   return formed;
 }
 
-export async function createTeam(archetypeId: string, members: Candidate[], missingRoles: string[], names: Map<string, string>) {
+export async function createTeam(archetypeId: string, members: Candidate[], missingRoles: string[], names: Map<string, string>, ai?: AiDecision) {
   const { data: offer } = await db.from("offers").select("persona_id, cohort_id").eq("user_id", members[0].userId).eq("status", "accepted").single();
   const { data: persona } = await db.from("company_personas").select("name, mission").eq("id", offer!.persona_id).single();
   const band = members.reduce((s, m) => s + m.scoreBand, 0) / members.length;
@@ -106,12 +170,15 @@ export async function createTeam(archetypeId: string, members: Candidate[], miss
   const seed = members[0];
   await recordDecision({
     kind: "squad_matching",
-    engine: "rules",
+    engine: ai ? "ai" : "rules",
+    model: ai?.model ?? null,
+    latencyMs: ai?.latencyMs ?? null,
     teamId: team.id,
     subjectType: "team",
     subjectId: team.id,
-    summary: `Formed ${team.name}: ${members.length} ${members.length === 1 ? "person" : "people"}${missingRoles.length ? ` + ${missingRoles.length} stand-in${missingRoles.length === 1 ? "" : "s"}` : ""} for ${persona!.name} (${archetypeId}).`,
+    summary: `${ai ? `${ai.summary} ` : ""}Formed ${team.name}: ${members.length} ${members.length === 1 ? "person" : "people"}${missingRoles.length ? ` + ${missingRoles.length} stand-in${missingRoles.length === 1 ? "" : "s"}` : ""} for ${persona!.name} (${archetypeId}).`,
     reasoning: [
+      ...(ai?.reasoning ?? []),
       { label: "Seed", detail: `${pname.get(seed.userId)} (${names.get(seed.roleId)}) has waited longest, since ${seed.waitingSince.toISOString().slice(0, 10)}, so the squad is built around them.` },
       ...members.slice(1).map((m) => ({
         label: `${names.get(m.roleId)}`,
@@ -120,9 +187,9 @@ export async function createTeam(archetypeId: string, members: Candidate[], miss
       })),
       ...(missingRoles.length ? [{ label: "Stand-ins", detail: `No one was waiting for ${missingRoles.map((r) => names.get(r)).join(", ")}; clearly labelled stand-ins cover those seats until a real person is matched.` }] : []),
     ],
-    confidence: Math.max(0.4, 1 - missingRoles.length * 0.12),
+    confidence: ai?.confidence ?? Math.max(0.4, 1 - missingRoles.length * 0.12),
   });
-  logger.info({ teamId: team.id, size: members.length, standins: missingRoles.length }, "team formed");
+  logger.info({ teamId: team.id, size: members.length, standins: missingRoles.length, engine: ai ? "ai" : "rules" }, "team formed");
   return team as { id: string; name: string };
 }
 
@@ -283,8 +350,18 @@ async function joinOpenSeat(me: Candidate, template: SquadTemplate): Promise<str
     .map((t) => ({ ...t, members: (t.members ?? []).filter((m: any) => m.status === "active") }))
     .filter((t) => t.members.length < maxSize && !t.members.some((m: any) => m.role_id === me.roleId))
     .sort((a, b) => Math.abs((a.score_band ?? 7) - me.scoreBand) - Math.abs((b.score_band ?? 7) - me.scoreBand) || b.members.filter((m: any) => !m.is_standin).length - a.members.filter((m: any) => !m.is_standin).length);
-  const team = open[0];
-  if (!team) return null;
+  if (!open[0]) return null;
+  const names0 = await roleNames();
+  const person = (await summaries([me], me, names0)).get(me.userId)!;
+  const ai = await chooseOpenSeat(
+    person,
+    open.slice(0, 3).map((t: any) => ({
+      id: t.id,
+      name: t.name,
+      description: `score band ${(t.score_band ?? 7) * 10}s, ${t.members.filter((m: any) => !m.is_standin).length} real members, ${t.members.length}/${maxSize} seats, project ${Math.max(1, t.current_level)}`,
+    })),
+  );
+  const team = (ai && open.find((t: any) => t.id === ai.teamId)) || open[0];
   const member = must(await db.from("team_members").insert({ team_id: team.id, user_id: me.userId, role_id: me.roleId }).select().single(), "member");
   await transition(me.userId, "PLACED", `joined ${team.name}`);
   if (team.current_level >= 1) await transition(me.userId, projectStatus(team.current_level), "joined mid-project");
@@ -294,17 +371,20 @@ async function joinOpenSeat(me: Candidate, template: SquadTemplate): Promise<str
   await notify(me.userId, "team.placed", "You've been placed on a team", `Welcome to ${team.name}. Your tasks are on the board.`);
   await recordDecision({
     kind: "squad_matching",
-    engine: "rules",
+    engine: ai ? "ai" : "rules",
+    model: ai?.decision.model ?? null,
+    latencyMs: ai?.decision.latencyMs ?? null,
     userId: me.userId,
     teamId: team.id,
     subjectType: "team",
     subjectId: team.id,
     summary: `Added a ${names.get(me.roleId)} to ${team.name}, which had an open seat for that role.`,
     reasoning: [
+      ...(ai?.decision.reasoning ?? []),
       { label: "Open seat", detail: `${names.get(me.roleId)} is an optional role for ${me.archetypeId} squads and nobody on ${team.name} holds it yet (${team.members.length}/${maxSize} seats used).` },
       { label: "Fit", detail: `Score band ${me.scoreBand * 10}s vs squad ${(team.score_band ?? 7) * 10}s; the squad is still on project ${Math.max(1, team.current_level)}.` },
     ],
-    confidence: 0.75,
+    confidence: ai?.decision.confidence ?? 0.75,
   });
   return team.id;
 }

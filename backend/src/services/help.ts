@@ -50,6 +50,20 @@ async function loadCorpus() {
 }
 export const resetHelpCorpus = () => (corpus = null);
 
+/**
+ * The help bot is retrieval-only by default: it answers from the FAQ and knowledge base and hands
+ * anything else to a person. An LLM rewrite of the retrieved answer only runs when an admin turns on
+ * feature_flags['help_bot'] with value {"ai": true}.
+ */
+let aiFlag: { at: number; on: boolean } | null = null;
+export async function helpAiEnabled() {
+  if (!aiFlag || Date.now() - aiFlag.at > 60_000) {
+    const { data } = await db.from("feature_flags").select("enabled, value").eq("key", "help_bot").maybeSingle();
+    aiFlag = { at: Date.now(), on: Boolean(data?.enabled && (data.value as { ai?: boolean } | null)?.ai) };
+  }
+  return aiFlag.on;
+}
+
 /** BM25 over FAQ questions (weighted double) and answers, normalised to 0–1 against a perfect match. */
 export async function search(question: string, roleId: string | null, k = 4) {
   const c = await loadCorpus();
@@ -103,7 +117,7 @@ export async function askHelp(userId: string, question: string) {
   if (top && top.doc.kind === "faq" && top.score >= CONFIDENT) {
     answer = top.doc.body;
     source = "faq";
-  } else if (aiConfigured() && hits.length) {
+  } else if (aiConfigured() && hits.length && (await helpAiEnabled())) {
     try {
       const { data } = await callStructured({
         feature: "help_bot",
