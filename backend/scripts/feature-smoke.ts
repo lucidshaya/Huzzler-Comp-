@@ -14,7 +14,8 @@ const { env } = await import("../src/config/env.js");
 
 const API = `${process.env.E2E_API ?? `http://localhost:${env.PORT}`}/api`;
 const stamp = Date.now().toString(36);
-const created = { users: [] as string[], teams: [] as string[], listings: [] as string[], invites: [] as string[], tickets: [] as string[] };
+const startedAt = new Date().toISOString();
+const created = { users: [] as string[], teams: [] as string[], joinedTeams: [] as string[], listings: [] as string[], invites: [] as string[], tickets: [] as string[] };
 let failures = 0;
 let pool0: { balance: number; lifetime_funded: number; lifetime_granted: number } | null = null;
 
@@ -155,7 +156,11 @@ async function opportunitiesAndWorkspace(u: { id: string; token: string }, admin
   if (o.stipend_tokens) acc?.stipend_tokens > 0 ? ok(`stipend paid: +${acc.stipend_tokens} tokens`) : bad("stipend not paid", acc);
   const team = await expect2xx<any>(u.token, "GET /team", "/team");
   if (team?.team) {
-    created.teams.push(team.team.id);
+    // Only delete the squad afterwards if the test created it. Real-first matching can seat the test
+    // learner on a real squad; that squad must survive (cleanup then just frees the test's seat).
+    const realOthers = team.members.filter((m: any) => !m.is_standin && m.user_id && m.user_id !== u.id).length;
+    if (realOthers === 0) created.teams.push(team.team.id);
+    else created.joinedTeams.push(team.team.id);
     ok(`squad "${team.team.name}" (${team.members.length} seats, ${team.members.filter((m: any) => m.is_standin).length} stand-ins)`);
   } else bad("no team after accept");
   const ws = await expect2xx<any>(u.token, "GET /workspace", "/workspace");
@@ -290,6 +295,20 @@ async function adminSide(admin: string) {
 
 async function cleanup() {
   console.log("\n▶ Cleanup");
+  // Real squads the test learner joined: give the seat back to a stand-in and undo the test's traces.
+  for (const t of created.joinedTeams) {
+    const { data: mine } = await db.from("team_members").select("id, role_id").eq("team_id", t).in("user_id", created.users);
+    for (const m of mine ?? []) {
+      const { data: seat } = await db.from("team_members").select("id").eq("team_id", t).eq("role_id", m.role_id).eq("is_standin", true).eq("status", "replaced").order("left_at", { ascending: false }).limit(1).maybeSingle();
+      if (seat) {
+        await db.from("team_members").update({ status: "active", left_at: null }).eq("id", seat.id);
+        await db.from("team_tasks").update({ assignee_id: null, assignee_member_id: seat.id }).eq("assignee_member_id", m.id);
+      }
+      await db.from("team_members").delete().eq("id", m.id);
+    }
+    await db.from("messages").delete().eq("team_id", t).eq("kind", "system").gte("created_at", startedAt).like("body", "%A real teammate has joined%");
+    await db.from("messages").delete().eq("team_id", t).in("user_id", created.users);
+  }
   for (const t of created.tickets) await db.from("support_tickets").delete().eq("id", t);
   for (const t of created.teams) {
     await db.from("ai_decisions").delete().eq("team_id", t);
