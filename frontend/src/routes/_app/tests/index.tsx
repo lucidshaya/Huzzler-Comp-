@@ -1,8 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Clock, Hourglass, Lock, Play, RotateCcw } from "lucide-react";
+import {
+  CheckCircle2,
+  Clock,
+  Hourglass,
+  Lock,
+  Play,
+  RotateCcw,
+  Save,
+  Timer,
+  Trophy,
+} from "lucide-react";
 import { api } from "@/lib/api";
-import { MAX_TEST_ATTEMPTS, useMe, useRefreshMe } from "@/lib/journey";
+import { MAX_TEST_ATTEMPTS, roleName, useMe, useRefreshMe } from "@/lib/journey";
+import { FIELD_TESTS, KIND_GUIDE, TEST_SLOTS } from "@/lib/onboardingGuide";
 import {
   Card,
   ErrorNote,
@@ -87,24 +98,58 @@ function TestsOverview() {
               <Play className="h-8 w-8" />
             )}
           </div>
-          <div className="grid w-full max-w-2xl grid-cols-5 gap-2">
-            {[
-              ["T1", "Fundamentals", "20m"],
-              ["T2", "Practical", "45m"],
-              ["T3", "Core task", "90m"],
-              ["T4", "Scenario", "60m"],
-              ["T5", "Teamwork", "20m"],
-            ].map(([n, label, mins]) => (
-              <div key={n} className="rounded-xl border border-border p-2">
-                <div className="font-display text-sm font-bold text-primary">{n}</div>
-                <div className="truncate text-[11px] font-semibold">{label}</div>
-                <div className="text-[10px] text-muted-foreground">{mins}</div>
+          <div className="w-full max-w-2xl text-left">
+            <div className="mb-2 text-center text-xs font-bold uppercase tracking-widest text-muted-foreground">
+              Your {roleName(me.profile.role_id)} tests
+            </div>
+            <ol className="flex flex-col gap-2">
+              {(FIELD_TESTS[me.profile.role_id ?? ""] ?? FIELD_TESTS.product_manager).map(
+                (kind, n) => (
+                  <li
+                    key={n}
+                    className="hz-fade-up flex items-start gap-3 rounded-xl border border-border p-3"
+                    style={{ animationDelay: `${n * 70}ms` }}
+                  >
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 font-display text-sm font-bold text-primary">
+                      T{n + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2 text-sm font-bold">
+                        {TEST_SLOTS[n].label}
+                        <Pill>{KIND_GUIDE[kind].label}</Pill>
+                        <span className="text-xs font-semibold text-muted-foreground">
+                          {TEST_SLOTS[n].mins} min
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{KIND_GUIDE[kind].how}</p>
+                    </div>
+                  </li>
+                ),
+              )}
+            </ol>
+          </div>
+          <div className="grid w-full max-w-2xl gap-2 text-left sm:grid-cols-3">
+            {(
+              [
+                [
+                  Timer,
+                  "One test at a time",
+                  "Each timer starts when you open that test, not now.",
+                ],
+                [Save, "Autosaves", "Answers save every 15 seconds. Take breaks between tests."],
+                [Trophy, "Pass mark 70%", "Weighted average, with no test under 50%."],
+              ] as const
+            ).map(([Icon, title, body]) => (
+              <div key={title} className="rounded-xl bg-muted/50 p-3">
+                <div className="flex items-center gap-1.5 text-xs font-bold">
+                  <Icon className="h-3.5 w-3.5 text-primary" /> {title}
+                </div>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">{body}</p>
               </div>
             ))}
           </div>
           <p className="max-w-md text-sm text-muted-foreground">
-            Find a quiet spot with a stable connection. The timer starts when you open each test,
-            not now — you can take breaks between tests.
+            Find a quiet spot with a stable connection, then start when you're ready.
           </p>
           <button onClick={() => start.mutate()} disabled={start.isPending} className="btn-duo">
             {start.isPending ? (
@@ -128,7 +173,7 @@ function TestsOverview() {
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
       <PageHeader
-        chip={`Attempt ${data.attempt.attempt_no} of 2`}
+        chip={`Attempt ${data.attempt.attempt_no} of ${MAX_TEST_ATTEMPTS}`}
         title="Your onboarding tests"
         body="Pass mark: 70% weighted average, with no test below 50%."
         actions={
@@ -167,6 +212,11 @@ function TestsOverview() {
               </span>
               <div className="min-w-0 flex-1">
                 <div className="font-display font-bold">{t.test_bank.title}</div>
+                {KIND_GUIDE[t.test_bank.kind as keyof typeof KIND_GUIDE] && (
+                  <div className="text-xs text-muted-foreground">
+                    {KIND_GUIDE[t.test_bank.kind as keyof typeof KIND_GUIDE].label}
+                  </div>
+                )}
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <span>{t.weight}% of total</span>·
                   <span className="flex items-center gap-1">

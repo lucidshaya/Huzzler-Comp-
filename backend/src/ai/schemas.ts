@@ -63,5 +63,16 @@ export const CvContent = z.object({
   projects: z.array(z.object({ name: line(120), context: line(200), bullets, link: line(200) })).max(12),
   education: z.array(z.object({ school: line(120), qualification: line(120), period: line(60) })).max(6),
   certifications: z.array(z.object({ name: line(160), issuer: line(80), code: line(40), url: line(200) })).max(10),
+  // ATS builder sections (added later; defaults keep older saved résumés valid).
+  personal: z.object({ first_name: line(40), last_name: line(40), nationality: line(60), availability: line(80) }).default({ first_name: "", last_name: "", nationality: "", availability: "" }),
+  courses: z.array(z.object({ name: line(120), institution: line(120), period: line(60) })).max(10).default([]),
+  languages: z.array(z.object({ name: line(40), level: line(40) })).max(10).default([]),
+  references: z.array(z.object({ name: line(80), company: line(120), contact: line(160) })).max(6).default([]),
+  hobbies: line(400).default(""),
+  custom: z.object({ title: line(60), items: z.array(z.object({ title: line(120), subtitle: line(120), period: line(60), description: line(600) })).max(8) }).default({ title: "", items: [] }),
+  job_description: line(8000).default(""),
+  design: z
+    .object({ template: z.enum(["classic", "modern", "compact"]), accent: z.string().regex(/^#[0-9a-fA-F]{6}$/), font: z.enum(["serif", "sans"]) })
+    .default({ template: "modern", accent: "#4f46e5", font: "serif" }),
 });
 export type CvContent = z.infer<typeof CvContent>;

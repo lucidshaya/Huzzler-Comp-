@@ -4,7 +4,15 @@
   "buildCommand": "npm run vercel-build",
   "outputDirectory": "public",
   "functions": {
-    "api/index.js": { "maxDuration": 60, "includeFiles": "dist/content/rubrics/**" }
+    "api/index.js": {
+      "maxDuration": 60,
+      "includeFiles": "{dist/content/rubrics/**,node_modules/sql.js/dist/sql-wasm-inline.js,node_modules/@jitl/quickjs-singlefile-cjs-release-sync/dist/**}"
+    }
   },
-  "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api"
+    }
+  ]
 }

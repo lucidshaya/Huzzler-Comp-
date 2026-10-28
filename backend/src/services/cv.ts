@@ -118,9 +118,9 @@ function factsPrompt(f: Facts): string {
   );
 }
 
-const stripTags = (s: string) => s.replace(/<\/?(background|target_role|facts)[^>]*>/gi, "");
+const stripTags = (s: string) => s.replace(/<\/?(background|target_role|facts|job_description)[^>]*>/gi, "");
 
-async function draftWithAi(userId: string, f: Facts, targetRole: string, background: string): Promise<CvDraft> {
+async function draftWithAi(userId: string, f: Facts, targetRole: string, background: string, jobDescription = ""): Promise<CvDraft> {
   const { data } = await callStructured({
     feature: "cv_builder",
     userId,
@@ -135,6 +135,9 @@ async function draftWithAi(userId: string, f: Facts, targetRole: string, backgro
           `<facts>\n${factsPrompt(f)}\n</facts>`,
           targetRole ? `<target_role>\n${stripTags(targetRole)}\n</target_role>` : "",
           background ? `<background>\n${stripTags(background)}\n</background>` : "",
+          jobDescription
+            ? `<job_description>\n${stripTags(jobDescription).slice(0, 6000)}\n</job_description>\nTailor the headline, summary, skills and bullet wording to this job's keywords where the facts support it. Never claim a skill or experience the facts don't show.`
+            : "",
           "Write the résumé.",
         ]
           .filter(Boolean)
@@ -219,7 +222,8 @@ export async function getCv(userId: string) {
     balanceOf(userId),
   ]);
   return {
-    cv: (doc?.content as CvContent | undefined) ?? null,
+    // Older résumés gain the newer sections with their defaults.
+    cv: doc?.content ? ((CvContent.safeParse(doc.content).data ?? doc.content) as CvContent) : null,
     target_role: doc?.target_role ?? null,
     generated_at: doc?.generated_at ?? null,
     updated_at: doc?.updated_at ?? null,
@@ -240,7 +244,7 @@ export async function saveCv(userId: string, content: CvContent) {
  * Charges the draft price up front (atomic, can't overdraw), writes the draft, and refunds the
  * charge if anything after the debit fails.
  */
-export async function generateCv(userId: string, input: { target_role: string; background: string }) {
+export async function generateCv(userId: string, input: { target_role: string; background: string; job_description?: string }) {
   const price = await priceOf(CV_ACTION);
   const ref = crypto.randomUUID();
   const balanceAfterSpend = await spendTokens(userId, price.cost, `${price.tool} · ${price.label}`, price.tool, ref);
@@ -255,7 +259,7 @@ export async function generateCv(userId: string, input: { target_role: string; b
     let draft: CvDraft | null = null;
     if (aiConfigured()) {
       try {
-        draft = await draftWithAi(userId, facts, input.target_role, input.background);
+        draft = await draftWithAi(userId, facts, input.target_role, input.background, input.job_description ?? existing?.job_description ?? "");
         engine = "ai";
       } catch (err) {
         if (!(err instanceof AiUnavailableError || err instanceof AiBudgetError || err instanceof AiOutputError)) throw err;
@@ -266,7 +270,9 @@ export async function generateCv(userId: string, input: { target_role: string; b
 
     // Re-validate against the stored schema (trims to limits); keep user-entered education if the draft has none.
     const content = CvContent.parse({
+      ...(existing ?? {}),
       ...verifiedParts(facts, existing),
+      ...(input.job_description !== undefined ? { job_description: input.job_description } : {}),
       headline: draft.headline.slice(0, 160),
       summary: draft.summary.slice(0, 1200),
       skills: draft.skills.slice(0, 30).map((s) => s.slice(0, 60)),

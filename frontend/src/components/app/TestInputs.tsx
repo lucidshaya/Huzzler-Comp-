@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Flag, ImagePlus, Loader2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Flag, ImagePlus, Loader2, Play, Terminal } from "lucide-react";
 import { lazy, Suspense, useState } from "react";
 import { Skeleton } from "./Skeleton";
 
@@ -260,11 +260,17 @@ export function NumericAnswers({
   );
 }
 
+export type RunResult =
+  | { kind: "code"; ok: boolean; stdout: string; error: string | null; status: string }
+  | { kind: "sql"; ok: true; rows: string[][]; total_rows: number }
+  | { kind: "sql"; ok: false; error: string };
+
 export function CodeAnswer({
   content,
   value,
   onChange,
   field = "code",
+  onRun,
 }: {
   content: {
     starter_code?: string;
@@ -276,10 +282,45 @@ export function CodeAnswer({
   value: Record<string, string>;
   onChange: (v: Record<string, string>) => void;
   field?: "code" | "sql";
+  /** Runs the current code or query and shows the learner's own output (not the hidden tests). */
+  onRun?: (source: string) => Promise<RunResult>;
 }) {
   const code = value[field] ?? (field === "code" ? (content.starter_code ?? "") : "");
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<RunResult | { kind: "fail"; error: string } | null>(null);
+  const run = async () => {
+    if (!onRun || !code.trim()) return;
+    setRunning(true);
+    try {
+      setResult(await onRun(code));
+    } catch (e) {
+      setResult({
+        kind: "fail",
+        error: e instanceof Error ? e.message : "Couldn't run your code.",
+      });
+    } finally {
+      setRunning(false);
+    }
+  };
   return (
     <div className="flex flex-col gap-3">
+      <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 text-xs leading-relaxed">
+        {field === "sql" ? (
+          <>
+            <b>How this works:</b> write one SQLite query. Press <b>Run query</b> to see the rows it
+            returns as often as you like. When you submit, we compare your result with the expected
+            one.
+          </>
+        ) : (
+          <>
+            <b>How this works:</b> write{" "}
+            {content.language === "typescript" ? "TypeScript" : "JavaScript"} and keep the function
+            name from the starter code. Press <b>Run code</b> to try it: add{" "}
+            <code>console.log(...)</code> calls to see results. When you submit, hidden tests check
+            normal and edge cases.
+          </>
+        )}
+      </div>
       {content.schema && (
         <pre className="overflow-x-auto rounded-xl border border-border bg-muted/40 p-4 font-mono text-[13px] leading-relaxed">
           <span className="mb-1 block font-sans text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -310,6 +351,20 @@ export function CodeAnswer({
           />
         </Suspense>
       </div>
+      {onRun && (
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => void run()}
+            disabled={running || !code.trim()}
+            className="btn-duo-outline w-fit !py-2 !px-4 text-sm disabled:opacity-50"
+          >
+            {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+            {field === "sql" ? "Run query" : "Run code"}
+          </button>
+          {result && <RunOutput result={result} />}
+        </div>
+      )}
       {field === "code" && (
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-semibold">Notes (approach, edge cases)</span>
@@ -388,6 +443,62 @@ export function WrittenAnswer({
           placeholder="Write your answer here. Markdown is fine."
         />
       </label>
+    </div>
+  );
+}
+
+function RunOutput({ result }: { result: RunResult | { kind: "fail"; error: string } }) {
+  const box = "hz-fade-up overflow-x-auto rounded-xl border p-3 font-mono text-xs leading-relaxed";
+  if (result.kind === "fail" || (!result.ok && "error" in result && result.kind === "sql"))
+    return (
+      <pre className={`${box} border-red-500/40 bg-red-500/5 text-red-600 dark:text-red-400`}>
+        {result.error}
+      </pre>
+    );
+  if (result.kind === "sql") {
+    if (!result.ok) return null;
+    return (
+      <div className={`${box} border-border bg-muted/40`}>
+        <div className="mb-2 flex items-center gap-1 font-sans font-bold text-muted-foreground">
+          <Terminal className="h-3.5 w-3.5" /> {result.total_rows} row
+          {result.total_rows === 1 ? "" : "s"}
+          {result.total_rows > result.rows.length && ` (first ${result.rows.length} shown)`}
+        </div>
+        {result.rows.length === 0 ? (
+          <span className="text-muted-foreground">No rows.</span>
+        ) : (
+          <table>
+            <tbody>
+              {result.rows.map((r, i) => (
+                <tr key={i} className="border-t border-border first:border-t-0">
+                  {r.map((c, j) => (
+                    <td key={j} className="px-2 py-0.5">
+                      {c}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className={`${box} border-border bg-muted/40`}>
+      <div className="mb-1 flex items-center gap-1 font-sans font-bold text-muted-foreground">
+        <Terminal className="h-3.5 w-3.5" /> Output ·{" "}
+        {result.status === "Accepted" ? "ran without errors" : result.status}
+      </div>
+      <pre className="whitespace-pre-wrap">
+        {result.stdout ||
+          (result.error ? "" : "Nothing printed. Add console.log(...) to see values.")}
+      </pre>
+      {result.error && (
+        <pre className="mt-1 whitespace-pre-wrap text-red-600 dark:text-red-400">
+          {result.error}
+        </pre>
+      )}
     </div>
   );
 }

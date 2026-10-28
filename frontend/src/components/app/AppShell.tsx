@@ -20,6 +20,7 @@ import {
   ChevronDown,
   Coins,
   LifeBuoy,
+  Compass,
   type LucideIcon,
 } from "lucide-react";
 import { ThemeToggle } from "@/lib/theme";
@@ -29,6 +30,7 @@ import { hasPaid, onTeam, roleName, STATUS_LABEL, type Me } from "@/lib/journey"
 import { fmtTokens, useWallet } from "@/lib/tokens";
 import { HuzzlerLoader } from "./Loader";
 import { HelpWidget } from "./Support";
+import { GuidedTour, startTour } from "./GuidedTour";
 import { fmtDateTime } from "./ui";
 
 type NavItem = { to: string; label: string; short: string; icon: LucideIcon; locked?: boolean };
@@ -119,6 +121,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
           <Link
             key={n.to}
             to={n.locked ? "/begin" : n.to}
+            data-tour={`nav-${n.to.slice(1)}`}
             title={compact ? n.label : undefined}
             aria-current={active ? "page" : undefined}
             className={`group flex min-h-11 items-center gap-3 rounded-xl py-2.5 font-display text-[15px] font-semibold tracking-tight transition-all ${compact ? "justify-center px-2" : "px-3"} ${
@@ -246,13 +249,17 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
             id="main"
             className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-6 md:px-8 md:pb-12 md:pt-10"
           >
-            {children}
+            {/* Re-keyed per page so each page eases in when you navigate. */}
+            <div key={pathname} className="hz-page">
+              {children}
+            </div>
           </main>
         </div>
       </div>
 
       {/* The Help & support page is the support centre itself; a second floating form would cover it. */}
       {!pathname.startsWith("/support") && <HelpWidget />}
+      <GuidedTour me={me} />
 
       {/* Mobile bottom tab bar */}
       <nav
@@ -267,6 +274,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
               <Link
                 key={n.to}
                 to={n.locked ? "/begin" : n.to}
+                data-tour={`nav-${n.to.slice(1)}`}
                 aria-current={active ? "page" : undefined}
                 className={`flex min-h-[60px] flex-col items-center justify-center gap-1 text-[11px] font-bold ${active ? "text-primary" : "text-muted-foreground"}`}
               >
@@ -340,6 +348,7 @@ function TokenChip() {
       to="/billing"
       hash="tokens"
       aria-label={`Token balance: ${fmtTokens(data?.balance ?? 0)}`}
+      data-tour="tokens"
       className="hidden h-11 items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 text-sm font-bold text-primary hover:bg-primary/15 sm:inline-flex"
     >
       <Coins className="h-4 w-4" /> {data ? fmtTokens(data.balance) : "—"}
@@ -415,6 +424,16 @@ function AccountMenu({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
           >
             <Wallet className="h-4 w-4" /> Billing
           </Link>
+          <button
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              startTour();
+            }}
+            className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-sm font-semibold hover:bg-muted"
+          >
+            <Compass className="h-4 w-4" /> Take the tour
+          </button>
           <button
             role="menuitem"
             onClick={onSignOut}

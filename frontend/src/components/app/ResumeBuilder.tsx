@@ -1,70 +1,80 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
   Circle,
+  Cloud,
+  CloudOff,
   Coins,
-  CreditCard,
   Download,
-  FileText,
+  Eye,
+  Loader2,
+  Palette,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PenLine,
   Plus,
-  Save,
   Sparkles,
-  Trash2,
+  Target,
   Wand2,
+  XCircle,
 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
-import { useMe, type Me } from "@/lib/journey";
+import { useMe } from "@/lib/journey";
 import { fmtTokens } from "@/lib/tokens";
 import { hzConfirm } from "./Dialogs";
 import { hzToast } from "./Toast";
 import { TokenTopUp } from "./TokenTopUp";
-import { Card, CardTitle, ErrorNote, Field, fmtDateTime, inputCls, Notice, Pill } from "./ui";
+import { ErrorNote, inputCls } from "./ui";
+import { atsScore, type Ats } from "./resume/ats";
+import {
+  blankCv,
+  filled,
+  forSave,
+  normalize,
+  SECTIONS,
+  type Cv,
+  type SectionKey,
+} from "./resume/model";
+import { ResumePage } from "./resume/Preview";
+import { SectionEditor } from "./resume/Sections";
 
-// AI résumé builder (Profile → AI résumé), ported from the development branch's CV builder. Each AI
-// draft is paid from the shared token wallet; editing, saving and the PDF are free.
-
-type Cv = {
-  full_name: string;
-  headline: string;
-  contact: { email: string; phone: string; location: string; links: string[] };
-  summary: string;
-  skills: string[];
-  experience: Array<{ title: string; organisation: string; period: string; bullets: string[] }>;
-  projects: Array<{ name: string; context: string; bullets: string[]; link: string }>;
-  education: Array<{ school: string; qualification: string; period: string }>;
-  certifications: Array<{ name: string; issuer: string; code: string; url: string }>;
-};
+// ATS résumé builder (Profile → ATS Resume Builder). Write: section by section with a live preview.
+// Tailor: paste a job post, see the ATS match and missing keywords, and redraft with AI (paid from
+// the token wallet). Design: template, colour and font. Editing, saving and the PDF are free.
 
 type CvState = {
-  cv: Cv | null;
+  cv: Partial<Cv> | null;
   target_role: string | null;
   generated_at: string | null;
-  updated_at: string | null;
   sources: {
     onboarding_passed: boolean;
     projects: number;
     portfolio_items: number;
     certified: boolean;
   };
-  generation_count: number;
   cost: number;
   balance: number;
   ai_enabled: boolean;
 };
 
-const blankCv = (me: Me): Cv => ({
-  full_name: me.profile.full_name ?? "",
-  headline: "",
-  contact: { email: me.user.email ?? "", phone: me.profile.phone ?? "", location: "", links: [] },
-  summary: me.profile.bio ?? "",
-  skills: [],
-  experience: [],
-  projects: [],
-  education: [],
-  certifications: [],
-});
+type Mode = "write" | "tailor" | "design";
+
+const MODES: Array<{ key: Mode; label: string; icon: typeof PenLine }> = [
+  { key: "write", label: "Write", icon: PenLine },
+  { key: "tailor", label: "Tailor", icon: Target },
+  { key: "design", label: "Design", icon: Palette },
+];
+
+const tone = (s: number) =>
+  s >= 75
+    ? "border-[color:var(--brand-green)]/50 bg-[color:var(--brand-green)]/15 text-[color:var(--brand-green-deep)] dark:text-[color:var(--brand-green)]"
+    : s >= 50
+      ? "border-[color:var(--gold)]/50 bg-[color:var(--gold)]/15 text-[color:var(--gold)]"
+      : "border-red-500/40 bg-red-500/10 text-red-500";
+
+const WIDTH_KEY = "hz-cv-preview-width";
 
 export function ResumeBuilder() {
   const { data: me } = useMe();
@@ -73,48 +83,70 @@ export function ResumeBuilder() {
     queryKey: ["cv"],
     queryFn: () => api<CvState>("/cv"),
   });
-  const [draft, setDraft] = useState<Cv | null>(null);
+  const [cv, setCv] = useState<Cv | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [mode, setMode] = useState<Mode>("write");
+  const [section, setSection] = useState<SectionKey>("personal");
+  const [railOpen, setRailOpen] = useState(true);
+  const [showPreview, setShowPreview] = useState(false);
   const [topUpOpen, setTopUpOpen] = useState(false);
-  const [targetRole, setTargetRole] = useState("");
-  const [background, setBackground] = useState("");
+  const [width, setWidth] = useState(() => {
+    try {
+      return Number(localStorage.getItem(WIDTH_KEY)) || 54;
+    } catch {
+      return 54;
+    }
+  });
 
   useEffect(() => {
-    if (data && !dirty) {
-      setDraft(data.cv);
-      setTargetRole((t) => t || data.target_role || "");
-    }
-  }, [data, dirty]);
+    if (data && me && !cv) setCv(data.cv ? normalize(data.cv) : blankCv(me));
+  }, [data, me, cv]);
 
   const edit = (next: Cv) => {
-    setDraft(next);
+    setCv(next);
     setDirty(true);
   };
 
   const save = useMutation({
-    mutationFn: (content: Cv) => api<{ cv: Cv }>("/cv", { method: "PUT", body: { content } }),
-    onSuccess: () => {
-      setDirty(false);
-      qc.invalidateQueries({ queryKey: ["cv"] });
-      hzToast.success("Résumé saved");
-    },
+    mutationFn: (content: Cv) =>
+      api<{ cv: Cv }>("/cv", { method: "PUT", body: { content: forSave(content) } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cv"] }),
   });
 
+  // Autosave 1.2s after the last change.
+  useEffect(() => {
+    if (!dirty || !cv) return;
+    const t = setTimeout(() => {
+      setDirty(false);
+      save.mutate(cv);
+    }, 1200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cv, dirty]);
+
   const generate = useMutation({
-    mutationFn: () =>
-      api<{ cv: Cv; balance: number; charged: number; engine: "ai" | "offline" }>("/cv/generate", {
-        body: { target_role: targetRole, background },
-      }),
+    mutationFn: (background: string) =>
+      api<{ cv: Partial<Cv>; balance: number; charged: number; engine: "ai" | "offline" }>(
+        "/cv/generate",
+        {
+          body: {
+            target_role: cv?.headline ?? "",
+            background,
+            job_description: cv?.job_description ?? "",
+          },
+        },
+      ),
     onSuccess: (r) => {
       setDirty(false);
-      setDraft(r.cv);
+      setCv(normalize(r.cv));
       qc.invalidateQueries({ queryKey: ["cv"] });
       qc.invalidateQueries({ queryKey: ["wallet"] });
+      setMode("write");
       hzToast.success(
         `Résumé drafted · −${r.charged} tokens`,
         r.engine === "ai"
-          ? "Written by AI from your verified work. Edit anything before you download."
-          : "Written from your verified records (AI key not connected yet). Edit anything before you download.",
+          ? "Written by AI from your verified work. Check every line before you send it."
+          : "Written from your verified records (AI isn't connected yet).",
       );
     },
     onError: (err) => {
@@ -123,170 +155,196 @@ export function ResumeBuilder() {
     },
   });
 
-  if (isLoading || !me) return <div className="skeleton h-96 rounded-2xl" />;
-  if (error || !data) return <ErrorNote error={error} />;
+  const ats = useMemo(() => (cv ? atsScore(cv) : null), [cv]);
 
-  const canAfford = data.balance >= data.cost;
-  const runGenerate = async () => {
-    if (!canAfford) return setTopUpOpen(true);
-    const ok = await hzConfirm({
-      title: draft
-        ? `Redraft your résumé for ${data.cost} tokens?`
-        : `Draft your résumé for ${data.cost} tokens?`,
-      body: draft
-        ? "This replaces the current text. Your contact details and links are kept. If anything goes wrong, the tokens are refunded."
-        : `${fmtTokens(data.cost)} tokens come from your balance of ${fmtTokens(data.balance)}. If anything goes wrong, they're refunded.`,
-      confirmLabel: `Use ${data.cost} tokens`,
-    });
-    if (ok) generate.mutate();
+  if (isLoading || !me || (data && !cv)) return <div className="skeleton h-[640px] rounded-3xl" />;
+  if (error || !data || !cv || !ats) return <ErrorNote error={error} />;
+
+  const setPreviewWidth = (v: number) => {
+    setWidth(v);
+    try {
+      localStorage.setItem(WIDTH_KEY, String(v));
+    } catch {
+      /* ignore */
+    }
   };
 
+  const runAi = async (background: string) => {
+    if (data.balance < data.cost) return setTopUpOpen(true);
+    const ok = await hzConfirm({
+      title: `Redraft your résumé for ${data.cost} tokens?`,
+      body: "AI rewrites your headline, summary, skills and bullets from your verified work (and the job post, if you added one). Your contact details, links and other sections are kept. If anything goes wrong, the tokens are refunded.",
+      confirmLabel: `Use ${data.cost} tokens`,
+    });
+    if (ok) generate.mutate(background);
+  };
+
+  const download = () => {
+    if (dirty) save.mutate(cv);
+    window.print();
+  };
+
+  const status = save.isPending ? (
+    <>
+      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…
+    </>
+  ) : save.isError ? (
+    <button onClick={() => save.mutate(cv)} className="flex items-center gap-1 text-red-500">
+      <CloudOff className="h-3.5 w-3.5" /> Not saved · retry
+    </button>
+  ) : (
+    <>
+      <Cloud className="h-3.5 w-3.5" /> {dirty ? "Editing…" : "Saved"}
+    </>
+  );
+
+  const current = SECTIONS.find((s) => s.key === section)!;
+
   return (
-    <div className="flex w-full flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-        <p className="max-w-xl text-sm text-muted-foreground">
-          AI drafts your résumé from your verified tests, team projects and certificate. Each draft
-          costs <b className="text-foreground">{data.cost} tokens</b>; editing and downloading are
-          free.
-        </p>
-        <WalletPill balance={data.balance} onTopUp={() => setTopUpOpen(true)} />
+    <div className="flex w-full flex-col gap-4">
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-3 print:hidden">
+        <div className="flex rounded-full border border-border bg-muted/50 p-1" role="tablist">
+          {MODES.map((m) => {
+            const Icon = m.icon;
+            const on = mode === m.key;
+            return (
+              <button
+                key={m.key}
+                role="tab"
+                aria-selected={on}
+                onClick={() => setMode(m.key)}
+                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold transition-all duration-300 ${on ? "bg-primary text-primary-foreground shadow-[0_6px_20px_-8px_var(--primary)]" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <Icon className="h-4 w-4" /> {m.label}
+              </button>
+            );
+          })}
+        </div>
+        <label className="hidden items-center gap-3 rounded-full border border-border bg-muted/50 px-4 py-2 text-xs font-bold lg:flex">
+          Preview width
+          <input
+            type="range"
+            min={32}
+            max={62}
+            value={width}
+            onChange={(e) => setPreviewWidth(Number(e.target.value))}
+            className="w-28 accent-[color:var(--primary)]"
+          />
+          <span className="w-9 text-primary">{width}%</span>
+        </label>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">{status}</span>
+          <button
+            onClick={() => setMode("tailor")}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold ${tone(ats.score)}`}
+            title="See what the ATS check found"
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" /> {ats.score}%{" "}
+            {ats.mode === "match" ? "ATS match" : "ATS ready"}
+          </button>
+          <button
+            onClick={() => setShowPreview((v) => !v)}
+            className="btn-duo-outline !py-1.5 !px-3 text-xs lg:hidden"
+          >
+            <Eye className="h-3.5 w-3.5" /> {showPreview ? "Edit" : "Preview"}
+          </button>
+          <button onClick={download} className="btn-duo !py-1.5 !px-4 text-xs">
+            <Download className="h-3.5 w-3.5" /> Download PDF
+          </button>
+        </div>
       </div>
 
-      <div className="grid gap-6 print:block lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-        <div className="flex flex-col gap-6 print:hidden">
-          <Card>
-            <CardTitle
-              icon={Wand2}
-              aside={
-                <Pill tone="gold">
-                  <Coins className="h-3 w-3" /> {data.cost} tokens
-                </Pill>
-              }
+      <div
+        className="grid gap-4 print:block lg:[grid-template-columns:var(--cols)]"
+        style={{ ["--cols" as string]: `minmax(0,1fr) ${width}%` }}
+      >
+        {/* Left: the active mode */}
+        <div className={`min-w-0 print:hidden ${showPreview ? "hidden lg:block" : ""}`}>
+          {mode === "write" && (
+            <div
+              className="grid gap-4 md:[grid-template-columns:var(--rail)_minmax(0,1fr)]"
+              style={{ ["--rail" as string]: railOpen ? "200px" : "56px" }}
             >
-              {draft ? "Redraft with AI" : "Draft with AI"}
-            </CardTitle>
-            <Sources sources={data.sources} />
-            <div className="mt-4 flex flex-col gap-3">
-              <Field
-                label="Job you're applying for"
-                hint="Optional. The AI tailors the headline and skills to it."
+              <nav
+                aria-label="Résumé sections"
+                className="card-duo flex gap-1 overflow-x-auto p-2 md:flex-col md:self-start md:overflow-visible"
               >
-                <input
-                  className={inputCls}
-                  value={targetRole}
-                  maxLength={120}
-                  onChange={(e) => setTargetRole(e.target.value)}
-                  placeholder="e.g. Junior Frontend Engineer"
-                />
-              </Field>
-              <Field
-                label="Anything else to include"
-                hint="Education, past jobs, volunteering, tools you know. The AI only uses facts you give it."
-              >
-                <textarea
-                  className={`${inputCls} min-h-24`}
-                  value={background}
-                  maxLength={3000}
-                  onChange={(e) => setBackground(e.target.value)}
-                  placeholder="BSc Computer Science, University of Lagos, 2022–2026…"
-                />
-              </Field>
-            </div>
-            {!data.ai_enabled && (
-              <div className="mt-3">
-                <Notice>
-                  Offline mode: until the AI key is connected, drafts are written from your verified
-                  records and the notes above. Nothing is invented.
-                </Notice>
-              </div>
-            )}
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => void runGenerate()}
-                disabled={generate.isPending}
-                className="btn-duo !py-2 !px-4 text-sm"
-              >
-                <Sparkles className="h-4 w-4" />
-                {generate.isPending
-                  ? "Writing your résumé…"
-                  : `${draft ? "Redraft" : "Draft my résumé"} · ${data.cost} tokens`}
-              </button>
-              {!draft && (
-                <button
-                  onClick={() => edit(blankCv(me))}
-                  className="btn-duo-outline !py-2 !px-4 text-sm"
-                >
-                  <FileText className="h-4 w-4" /> Start from scratch (free)
-                </button>
-              )}
-            </div>
-            {!canAfford && (
-              <p className="mt-2 text-xs font-semibold text-[color:var(--fire)]">
-                You have {fmtTokens(data.balance)} tokens. Top up to draft with AI.
-              </p>
-            )}
-            {generate.error &&
-              !(
-                generate.error instanceof ApiError && generate.error.code === "INSUFFICIENT_TOKENS"
-              ) && <ErrorNote error={generate.error} />}
-          </Card>
-
-          {draft && (
-            <Card>
-              <CardTitle
-                icon={FileText}
-                aside={
+                <div className="hidden items-center justify-between px-2 pb-1 pt-1 md:flex">
+                  {railOpen && (
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                      Sections
+                    </span>
+                  )}
                   <button
-                    onClick={() => save.mutate(draft)}
-                    disabled={!dirty || save.isPending}
-                    className="btn-duo !py-1.5 !px-3 text-xs"
+                    onClick={() => setRailOpen((v) => !v)}
+                    aria-label={railOpen ? "Collapse sections" : "Expand sections"}
+                    className="grid h-7 w-7 place-items-center rounded-lg text-muted-foreground hover:bg-muted"
                   >
-                    <Save className="h-3.5 w-3.5" />{" "}
-                    {save.isPending ? "Saving…" : dirty ? "Save" : "Saved"}
+                    {railOpen ? (
+                      <PanelLeftClose className="h-4 w-4" />
+                    ) : (
+                      <PanelLeftOpen className="h-4 w-4" />
+                    )}
                   </button>
-                }
-              >
-                Edit
-              </CardTitle>
-              <Editor cv={draft} onChange={edit} />
-              <ErrorNote error={save.error} />
-            </Card>
+                </div>
+                {SECTIONS.map((s, i) => {
+                  const on = s.key === section;
+                  const done = filled(cv, s.key);
+                  return (
+                    <button
+                      key={s.key}
+                      onClick={() => setSection(s.key)}
+                      title={s.label}
+                      className={`group relative flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold transition-colors ${on ? "bg-primary/10 text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+                    >
+                      <span className={`flex-1 whitespace-nowrap ${railOpen ? "" : "md:hidden"}`}>
+                        {s.label}
+                      </span>
+                      <span className="relative flex h-4 w-4 items-center justify-center">
+                        {i < SECTIONS.length - 1 && (
+                          <span className="absolute left-1/2 top-3 hidden h-[26px] w-px -translate-x-1/2 bg-border md:block" />
+                        )}
+                        <span
+                          className={`relative h-2.5 w-2.5 rounded-full transition-all duration-300 ${on ? "scale-125 bg-white ring-2 ring-primary" : done ? "bg-[color:var(--brand-green)] shadow-[0_0_8px_var(--brand-green)]" : "bg-muted-foreground/30"}`}
+                        />
+                      </span>
+                    </button>
+                  );
+                })}
+              </nav>
+              <section key={section} className="hz-page card-duo flex flex-col gap-4 p-5 md:p-6">
+                <div>
+                  <h2 className="font-display text-2xl font-bold">{current.label}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">{current.hint}</p>
+                </div>
+                <SectionEditor key={section} section={section} cv={cv} onChange={edit} />
+                <SectionNav section={section} onGo={setSection} />
+              </section>
+            </div>
           )}
+          {mode === "tailor" && (
+            <TailorPanel
+              cv={cv}
+              ats={ats}
+              state={data}
+              onChange={edit}
+              onAi={(bg) => void runAi(bg)}
+              busy={generate.isPending}
+              error={generate.error}
+              onTopUp={() => setTopUpOpen(true)}
+            />
+          )}
+          {mode === "design" && <DesignPanel cv={cv} onChange={edit} />}
         </div>
 
-        <div className="flex flex-col gap-3 print:block">
-          {draft ? (
-            <>
-              <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
-                <span className="text-xs text-muted-foreground">
-                  {data.generated_at
-                    ? `Last AI draft ${fmtDateTime(data.generated_at)}`
-                    : "Preview"}
-                  {dirty && " · unsaved changes"}
-                </span>
-                <button
-                  onClick={() => {
-                    if (dirty) save.mutate(draft);
-                    window.print();
-                  }}
-                  className="btn-duo-outline !py-1.5 !px-3 text-xs"
-                >
-                  <Download className="h-3.5 w-3.5" /> Download PDF
-                </button>
-              </div>
-              <CvPreview cv={draft} />
-            </>
-          ) : (
-            <Card className="print:hidden">
-              <div className="flex flex-col items-center gap-2 py-16 text-center">
-                <FileText className="h-10 w-10 text-muted-foreground opacity-60" />
-                <p className="font-display text-sm font-bold">Your résumé preview appears here</p>
-                <p className="max-w-xs text-xs text-muted-foreground">
-                  Generate a draft with AI or start from scratch.
-                </p>
-              </div>
-            </Card>
-          )}
+        {/* Right: live preview (also what prints) */}
+        <div className={`min-w-0 print:block ${showPreview ? "" : "hidden lg:block"}`}>
+          <div className="lg:sticky lg:top-24">
+            <div className="max-h-none rounded-3xl bg-muted/40 p-3 print:bg-transparent print:p-0 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
+              <ResumePage cv={cv} />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -295,527 +353,395 @@ export function ResumeBuilder() {
   );
 }
 
-function WalletPill({ balance, onTopUp }: { balance: number; onTopUp: () => void }) {
+function SectionNav({ section, onGo }: { section: SectionKey; onGo: (s: SectionKey) => void }) {
+  const i = SECTIONS.findIndex((s) => s.key === section);
+  const prev = SECTIONS[i - 1];
+  const next = SECTIONS[i + 1];
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-[color:var(--gold)]/40 bg-[color:var(--gold)]/10 py-2 pl-3 pr-2">
-      <div className="grid h-9 w-9 place-items-center rounded-xl bg-[color:var(--gold)]/20 text-[color:var(--gold)]">
-        <Coins className="h-5 w-5" />
-      </div>
-      <div>
-        <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-          Token balance
-        </div>
-        <div className="font-display text-lg font-bold leading-tight">{fmtTokens(balance)}</div>
-      </div>
-      <button onClick={onTopUp} className="btn-duo !py-1.5 !px-3 text-xs">
-        <CreditCard className="h-3.5 w-3.5" /> Top up
-      </button>
+    <div className="mt-2 flex items-center justify-between border-t border-border pt-4">
+      {prev ? (
+        <button onClick={() => onGo(prev.key)} className="btn-duo-outline !py-2 !px-4 text-xs">
+          ← {prev.label}
+        </button>
+      ) : (
+        <span />
+      )}
+      {next && (
+        <button onClick={() => onGo(next.key)} className="btn-duo !py-2 !px-4 text-xs">
+          Next: {next.label} →
+        </button>
+      )}
     </div>
   );
 }
 
-function Sources({ sources }: { sources: CvState["sources"] }) {
-  const items = [
-    { ok: sources.onboarding_passed, label: "Onboarding tests passed" },
+function TailorPanel({
+  cv,
+  ats,
+  state,
+  onChange,
+  onAi,
+  busy,
+  error,
+  onTopUp,
+}: {
+  cv: Cv;
+  ats: Ats;
+  state: CvState;
+  onChange: (cv: Cv) => void;
+  onAi: (background: string) => void;
+  busy: boolean;
+  error: unknown;
+  onTopUp: () => void;
+}) {
+  const [background, setBackground] = useState("");
+  const input = inputCls.replace("px-4 py-3 text-base", "px-3.5 py-2.5 text-sm");
+  const addSkill = (k: string) => {
+    const label = k.replace(/\b\w/g, (c) => c.toUpperCase());
+    if (!cv.skills.some((s) => s.toLowerCase() === k))
+      onChange({ ...cv, skills: [...cv.skills, label].slice(0, 30) });
+  };
+  const s = state.sources;
+  const sources = [
+    { ok: s.onboarding_passed, label: "Onboarding tests passed" },
     {
-      ok: sources.projects > 0,
-      label: `${sources.projects} team project${sources.projects === 1 ? "" : "s"} graded`,
+      ok: s.projects > 0,
+      label: `${s.projects} team project${s.projects === 1 ? "" : "s"} graded`,
     },
     {
-      ok: sources.portfolio_items > 0,
-      label: `${sources.portfolio_items} portfolio item${sources.portfolio_items === 1 ? "" : "s"}`,
+      ok: s.portfolio_items > 0,
+      label: `${s.portfolio_items} portfolio item${s.portfolio_items === 1 ? "" : "s"}`,
     },
-    { ok: sources.certified, label: "Certificate issued" },
+    { ok: s.certified, label: "Certificate issued" },
   ];
   return (
-    <div>
-      <div className="mb-2 text-xs font-semibold text-muted-foreground">What the AI will use</div>
-      <ul className="grid gap-1.5 sm:grid-cols-2">
-        {items.map((i) => (
-          <li key={i.label} className="flex items-center gap-2 text-sm">
-            {i.ok ? (
-              <CheckCircle2 className="h-4 w-4 text-primary" />
-            ) : (
-              <Circle className="h-4 w-4 text-muted-foreground" />
-            )}
-            <span className={i.ok ? "" : "text-muted-foreground"}>{i.label}</span>
-          </li>
-        ))}
-      </ul>
-      {!sources.onboarding_passed && sources.projects === 0 && (
-        <p className="mt-2 text-xs text-muted-foreground">
-          You don't have verified work yet, so the draft will lean on what you write below. It gets
-          stronger as you finish{" "}
-          <Link to="/tests" className="font-bold text-primary">
-            tests
-          </Link>{" "}
-          and projects.
-        </p>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Editor
-// ---------------------------------------------------------------------------
-const lines = (s: string) =>
-  s
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
-
-function Section({
-  title,
-  onAdd,
-  children,
-}: {
-  title: string;
-  onAdd?: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <div className="border-t border-border pt-4 first:border-t-0 first:pt-0">
-      <div className="mb-2 flex items-center justify-between">
-        <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-          {title}
+    <div className="hz-page flex flex-col gap-4">
+      <section className="card-duo flex flex-col gap-4 p-5 md:p-6">
+        <div>
+          <h2 className="font-display text-2xl font-bold">Tailor to a job</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Paste the job post. We compare it with your résumé the way an applicant tracking system
+            would, and show which keywords are missing.
+          </p>
         </div>
-        {onAdd && (
-          <button
-            onClick={onAdd}
-            className="inline-flex items-center gap-1 text-xs font-bold text-primary"
-          >
-            <Plus className="h-3.5 w-3.5" /> Add
-          </button>
-        )}
-      </div>
-      <div className="flex flex-col gap-3">{children}</div>
-    </div>
-  );
-}
-
-function EntryBox({ onRemove, children }: { onRemove: () => void; children: ReactNode }) {
-  return (
-    <div className="relative flex flex-col gap-2 rounded-xl border border-border p-3 pr-10">
-      <button
-        onClick={onRemove}
-        aria-label="Remove"
-        className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full text-muted-foreground hover:bg-red-500/10 hover:text-red-500"
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </button>
-      {children}
-    </div>
-  );
-}
-
-const smallInput = inputCls.replace("px-4 py-3 text-base", "px-3 py-2 text-sm");
-
-function Editor({ cv, onChange }: { cv: Cv; onChange: (cv: Cv) => void }) {
-  const set = <K extends keyof Cv>(k: K, v: Cv[K]) => onChange({ ...cv, [k]: v });
-  const setAt = <K extends "experience" | "projects" | "education" | "certifications">(
-    k: K,
-    i: number,
-    patch: Partial<Cv[K][number]>,
-  ) => set(k, cv[k].map((e, j) => (j === i ? { ...e, ...patch } : e)) as Cv[K]);
-  const removeAt = <K extends "experience" | "projects" | "education" | "certifications">(
-    k: K,
-    i: number,
-  ) => set(k, cv[k].filter((_, j) => j !== i) as Cv[K]);
-
-  return (
-    <div className="flex flex-col gap-4">
-      <Section title="Basics">
-        <input
-          className={smallInput}
-          value={cv.full_name}
-          maxLength={80}
-          onChange={(e) => set("full_name", e.target.value)}
-          placeholder="Full name"
-        />
-        <input
-          className={smallInput}
-          value={cv.headline}
-          maxLength={160}
-          onChange={(e) => set("headline", e.target.value)}
-          placeholder="Headline"
-        />
-        <div className="grid gap-2 sm:grid-cols-3">
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold text-muted-foreground">
+            Job title you're applying for
+          </span>
           <input
-            className={smallInput}
-            value={cv.contact.email}
-            maxLength={120}
-            onChange={(e) => set("contact", { ...cv.contact, email: e.target.value })}
-            placeholder="Email"
+            className={input}
+            value={cv.headline}
+            maxLength={160}
+            onChange={(e) => onChange({ ...cv, headline: e.target.value })}
           />
-          <input
-            className={smallInput}
-            value={cv.contact.phone}
-            maxLength={30}
-            onChange={(e) => set("contact", { ...cv.contact, phone: e.target.value })}
-            placeholder="Phone"
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold text-muted-foreground">Job description</span>
+          <textarea
+            className={input}
+            rows={7}
+            maxLength={8000}
+            value={cv.job_description}
+            placeholder="Paste the full job post here…"
+            onChange={(e) => onChange({ ...cv, job_description: e.target.value })}
           />
-          <input
-            className={smallInput}
-            value={cv.contact.location}
-            maxLength={80}
-            onChange={(e) => set("contact", { ...cv.contact, location: e.target.value })}
-            placeholder="City"
-          />
+        </label>
+      </section>
+
+      <section className="card-duo flex flex-col gap-4 p-5 md:p-6">
+        <div className="flex items-center gap-4">
+          <ScoreRing score={ats.score} />
+          <div>
+            <div className="font-display text-lg font-bold">
+              {ats.mode === "match" ? "ATS match" : "ATS readiness"}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {ats.mode === "match"
+                ? `${ats.matched.length} of ${ats.matched.length + ats.missing.length} key terms from the job post appear in your résumé.`
+                : "Paste a job description above to see your keyword match."}
+            </p>
+          </div>
         </div>
-        <textarea
-          className={`${smallInput} min-h-16`}
-          value={cv.contact.links.join("\n")}
-          onChange={(e) =>
-            set("contact", { ...cv.contact, links: e.target.value.split("\n").slice(0, 6) })
-          }
-          onBlur={(e) =>
-            set("contact", { ...cv.contact, links: lines(e.target.value).slice(0, 6) })
-          }
-          placeholder="Links, one per line (portfolio, GitHub, LinkedIn)"
-        />
-      </Section>
-
-      <Section title="Summary">
-        <textarea
-          className={`${smallInput} min-h-24`}
-          value={cv.summary}
-          maxLength={1200}
-          onChange={(e) => set("summary", e.target.value)}
-        />
-      </Section>
-
-      <Section title="Skills">
-        <input
-          className={smallInput}
-          value={cv.skills.join(", ")}
-          onChange={(e) =>
-            set(
-              "skills",
-              e.target.value
-                .split(",")
-                .map((s) => s.trimStart())
-                .slice(0, 30),
-            )
-          }
-          onBlur={(e) =>
-            set(
-              "skills",
-              e.target.value
-                .split(",")
-                .map((s) => s.trim())
-                .filter(Boolean)
-                .slice(0, 30),
-            )
-          }
-          placeholder="Comma-separated"
-        />
-      </Section>
-
-      <Section
-        title="Experience"
-        onAdd={() =>
-          set("experience", [
-            ...cv.experience,
-            { title: "", organisation: "", period: "", bullets: [] },
-          ])
-        }
-      >
-        {cv.experience.map((e, i) => (
-          <EntryBox key={i} onRemove={() => removeAt("experience", i)}>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <input
-                className={smallInput}
-                value={e.title}
-                maxLength={120}
-                onChange={(ev) => setAt("experience", i, { title: ev.target.value })}
-                placeholder="Title"
-              />
-              <input
-                className={smallInput}
-                value={e.organisation}
-                maxLength={120}
-                onChange={(ev) => setAt("experience", i, { organisation: ev.target.value })}
-                placeholder="Organisation"
-              />
-            </div>
-            <input
-              className={smallInput}
-              value={e.period}
-              maxLength={60}
-              onChange={(ev) => setAt("experience", i, { period: ev.target.value })}
-              placeholder="Period, e.g. Jan 2026 – Present"
-            />
-            <BulletsInput
-              value={e.bullets}
-              onChange={(b) => setAt("experience", i, { bullets: b })}
-            />
-          </EntryBox>
-        ))}
-      </Section>
-
-      <Section
-        title="Projects"
-        onAdd={() =>
-          set("projects", [...cv.projects, { name: "", context: "", bullets: [], link: "" }])
-        }
-      >
-        {cv.projects.map((p, i) => (
-          <EntryBox key={i} onRemove={() => removeAt("projects", i)}>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <input
-                className={smallInput}
-                value={p.name}
-                maxLength={120}
-                onChange={(ev) => setAt("projects", i, { name: ev.target.value })}
-                placeholder="Project name"
-              />
-              <input
-                className={smallInput}
-                value={p.context}
-                maxLength={200}
-                onChange={(ev) => setAt("projects", i, { context: ev.target.value })}
-                placeholder="Context"
-              />
-            </div>
-            <input
-              className={smallInput}
-              value={p.link}
-              maxLength={200}
-              onChange={(ev) => setAt("projects", i, { link: ev.target.value })}
-              placeholder="Link (optional)"
-            />
-            <BulletsInput
-              value={p.bullets}
-              onChange={(b) => setAt("projects", i, { bullets: b })}
-            />
-          </EntryBox>
-        ))}
-      </Section>
-
-      <Section
-        title="Education"
-        onAdd={() =>
-          set("education", [...cv.education, { school: "", qualification: "", period: "" }])
-        }
-      >
-        {cv.education.map((e, i) => (
-          <EntryBox key={i} onRemove={() => removeAt("education", i)}>
-            <input
-              className={smallInput}
-              value={e.school}
-              maxLength={120}
-              onChange={(ev) => setAt("education", i, { school: ev.target.value })}
-              placeholder="School"
-            />
-            <div className="grid gap-2 sm:grid-cols-2">
-              <input
-                className={smallInput}
-                value={e.qualification}
-                maxLength={120}
-                onChange={(ev) => setAt("education", i, { qualification: ev.target.value })}
-                placeholder="Qualification"
-              />
-              <input
-                className={smallInput}
-                value={e.period}
-                maxLength={60}
-                onChange={(ev) => setAt("education", i, { period: ev.target.value })}
-                placeholder="Period"
-              />
-            </div>
-          </EntryBox>
-        ))}
-      </Section>
-
-      <Section
-        title="Certifications"
-        onAdd={() =>
-          set("certifications", [...cv.certifications, { name: "", issuer: "", code: "", url: "" }])
-        }
-      >
-        {cv.certifications.map((c, i) => (
-          <EntryBox key={i} onRemove={() => removeAt("certifications", i)}>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <input
-                className={smallInput}
-                value={c.name}
-                maxLength={160}
-                onChange={(ev) => setAt("certifications", i, { name: ev.target.value })}
-                placeholder="Name"
-              />
-              <input
-                className={smallInput}
-                value={c.issuer}
-                maxLength={80}
-                onChange={(ev) => setAt("certifications", i, { issuer: ev.target.value })}
-                placeholder="Issuer"
-              />
-            </div>
-            <input
-              className={smallInput}
-              value={c.url}
-              maxLength={200}
-              onChange={(ev) => setAt("certifications", i, { url: ev.target.value })}
-              placeholder="Verification link (optional)"
-            />
-          </EntryBox>
-        ))}
-      </Section>
-    </div>
-  );
-}
-
-/** One bullet per line; keeps the raw text while typing so blank lines don't vanish mid-edit. */
-function BulletsInput({ value, onChange }: { value: string[]; onChange: (b: string[]) => void }) {
-  const [text, setText] = useState(value.join("\n"));
-  useEffect(() => {
-    if (lines(text).join("\n") !== value.join("\n")) setText(value.join("\n"));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
-  return (
-    <textarea
-      className={`${smallInput} min-h-20`}
-      value={text}
-      onChange={(e) => {
-        setText(e.target.value);
-        onChange(
-          lines(e.target.value)
-            .slice(0, 10)
-            .map((l) => l.slice(0, 300)),
-        );
-      }}
-      placeholder="Achievements, one per line"
-    />
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Preview (also the printed PDF: fixed light colours regardless of theme)
-// ---------------------------------------------------------------------------
-function CvPreview({ cv }: { cv: Cv }) {
-  const contact = [
-    cv.contact.email,
-    cv.contact.phone,
-    cv.contact.location,
-    ...cv.contact.links,
-  ].filter(Boolean);
-  const H = ({ children }: { children: ReactNode }) => (
-    <h3 className="mb-1.5 mt-5 border-b border-neutral-300 pb-1 text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-600">
-      {children}
-    </h3>
-  );
-  return (
-    <article
-      id="cv-print"
-      className="rounded-2xl border border-border bg-white p-8 text-[13px] leading-relaxed text-neutral-900 shadow-sm print:rounded-none print:border-0 print:p-0 print:shadow-none"
-    >
-      <header>
-        <h2 className="text-2xl font-bold tracking-tight text-neutral-950">
-          {cv.full_name || "Your name"}
-        </h2>
-        {cv.headline && (
-          <p className="mt-0.5 text-sm font-semibold text-neutral-700">{cv.headline}</p>
-        )}
-        {contact.length > 0 && (
-          <p className="mt-1.5 break-words text-xs text-neutral-600">{contact.join("  ·  ")}</p>
-        )}
-      </header>
-
-      {cv.summary && (
-        <>
-          <H>Summary</H>
-          <p className="whitespace-pre-line">{cv.summary}</p>
-        </>
-      )}
-
-      {cv.skills.filter(Boolean).length > 0 && (
-        <>
-          <H>Skills</H>
-          <p>{cv.skills.filter(Boolean).join(" · ")}</p>
-        </>
-      )}
-
-      {cv.experience.length > 0 && (
-        <>
-          <H>Experience</H>
-          {cv.experience.map((e, i) => (
-            <div key={i} className="mb-3 break-inside-avoid">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                <span className="font-bold">
-                  {e.title}
-                  {e.organisation && (
-                    <span className="font-normal text-neutral-700"> — {e.organisation}</span>
-                  )}
-                </span>
-                <span className="text-xs text-neutral-500">{e.period}</span>
+        {ats.mode === "match" && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <div className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                Missing: tap to add as a skill
               </div>
-              <Bullets items={e.bullets} />
-            </div>
-          ))}
-        </>
-      )}
-
-      {cv.projects.length > 0 && (
-        <>
-          <H>Projects</H>
-          {cv.projects.map((p, i) => (
-            <div key={i} className="mb-3 break-inside-avoid">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                <span className="font-bold">
-                  {p.name}
-                  {p.context && (
-                    <span className="font-normal text-neutral-700"> — {p.context}</span>
-                  )}
-                </span>
-                {p.link && <span className="break-all text-xs text-neutral-500">{p.link}</span>}
+              <div className="flex flex-wrap gap-1.5">
+                {ats.missing.length === 0 && (
+                  <span className="text-sm text-muted-foreground">Nothing missing.</span>
+                )}
+                {ats.missing.map((k) => (
+                  <button
+                    key={k}
+                    onClick={() => addSkill(k)}
+                    className="inline-flex items-center gap-1 rounded-full border border-dashed border-[color:var(--gold)]/60 px-2.5 py-1 text-xs font-semibold text-[color:var(--gold)] hover:bg-[color:var(--gold)]/10"
+                  >
+                    <Plus className="h-3 w-3" /> {k}
+                  </button>
+                ))}
               </div>
-              <Bullets items={p.bullets} />
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Only add what you can actually show. Interviewers will ask.
+              </p>
             </div>
-          ))}
-        </>
-      )}
-
-      {cv.education.length > 0 && (
-        <>
-          <H>Education</H>
-          {cv.education.map((e, i) => (
-            <div key={i} className="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-3">
-              <span>
-                <b>{e.school}</b>
-                {e.qualification && <span className="text-neutral-700"> — {e.qualification}</span>}
-              </span>
-              <span className="text-xs text-neutral-500">{e.period}</span>
+            <div>
+              <div className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                Found
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {ats.matched.map((k) => (
+                  <span
+                    key={k}
+                    className="rounded-full bg-[color:var(--brand-green)]/15 px-2.5 py-1 text-xs font-semibold text-[color:var(--brand-green-deep)] dark:text-[color:var(--brand-green)]"
+                  >
+                    {k}
+                  </span>
+                ))}
+              </div>
             </div>
-          ))}
-        </>
-      )}
-
-      {cv.certifications.length > 0 && (
-        <>
-          <H>Certifications</H>
-          {cv.certifications.map((c, i) => (
-            <div key={i} className="mb-1.5">
-              <b>{c.name}</b>
-              {c.issuer && <span className="text-neutral-700"> — {c.issuer}</span>}
-              {c.url && (
-                <span className="block break-all text-xs text-neutral-500">Verify: {c.url}</span>
+          </div>
+        )}
+        <ul className="grid gap-1.5 sm:grid-cols-2">
+          {ats.checks.map((c) => (
+            <li
+              key={c.label}
+              className="flex items-start gap-2 text-sm"
+              title={c.ok ? undefined : c.tip}
+            >
+              {c.ok ? (
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--brand-green)]" />
+              ) : (
+                <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
               )}
-            </div>
+              <span>
+                <span className={c.ok ? "" : "text-muted-foreground"}>{c.label}</span>
+                {!c.ok && <span className="block text-[11px] text-muted-foreground">{c.tip}</span>}
+              </span>
+            </li>
           ))}
-        </>
-      )}
-    </article>
+        </ul>
+      </section>
+
+      <section className="card-duo flex flex-col gap-4 p-5 md:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 font-display text-lg font-bold">
+            <Wand2 className="h-5 w-5 text-primary" /> Redraft with AI
+          </div>
+          <span className="inline-flex items-center gap-1 rounded-full border border-[color:var(--gold)]/40 bg-[color:var(--gold)]/10 px-2.5 py-1 text-xs font-bold text-[color:var(--gold)]">
+            <Coins className="h-3.5 w-3.5" /> {state.cost} tokens · you have{" "}
+            {fmtTokens(state.balance)}
+          </span>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          AI writes your headline, summary, skills and bullets from your verified Huzzler work
+          {cv.job_description.trim() ? ", tailored to the job post above" : ""}. It never invents
+          employers or skills.
+        </p>
+        <ul className="grid gap-1.5 sm:grid-cols-2">
+          {sources.map((i) => (
+            <li key={i.label} className="flex items-center gap-2 text-sm">
+              {i.ok ? (
+                <CheckCircle2 className="h-4 w-4 text-primary" />
+              ) : (
+                <Circle className="h-4 w-4 text-muted-foreground" />
+              )}
+              <span className={i.ok ? "" : "text-muted-foreground"}>{i.label}</span>
+            </li>
+          ))}
+        </ul>
+        {!s.onboarding_passed && s.projects === 0 && (
+          <p className="text-xs text-muted-foreground">
+            No verified work yet, so the draft leans on your notes below. It gets stronger as you
+            finish{" "}
+            <Link to="/tests" className="font-bold text-primary">
+              tests
+            </Link>{" "}
+            and projects.
+          </p>
+        )}
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold text-muted-foreground">
+            Anything else to include (optional)
+          </span>
+          <textarea
+            className={input}
+            rows={3}
+            maxLength={3000}
+            value={background}
+            onChange={(e) => setBackground(e.target.value)}
+            placeholder="Past jobs, volunteering, tools you know. The AI only uses facts you give it."
+          />
+        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => onAi(background)}
+            disabled={busy}
+            className="btn-duo !py-2 !px-4 text-sm"
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {busy ? "Writing your résumé…" : `Redraft · ${state.cost} tokens`}
+          </button>
+          {state.balance < state.cost && (
+            <button onClick={onTopUp} className="btn-duo-outline !py-2 !px-4 text-sm">
+              <Coins className="h-4 w-4" /> Top up tokens
+            </button>
+          )}
+        </div>
+        {!(error instanceof ApiError && error.code === "INSUFFICIENT_TOKENS") && (
+          <ErrorNote error={error} />
+        )}
+      </section>
+    </div>
   );
 }
 
-function Bullets({ items }: { items: string[] }) {
-  if (!items.length) return null;
+function ScoreRing({ score }: { score: number }) {
+  const r = 26;
+  const c = 2 * Math.PI * r;
+  const color = score >= 75 ? "var(--brand-green)" : score >= 50 ? "var(--gold)" : "#ef4444";
   return (
-    <ul className="mt-1 list-disc space-y-0.5 pl-5">
-      {items.map((b, i) => (
-        <li key={i}>{b}</li>
-      ))}
-    </ul>
+    <div className="relative grid h-16 w-16 shrink-0 place-items-center">
+      <svg viewBox="0 0 64 64" className="absolute inset-0 -rotate-90">
+        <circle
+          cx="32"
+          cy="32"
+          r={r}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="6"
+          className="text-muted"
+        />
+        <circle
+          cx="32"
+          cy="32"
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth="6"
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={c * (1 - score / 100)}
+          style={{ transition: "stroke-dashoffset 0.6s cubic-bezier(0.22,1,0.36,1)" }}
+        />
+      </svg>
+      <span className="font-display text-base font-bold">{score}%</span>
+    </div>
+  );
+}
+
+const ACCENTS = [
+  "#4f46e5",
+  "#0ea5e9",
+  "#0f766e",
+  "#16a34a",
+  "#b45309",
+  "#be123c",
+  "#7c3aed",
+  "#111827",
+];
+const TEMPLATES: Array<{ key: Cv["design"]["template"]; label: string; note: string }> = [
+  { key: "modern", label: "Modern", note: "Colour name and headings" },
+  { key: "classic", label: "Classic", note: "Centred, traditional" },
+  { key: "compact", label: "Compact", note: "Fits more on one page" },
+];
+
+function DesignPanel({ cv, onChange }: { cv: Cv; onChange: (cv: Cv) => void }) {
+  const d = cv.design;
+  const set = (patch: Partial<Cv["design"]>) => onChange({ ...cv, design: { ...d, ...patch } });
+  return (
+    <section className="hz-page card-duo flex flex-col gap-6 p-5 md:p-6">
+      <div>
+        <h2 className="font-display text-2xl font-bold">Design</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Every template is single-column with standard headings, so applicant tracking systems read
+          it correctly.
+        </p>
+      </div>
+      <div>
+        <div className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+          Template
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {TEMPLATES.map((t) => {
+            const on = d.template === t.key;
+            return (
+              <button
+                key={t.key}
+                onClick={() => set({ template: t.key })}
+                className={`flex flex-col gap-2 rounded-2xl border p-3 text-left transition-all ${on ? "border-primary ring-2 ring-primary/40" : "border-border hover:border-primary/50"}`}
+              >
+                <div className="flex h-24 flex-col gap-1.5 rounded-lg bg-white p-3">
+                  <div
+                    className={`h-2.5 rounded ${t.key === "classic" ? "mx-auto w-1/2 bg-neutral-800" : "w-2/3"}`}
+                    style={t.key === "classic" ? undefined : { background: d.accent }}
+                  />
+                  <div
+                    className={`h-1.5 rounded bg-neutral-300 ${t.key === "classic" ? "mx-auto w-1/3" : "w-1/3"}`}
+                  />
+                  <div
+                    className="mt-1 h-1 w-1/4 rounded"
+                    style={{ background: t.key === "classic" ? "#262626" : d.accent }}
+                  />
+                  <div className="h-1 w-full rounded bg-neutral-200" />
+                  <div className="h-1 w-5/6 rounded bg-neutral-200" />
+                  {t.key === "compact" && <div className="h-1 w-4/6 rounded bg-neutral-200" />}
+                </div>
+                <div>
+                  <div className="text-sm font-bold">{t.label}</div>
+                  <div className="text-[11px] text-muted-foreground">{t.note}</div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div>
+        <div className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+          Accent colour
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {ACCENTS.map((c) => (
+            <button
+              key={c}
+              aria-label={`Accent ${c}`}
+              onClick={() => set({ accent: c })}
+              className={`h-9 w-9 rounded-full transition-transform hover:scale-110 ${d.accent === c ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
+              style={{ background: c }}
+            />
+          ))}
+          <label
+            className="relative h-9 w-9 cursor-pointer overflow-hidden rounded-full border border-dashed border-border"
+            title="Custom colour"
+          >
+            <input
+              type="color"
+              value={d.accent}
+              onChange={(e) => set({ accent: e.target.value })}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            />
+            <Plus className="absolute inset-0 m-auto h-4 w-4 text-muted-foreground" />
+          </label>
+        </div>
+      </div>
+      <div>
+        <div className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+          Font
+        </div>
+        <div className="flex gap-2">
+          {(["serif", "sans"] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => set({ font: f })}
+              className={`rounded-xl border px-4 py-2 text-sm font-bold ${d.font === f ? "border-primary bg-primary/10 text-primary" : "border-border"}`}
+              style={{ fontFamily: f === "serif" ? "Georgia, serif" : "Arial, sans-serif" }}
+            >
+              {f === "serif" ? "Serif" : "Sans-serif"}
+            </button>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }

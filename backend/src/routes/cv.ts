@@ -12,7 +12,7 @@ cvRouter.put("/", h(async (req) => saveCv(uid(req), parse(z.object({ content: Cv
 cvRouter.post(
   "/generate",
   h(async (req) => {
-    const b = parse(z.object({ target_role: z.string().trim().max(120).default(""), background: z.string().trim().max(3000).default("") }), req.body ?? {});
+    const b = parse(z.object({ target_role: z.string().trim().max(120).default(""), background: z.string().trim().max(3000).default(""), job_description: z.string().trim().max(8000).optional() }), req.body ?? {});
     return generateCv(uid(req), b);
   }),
 );

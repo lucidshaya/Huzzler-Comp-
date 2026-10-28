@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { h, parse, uid } from "./util.js";
 import { requirePaidAccess } from "../middleware/auth.js";
-import { startAttempt, attemptOverview, getTest, startTest, saveDraft, submitTest, attemptResults, fileAppeal, answerFollowUp } from "../services/onboarding.js";
+import { startAttempt, attemptOverview, getTest, startTest, saveDraft, submitTest, runCode, attemptResults, fileAppeal, answerFollowUp } from "../services/onboarding.js";
 
 export const onboardingRouter = Router();
 onboardingRouter.use(requirePaidAccess);
@@ -14,6 +14,7 @@ onboardingRouter.post("/start", h(async (req) => startAttempt(uid(req))));
 onboardingRouter.get("/tests/:n", h(async (req) => getTest(uid(req), testNo(req.params.n))));
 onboardingRouter.post("/tests/:n/start", h(async (req) => startTest(uid(req), testNo(req.params.n))));
 onboardingRouter.put("/tests/:n/draft", h(async (req) => saveDraft(uid(req), testNo(req.params.n), req.body?.draft ?? {})));
+onboardingRouter.post("/tests/:n/run", h(async (req) => runCode(uid(req), testNo(req.params.n), parse(z.object({ source: z.string().min(1).max(50_000) }), req.body).source)));
 onboardingRouter.post("/tests/:n/submit", h(async (req) =>
   submitTest(uid(req), testNo(req.params.n), parse(z.object({ answers: z.unknown(), ai_declaration: z.boolean().optional() }), req.body)),
 ));

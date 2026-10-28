@@ -3,7 +3,8 @@ import { z } from "zod";
 import { db, must, ok } from "../lib/supabase.js";
 import { logger } from "../lib/logger.js";
 import { notify } from "../lib/notify.js";
-import { badRequest, conflict, forbidden, notFound } from "../lib/errors.js";
+import { badRequest, conflict, forbidden, HttpError, notFound } from "../lib/errors.js";
+import { env } from "../config/env.js";
 import { MAX_ATTEMPTS, PASS_MARK, RETAKE_WAIT_DAYS, TEST_WEIGHTS } from "../domain/constants.js";
 import { onboardingOutcome } from "../domain/grading.js";
 import { gradeMcq, gradeNumeric, gradeRanking, gradeSeededIssues, gradeSjt, compareResultSets, type AutoResult } from "../domain/autograde.js";
@@ -11,7 +12,7 @@ import { getJourney, transition } from "./journey.js";
 import { getProfile } from "./profile.js";
 import { enqueue } from "../jobs/queue.js";
 import { gradeSubjectWithAi } from "./aiGrading.js";
-import { runHiddenTests, runSql, sandboxConfigured, SandboxUnavailableError } from "./sandbox.js";
+import { LANG as LANG_IDS, runHiddenTests, runInSandbox, runJsLocally, runSql, sandboxConfigured, SandboxUnavailableError } from "./sandbox.js";
 import { checkSimilarity } from "./integrity.js";
 
 const DAY = 86_400_000;
@@ -160,6 +161,28 @@ export async function saveDraft(userId: string, testNo: number, draft: unknown) 
   if (JSON.stringify(draft).length > 60_000) throw badRequest("Draft too large");
   await db.from("test_submissions").update({ draft }).eq("id", sub.id);
   return { saved: true, at: new Date().toISOString() };
+}
+
+// "Run" while a code or SQL test is open: shows the learner's own output (console.log, errors, or the
+// rows their query returns). Hidden tests and the expected result are never run or revealed here.
+const runs = new Map<string, number[]>();
+export async function runCode(userId: string, testNo: number, source: string) {
+  const now = Date.now();
+  const recent = (runs.get(userId) ?? []).filter((t) => now - t < 60_000);
+  if (recent.length >= 15) throw new HttpError(429, "That's a lot of runs in a minute. Wait a few seconds and try again.", "RUN_LIMIT");
+  runs.set(userId, [...recent, now]);
+
+  const { sub } = await getSubmission(userId, testNo);
+  if (sub.status !== "in_progress") throw conflict("This test isn't in progress.");
+  const bank = must(await db.from("test_bank").select("kind, content, answer_key").eq("id", sub.test_bank_id).single(), "test");
+  if (bank.kind === "sql_result") {
+    const r = await runSql(bank.answer_key?.setup_sql ?? "", source);
+    return r.ok ? { kind: "sql" as const, ok: true, rows: r.rows.slice(0, 50), total_rows: r.rows.length } : { kind: "sql" as const, ok: false, error: r.error };
+  }
+  if (bank.kind !== "code_sandbox") throw badRequest("This test has no code to run.");
+  const lang = bank.content?.language === "typescript" ? LANG_IDS.typescript : LANG_IDS.javascript;
+  const r = env.JUDGE0_URL ? await runInSandbox(lang, source) : await runJsLocally(source);
+  return { kind: "code" as const, ok: !r.stderr, stdout: r.stdout.slice(0, 5000), error: r.stderr.slice(0, 2000) || null, status: r.status };
 }
 
 export async function submitTest(userId: string, testNo: number, body: { answers: unknown; ai_declaration?: boolean }) {

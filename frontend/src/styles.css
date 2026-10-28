@@ -637,8 +637,9 @@
 
 /* Profile → AI résumé: print only the résumé sheet ("Download PDF" uses the browser's Save as PDF). */
 @media print {
+  /* The résumé page carries its own side padding. */
   @page {
-    margin: 14mm;
+    margin: 10mm 0;
   }
   body:has(#cv-print) {
     background: #fff !important;
@@ -654,6 +655,46 @@
     position: absolute;
     left: 0;
     top: 0;
-    width: 100%;
+    width: 100% !important;
+    min-height: 0 !important;
+    transform: none !important;
+  }
+}
+
+/* Page transitions in the app shell and the guided tour. */
+@keyframes hz-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+.hz-page {
+  animation: hz-page-in 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.hz-tour-spot {
+  box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.6);
+  transition:
+    left 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    top 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    height 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.3s;
+}
+.hz-tour-card {
+  animation: hz-page-in 0.35s 0.12s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hz-page,
+  .hz-tour-card {
+    animation: none;
+  }
+  .hz-tour-spot {
+    transition: none;
   }
 }

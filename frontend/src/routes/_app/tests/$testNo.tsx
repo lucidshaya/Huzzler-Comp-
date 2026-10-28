@@ -12,9 +12,11 @@ import {
   Ranking,
   SeededIssues,
   WrittenAnswer,
+  type RunResult,
 } from "@/components/app/TestInputs";
 import { hzConfirm } from "@/components/app/Dialogs";
 import { DetailSkeleton } from "@/components/app/Skeleton";
+import { KIND_GUIDE, type TestKind } from "@/lib/onboardingGuide";
 
 export const Route = createFileRoute("/_app/tests/$testNo")({
   head: () => ({ meta: [{ title: "Test · Huzzler" }] }),
@@ -111,6 +113,10 @@ function TestRunner() {
     },
   });
   const onExpire = useCallback(() => submit.mutate(), [submit]);
+  const runCode = useCallback(
+    (source: string) => api<RunResult>(`/onboarding/tests/${testNo}/run`, { body: { source } }),
+    [testNo],
+  );
 
   if (isLoading) return <DetailSkeleton label="Loading test" />;
   if (error || !data)
@@ -139,6 +145,12 @@ function TestRunner() {
           </div>
           <h1 className="mt-1 font-display text-2xl font-bold">{test.title}</h1>
           <p className="mt-3 text-sm text-muted-foreground">{test.content.instructions}</p>
+          {KIND_GUIDE[test.kind as TestKind] && (
+            <div className="mt-4 rounded-xl border border-border bg-muted/40 p-3 text-sm">
+              <b>{KIND_GUIDE[test.kind as TestKind].label}:</b>{" "}
+              {KIND_GUIDE[test.kind as TestKind].how}
+            </div>
+          )}
           <div className="mt-4 flex items-center gap-2 text-sm font-semibold">
             <Clock className="h-4 w-4 text-primary" /> {test.time_limit_min} minutes, starting when
             you press Start.
@@ -212,9 +224,11 @@ function TestRunner() {
         <NumericAnswers content={c as any} value={answers} onChange={change} />
       )}
       {test.kind === "sql_result" && (
-        <CodeAnswer content={c} value={answers} onChange={change} field="sql" />
+        <CodeAnswer content={c} value={answers} onChange={change} field="sql" onRun={runCode} />
       )}
-      {test.kind === "code_sandbox" && <CodeAnswer content={c} value={answers} onChange={change} />}
+      {test.kind === "code_sandbox" && (
+        <CodeAnswer content={c} value={answers} onChange={change} onRun={runCode} />
+      )}
       {test.kind === "ai_rubric" && <WrittenAnswer content={c} value={answers} onChange={change} />}
 
       <div className="sticky bottom-[76px] z-20 -mx-1 rounded-2xl border border-border bg-background/95 px-4 py-3 shadow-[0_-8px_30px_-12px_rgba(0,0,0,0.35)] backdrop-blur md:bottom-4">
