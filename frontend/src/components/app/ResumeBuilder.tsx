@@ -145,7 +145,7 @@ export function ResumeBuilder() {
       hzToast.success(
         `Résumé drafted · −${r.charged} tokens`,
         r.engine === "ai"
-          ? "Written by AI from your verified work. Check every line before you send it."
+          ? "Written by Huzzler AI from your verified work. Check every line before you send it."
           : "Written from your verified records (AI isn't connected yet).",
       );
     },
@@ -173,7 +173,7 @@ export function ResumeBuilder() {
     if (data.balance < data.cost) return setTopUpOpen(true);
     const ok = await hzConfirm({
       title: `Redraft your résumé for ${data.cost} tokens?`,
-      body: "AI rewrites your headline, summary, skills and bullets from your verified work (and the job post, if you added one). Your contact details, links and other sections are kept. If anything goes wrong, the tokens are refunded.",
+      body: "Huzzler AI rewrites your headline, summary, skills and bullets from your verified work (and the job post, if you added one). Your contact details, links and other sections are kept. If anything goes wrong, the tokens are refunded.",
       confirmLabel: `Use ${data.cost} tokens`,
     });
     if (ok) generate.mutate(background);
@@ -527,7 +527,7 @@ function TailorPanel({
       <section className="card-duo flex flex-col gap-4 p-5 md:p-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 font-display text-lg font-bold">
-            <Wand2 className="h-5 w-5 text-primary" /> Redraft with AI
+            <Wand2 className="h-5 w-5 text-primary" /> Redraft with Huzzler AI
           </div>
           <span className="inline-flex items-center gap-1 rounded-full border border-[color:var(--gold)]/40 bg-[color:var(--gold)]/10 px-2.5 py-1 text-xs font-bold text-[color:var(--gold)]">
             <Coins className="h-3.5 w-3.5" /> {state.cost} tokens · you have{" "}
@@ -535,7 +535,8 @@ function TailorPanel({
           </span>
         </div>
         <p className="text-sm text-muted-foreground">
-          AI writes your headline, summary, skills and bullets from your verified Huzzler work
+          Huzzler AI writes your headline, summary, skills and bullets from your verified Huzzler
+          work
           {cv.job_description.trim() ? ", tailored to the job post above" : ""}. It never invents
           employers or skills.
         </p>

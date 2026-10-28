@@ -420,7 +420,7 @@ const KINDS = [
 ];
 const queueOf = (k: string) => KINDS.find((x) => x.key === k)?.queue ?? k;
 const ENGINE: Record<string, { label: string; tone: "green" | "gold" | "muted" }> = {
-  ai: { label: "Claude", tone: "green" },
+  ai: { label: "DeepSeek", tone: "green" },
   rules: { label: "Rules engine", tone: "gold" },
   mock: { label: "Mock", tone: "muted" },
 };
@@ -463,7 +463,7 @@ export function AiView() {
       <Header
         chip="AI reasoning"
         title="How the AI PM thinks."
-        body="Every squad match, grade, work breakdown and opportunity ranking is logged with the steps behind it. Until the Anthropic API key is added, the rules engine makes these calls and explains itself the same way; once the key is set, Claude takes over and its reasoning appears here."
+        body="Every squad match, grade, work breakdown, team review and test draft is logged with the steps behind it. Huzzler AI runs on DeepSeek; without the key, the rules engine makes these calls and explains itself the same way."
         actions={
           <button
             onClick={() => {
@@ -484,15 +484,15 @@ export function AiView() {
         <AgentMark size={52} animated={Boolean(s?.configured)} />
         <div className="min-w-[220px] flex-1">
           <div className="flex flex-wrap items-center gap-2 font-display text-lg font-bold">
-            {s?.configured ? "Claude is connected" : "AI key not connected yet"}
+            {s?.configured ? "DeepSeek is connected" : "AI key not connected yet"}
             <Pill tone={s?.configured ? "green" : "gold"}>
               {s?.configured ? "live" : s?.mock ? "mock mode" : "rules engine"}
             </Pill>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {s?.configured
-              ? "Grading, briefs, the mentor and the Workstation call Claude. Matching stays deterministic so it's explainable and fair."
-              : "Add ANTHROPIC_API_KEY to the API's environment and redeploy. Work waiting for AI grading is picked up automatically; nothing else needs to change."}
+              ? `Grading, briefs, team reviews, test drafts, the mentor and the Workstation call DeepSeek (deepseek-flash). Squad matching uses the rules engine to decide which squads are valid; the AI only chooses between valid options and explains why. Learners see it as "Huzzler AI".`
+              : "Add DEEPSEEK_API_KEY to the API's environment and redeploy. Work waiting for AI grading is picked up automatically; nothing else needs to change."}
           </p>
         </div>
         <div className="grid grid-cols-2 gap-3 text-center text-xs">

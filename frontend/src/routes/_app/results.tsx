@@ -217,7 +217,7 @@ function TestResult({ t }: { t: ResultsData["tests"][number] }) {
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                 Graded by{" "}
                 {g.grader === "ai"
-                  ? "AI against a rubric (pass/fail applied by Huzzler)"
+                  ? "Huzzler AI against a rubric (pass/fail applied by Huzzler)"
                   : g.grader === "human"
                     ? "a Huzzler reviewer"
                     : "automatic checks"}

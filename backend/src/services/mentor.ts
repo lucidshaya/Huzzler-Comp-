@@ -29,7 +29,7 @@ export async function mentorHistory(userId: string, taskId: string) {
 
 /**
  * Mentor chat: opens after the 3 hints; 10 messages/day. FAQ/hint lookup first (no LLM call when
- * similarity ≥ threshold), otherwise Haiku with only the top retrieved chunks, the task brief and
+ * similarity ≥ threshold), otherwise the AI model with only the top retrieved chunks, the task brief and
  * the user's draft. History is trimmed to keep prompts small.
  */
 export async function askMentor(userId: string, taskId: string, question: string, draft?: string) {

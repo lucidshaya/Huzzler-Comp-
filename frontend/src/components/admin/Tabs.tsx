@@ -1405,7 +1405,8 @@ export function SystemTab() {
         <CardTitle>Feature flags & settings</CardTitle>
         <p className="mb-2 text-xs text-muted-foreground">
           Move a single AI feature to another model with key <code>ai_models</code>, e.g.{" "}
-          {`{"mentor_chat":{"model":"claude-sonnet-5-5"}}`}.
+          {`{"mentor_chat":{"model":"deepseek-v4-pro"}}`}. Huzzler AI runs on DeepSeek
+          (deepseek-flash by default).
         </p>
         <ErrorNote error={save.error} />
         {(flags.data ?? []).map((f) => (

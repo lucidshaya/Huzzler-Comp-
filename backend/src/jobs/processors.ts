@@ -36,7 +36,7 @@ export const processors: Record<JobName, Processor> = {
     for (const u of lapsed) await handleLapsedMember(u);
     await backfillLapsed();
   },
-  // Once ANTHROPIC_API_KEY is configured, everything parked in `awaiting_ai` is graded.
+  // Once an AI key (DEEPSEEK_API_KEY) is configured, everything parked in `awaiting_ai` is graded.
   retry_awaiting_ai: async () => {
     if (!aiConfigured()) return;
     const { data: subs } = await db.from("test_submissions").select("id").eq("status", "awaiting_ai").limit(50);

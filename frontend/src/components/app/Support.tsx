@@ -683,7 +683,7 @@ function HelpBot({ onReport }: { onReport: (question?: string) => void }) {
             {m.from === "bot" && m.id && (
               <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                 {m.source === "faq" && <span>From the Huzzler FAQ</span>}
-                {m.source === "ai" && <span>AI answer from the FAQ</span>}
+                {m.source === "ai" && <span>Huzzler AI answer from the FAQ</span>}
                 {!m.rated ? (
                   <span className="flex items-center gap-1">
                     Helpful?

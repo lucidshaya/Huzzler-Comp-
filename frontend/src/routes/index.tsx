@@ -49,7 +49,7 @@ export const Route = createFileRoute("/")({
       {
         property: "og:description",
         content:
-          "Break the no-experience loop. Get verified by AI, join real product teams, and build the portfolio that gets you hired.",
+          "Break the no-experience loop. Get verified by Huzzler AI, join real product teams, and build the portfolio that gets you hired.",
       },
       { property: "og:url", content: absolute("/") },
       { property: "og:image", content: absolute("/og-image.png") },
@@ -59,7 +59,7 @@ export const Route = createFileRoute("/")({
       {
         name: "twitter:description",
         content:
-          "Break the no-experience loop. Get verified by AI, join real product teams, and build the portfolio that gets you hired.",
+          "Break the no-experience loop. Get verified by Huzzler AI, join real product teams, and build the portfolio that gets you hired.",
       },
       { name: "twitter:image", content: absolute("/og-image.png") },
     ],
@@ -513,9 +513,10 @@ function Index() {
               Dropped into a real team. In minutes.
             </h2>
             <p className="mt-5 text-lg text-charcoal/75 leading-relaxed">
-              When a product team needs talent, the AI autonomously drafts a verified crew: 1 PM, 2
-              React engineers, 1 designer, 1 data analyst. You drop into a shared workspace with a
-              visual collaboration tree showing how everyone connects and ships live features.
+              When a product team needs talent, Huzzler AI autonomously drafts a verified crew: 1
+              PM, 2 React engineers, 1 designer, 1 data analyst. You drop into a shared workspace
+              with a visual collaboration tree showing how everyone connects and ships live
+              features.
             </p>
             <div className="mt-6 grid grid-cols-2 gap-3">
               {[
@@ -695,7 +696,7 @@ function Index() {
                   "5 onboarding tests, 3 attempts",
                   "Simulated internship offers",
                   "A real team and 5 projects",
-                  "Hints and AI mentor chat",
+                  "Hints and Huzzler AI mentor chat",
                   "Verifiable certificate and portfolio",
                 ].map((f) => (
                   <li key={f} className="flex items-center gap-2">

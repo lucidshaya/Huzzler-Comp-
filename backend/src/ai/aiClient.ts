@@ -27,6 +27,8 @@ export function aiProvider(): AiProvider | null {
   return env.DEEPSEEK_API_KEY ? "deepseek" : env.ANTHROPIC_API_KEY ? "anthropic" : null;
 }
 export const aiConfigured = () => aiProvider() !== null;
+/** Staff-facing name of the model provider (learners only ever see "Huzzler AI"). */
+export const providerName = () => (aiProvider() === "anthropic" ? "Claude" : "DeepSeek");
 function getClient(): Anthropic {
   if (!env.ANTHROPIC_API_KEY) throw new AiUnavailableError();
   // maxRetries covers 429/5xx/connection errors with backoff; BullMQ retries on top of that.

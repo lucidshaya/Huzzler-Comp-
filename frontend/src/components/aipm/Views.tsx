@@ -335,7 +335,7 @@ function WbsPanel({ brief, onNext }: { brief: any; onNext: () => void }) {
         </span>
         <span>
           {brief.generated_by === "ai"
-            ? "Planned by Claude"
+            ? "Planned by DeepSeek"
             : "Planned from the Huzzler task library"}
         </span>
       </div>

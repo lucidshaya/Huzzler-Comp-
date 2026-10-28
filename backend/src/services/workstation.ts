@@ -7,7 +7,7 @@ import { aiConfigured, callStructured, AiBudgetError, AiOutputError, AiUnavailab
 import { balanceOf, creditTokens, priceOf, spendTokens, tokenPrices } from "./tokens.js";
 
 // The four Workstation tools from the Frontend design. Each run costs tokens (token_prices). With an
-// Anthropic key the output comes from Claude; until then a deterministic generator grounded in the
+// AI key the output comes from the model; until then a deterministic generator grounded in the
 // user's own project and task (a small retrieval step) produces a realistic result so the flow works.
 
 export const WORKSTATION_ACTIONS = ["code_autocomplete", "docs_extract", "logic_canvas", "data_forge", "voice_summary"] as const;
@@ -99,7 +99,7 @@ export async function runTool(userId: string, input: RunInput) {
 }
 
 // ---------------------------------------------------------------------------
-// Claude (when the API key is set)
+// The AI provider (when the API key is set)
 // ---------------------------------------------------------------------------
 
 const RULES = `You power the Huzzler Workstation, a set of tools for early-career African tech talent working in a squad on a simulated internship.

@@ -357,7 +357,7 @@ function Mentor({ taskId, open, readOnly }: { taskId: string; open: boolean; rea
           ) : undefined
         }
       >
-        Mentor
+        Huzzler AI mentor
       </CardTitle>
       {!open ? (
         <p className="text-sm text-muted-foreground">

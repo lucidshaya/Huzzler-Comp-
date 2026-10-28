@@ -120,7 +120,7 @@ export function OverviewTab() {
       </div>
       {!data.ai.configured && (
         <div className="rounded-xl border border-[color:var(--gold)]/40 bg-[color:var(--gold)]/10 p-3 text-sm">
-          AI is not configured (ANTHROPIC_API_KEY unset). AI-graded work is waiting in the review
+          AI is not configured (DEEPSEEK_API_KEY unset). AI-graded work is waiting in the review
           queue as "awaiting AI" and will be graded automatically once the key is added.
         </div>
       )}

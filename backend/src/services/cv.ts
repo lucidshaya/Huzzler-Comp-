@@ -11,7 +11,7 @@ import { getProfile } from "./profile.js";
 import { balanceOf, creditTokens, priceOf, spendTokens } from "./tokens.js";
 
 // AI résumé builder (Profile → AI résumé). Each AI draft is paid from the user's token wallet at the
-// `cv_generate` price; editing, saving and the PDF are free. With an Anthropic key Claude writes the
+// `cv_generate` price; editing, saving and the PDF are free. With an AI key the model writes the
 // draft; until then a deterministic writer builds it from the same verified records.
 
 export const CV_ACTION = "cv_generate";
@@ -160,7 +160,7 @@ const ROLE_SKILLS: Record<string, string[]> = {
 };
 
 /**
- * Writes the draft from verified records only, for when the Anthropic key isn't set yet (and as the
+ * Writes the draft from verified records only, for when no AI key is set (and as the
  * fallback if the model is unavailable). Nothing is invented: every line traces to a record or the
  * user's own notes.
  */
