@@ -14,7 +14,9 @@ export type AiFeature =
   | "cv_builder"
   | "squad_matching"
   | "team_review"
-  | "test_generation";
+  | "test_generation"
+  | "standin_agent"
+  | "meeting_notes";
 
 export type FeatureConfig = { model: string; maxTokens: number; effort: "low" | "medium" | "high" };
 
@@ -36,6 +38,8 @@ const DEFAULTS: Record<AiFeature, FeatureConfig> = {
   squad_matching: { model: "claude-haiku-5-5", maxTokens: 2000, effort: "low" },
   team_review: { model: "claude-haiku-5-5", maxTokens: 4000, effort: "medium" },
   test_generation: { model: "claude-haiku-5-5", maxTokens: 12000, effort: "medium" },
+  standin_agent: { model: "claude-haiku-5-5", maxTokens: 4000, effort: "low" },
+  meeting_notes: { model: "claude-haiku-5-5", maxTokens: 4000, effort: "medium" },
 };
 
 let cache: { at: number; overrides: Partial<Record<AiFeature, Partial<FeatureConfig>>> } | null = null;

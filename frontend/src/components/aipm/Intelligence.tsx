@@ -417,6 +417,8 @@ const KINDS = [
   { key: "offer_ranking", label: "Opportunity ranking", queue: "offer-ranker" },
   { key: "team_review", label: "Team reviews", queue: "team-review" },
   { key: "test_generation", label: "Test pool", queue: "test-pool" },
+  { key: "standin_work", label: "Stand-in work", queue: "stand-ins" },
+  { key: "meeting_notes", label: "Meeting notes", queue: "meetings" },
 ];
 const queueOf = (k: string) => KINDS.find((x) => x.key === k)?.queue ?? k;
 const ENGINE: Record<string, { label: string; tone: "green" | "gold" | "muted" }> = {
@@ -438,6 +440,8 @@ const FEATURE_LABEL: Record<string, string> = {
   team_review: "Team reviews",
   test_generation: "Test pool",
   cv_builder: "Résumé builder",
+  standin_agent: "AI stand-ins",
+  meeting_notes: "Meeting notes",
 };
 
 export function AiView() {

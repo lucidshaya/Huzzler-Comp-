@@ -7,9 +7,12 @@ import { forbidden } from "../lib/errors.js";
 import { requirePaidAccess } from "../middleware/auth.js";
 import { listOffers, respondToOffer, restoreOffer } from "../services/offers.js";
 import { CanvasInput, RunInput, runTool, saveCanvas, workstationState } from "../services/workstation.js";
-import { myTeam, assertTeamMember, maybeStandinReply } from "../services/teams.js";
+import { myTeam, assertTeamMember } from "../services/teams.js";
+import { standinReply } from "../services/standins.js";
+import { later } from "../lib/notify.js";
 import { workspace, updateTask, getTaskDetail, unlockHint, submitDeliverable, submitCheckin, submitPeerReviews, submitDemo, ciToken } from "../services/projects.js";
 import { mentorHistory, askMentor } from "../services/mentor.js";
+import { addMeeting, decideMeeting, getMeetingNotes, listMeetings } from "../services/meetings.js";
 import { certificationStatus, certificatePdfUrl } from "../services/certification.js";
 import { myOpportunityRequests, respondConsent } from "../services/opportunities.js";
 
@@ -46,6 +49,10 @@ teamRouter.get("/team/checkins", h(async (req) => {
   return data ?? [];
 }));
 
+// Meeting notes and the AI PM's proposed plan changes.
+teamRouter.get("/team/meetings", h(async (req) => listMeetings(uid(req))));
+teamRouter.get("/team/meetings/:id/notes", h(async (req) => getMeetingNotes(uid(req), req.params.id)));
+
 teamRouter.use(requirePaidAccess);
 
 teamRouter.get("/offers", h(async (req) => listOffers(uid(req))));
@@ -62,9 +69,21 @@ teamRouter.post("/team/messages", h(async (req) => {
   const team = await myTeam(uid(req));
   if (!team) throw forbidden("You're not on a team yet.");
   const { data } = await db.from("messages").insert({ team_id: team.team!.id, user_id: uid(req), kind: "user", body }).select().single();
-  void maybeStandinReply(team.team!.id, body);
+  later(standinReply(team.team!.id, body));
   return data;
 }));
+
+teamRouter.post("/team/meetings", h(async (req) =>
+  addMeeting(uid(req), parse(z.object({
+    title: z.string().trim().min(1).max(160),
+    notes: z.string().trim().min(20).max(60_000),
+    held_at: z.string().datetime().optional(),
+    source: z.enum(["paste", "upload"]).default("paste"),
+  }), req.body)),
+));
+teamRouter.post("/team/meetings/:id/decision", h(async (req) =>
+  decideMeeting(uid(req), req.params.id, parse(z.object({ accept: z.array(z.number().int().min(0)).max(20) }), req.body).accept),
+));
 
 teamRouter.get("/tasks/:id", h(async (req) => getTaskDetail(uid(req), req.params.id)));
 teamRouter.patch("/tasks/:id", h(async (req) =>

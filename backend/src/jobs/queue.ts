@@ -17,7 +17,9 @@ export type JobName =
   | "generate_offers"
   | "compute_project_results"
   | "issue_certificate"
-  | "send_campaign";
+  | "send_campaign"
+  | "standin_work"
+  | "process_meeting";
 
 const BACKOFF_MS = 10_000;
 

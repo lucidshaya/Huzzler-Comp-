@@ -33,7 +33,9 @@ export const MIN_PEER_REVIEWS_FOR_CERT = 2;
 
 export const OFFER_TTL_HOURS = 72;
 export const MAX_OFFER_DECLINES = 2;
-export const STANDIN_AFTER_HOURS = 72;
+export const STANDIN_AFTER_HOURS = 24;
+/** AI chat replies a squad's stand-ins can send per day before falling back to canned ones. */
+export const STANDIN_DAILY_REPLIES = 20;
 export const MAX_TEAM_SIZE = 7;
 
 export const GRACE_DAYS = 7;

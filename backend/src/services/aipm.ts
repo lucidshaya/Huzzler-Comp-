@@ -459,7 +459,7 @@ export async function activity() {
 // AI reasoning: how the AI PM (or the rules engine standing in for it) thinks
 // ---------------------------------------------------------------------------
 
-const AI_FEATURES: AiFeature[] = ["onboarding_grading", "project_grading", "second_grading", "demo_grading", "mentor_chat", "aipm_wbs", "help_bot", "workstation", "integrity_review", "squad_matching", "team_review", "test_generation"];
+const AI_FEATURES: AiFeature[] = ["onboarding_grading", "project_grading", "second_grading", "demo_grading", "mentor_chat", "aipm_wbs", "help_bot", "workstation", "integrity_review", "squad_matching", "team_review", "test_generation", "standin_agent", "meeting_notes"];
 
 export async function aiStatus() {
   const monthStart = new Date();

@@ -78,7 +78,7 @@ export async function startProject(teamId: string, level: number) {
       project_instance_id: instance.id, milestone_id: ms?.id ?? null, template_task_key: t.key, role_id: t.role_id,
       assignee_id: assignee.user_id, assignee_member_id: assignee.id, title: t.title, description: t.description,
       hints: t.hints.slice(0, HINTS_PER_TASK), rubric_id: `${t.role_id}.project`, due_at: ms?.due_at ?? instance.due_at, sort_order: i,
-      status: assignee.is_standin ? "done" : "todo",
+      status: "todo",
     };
   });
   const inserted = must(await db.from("team_tasks").insert(rows).select("id, template_task_key, assignee_member_id, status"), "tasks");
@@ -88,11 +88,8 @@ export async function startProject(teamId: string, level: number) {
       await db.from("team_tasks").update({ depends_on: t.depends_on.map((k) => idByKey.get(k)).filter(Boolean) }).eq("id", idByKey.get(t.key)!);
     }
   }
-  // Stand-ins post their pre-made deliverables straight away so dependants aren't blocked.
-  for (const t of tasks) {
-    const member = byRole.get(t.role_id)!.find((m) => m.id === rows.find((r) => r.template_task_key === t.key)?.assignee_member_id);
-    if (member?.is_standin) await postSystemMessage(teamId, `${t.title}: ${t.standin_deliverable ?? "Done — see the task for details."}`, "standin", `Huzzler stand-in`);
-  }
+  // Stand-ins start on their unblocked tasks straight away so dependants aren't held up.
+  if ((members ?? []).some((m) => m.is_standin)) await enqueue("standin_work", { teamId });
 
   await db.from("teams").update({ current_level: level }).eq("id", teamId);
   for (const m of members ?? []) {
@@ -192,7 +189,7 @@ export async function getTaskDetail(userId: string, taskId: string) {
   const { task } = await loadTaskForUser(userId, taskId);
   const [{ data: unlocks }, { data: deliverables }] = await Promise.all([
     db.from("hint_unlocks").select("hint_index").eq("task_id", taskId).eq("user_id", userId),
-    db.from("deliverables").select("id, content, links, status, score, submitted_at, user_id").eq("task_id", taskId).order("submitted_at", { ascending: false }),
+    db.from("deliverables").select("id, content, links, status, score, submitted_at, user_id, standin_member_id").eq("task_id", taskId).order("submitted_at", { ascending: false }),
   ]);
   const unlocked = new Set((unlocks ?? []).map((u) => u.hint_index));
   const hints = (task.hints as string[]).map((h, i) => (unlocked.has(i) ? { index: i, text: h } : { index: i, locked: true }));
@@ -229,7 +226,7 @@ export async function submitDeliverable(userId: string, taskId: string, input: {
 export async function gradeDeliverable(deliverableId: string) {
   const d = must(await db.from("deliverables").select("*").eq("id", deliverableId).single(), "deliverable");
   if (d.status === "graded" || d.status === "needs_review") return;
-  const task = must(await db.from("team_tasks").select("*, project:project_instance_id(level, template:template_id(title, brief))").eq("id", d.task_id).single(), "task") as any;
+  const task = must(await db.from("team_tasks").select("*, project:project_instance_id(team_id, level, template:template_id(title, brief))").eq("id", d.task_id).single(), "task") as any;
   const res = await gradeSubjectWithAi(
     { subjectType: "deliverable", subjectId: d.id },
     {
@@ -249,9 +246,11 @@ export async function gradeDeliverable(deliverableId: string) {
   await db.from("team_tasks").update({ status: "done" }).eq("id", d.task_id);
   await checkSimilarity("deliverable", d.id, d.user_id, task.template_task_key, d.content).catch(() => {});
   await maybeCloseMilestones(task.project_instance_id);
+  // This may unblock a stand-in's task.
+  await enqueue("standin_work", { teamId: task.project.team_id });
 }
 
-async function maybeCloseMilestones(instanceId: string) {
+export async function maybeCloseMilestones(instanceId: string) {
   const { data: tasks } = await db.from("team_tasks").select("milestone_id, status").eq("project_instance_id", instanceId);
   const byMs = new Map<string, string[]>();
   for (const t of tasks ?? []) if (t.milestone_id) byMs.set(t.milestone_id, [...(byMs.get(t.milestone_id) ?? []), t.status]);

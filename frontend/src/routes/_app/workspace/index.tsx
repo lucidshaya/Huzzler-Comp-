@@ -45,6 +45,7 @@ import { TeamTree } from "@/components/app/TeamTree";
 import { WorkspaceSkeleton } from "@/components/app/Skeleton";
 import { HustlerPanel } from "@/components/app/Hustler";
 import { Workstation } from "@/components/app/Workstation";
+import { Meetings } from "@/components/app/Meetings";
 
 type Tab = "board" | "squad" | "workstation" | "deliverables";
 
@@ -302,6 +303,7 @@ function Workspace() {
               lapsed={lapsed}
             />
           </div>
+          {w?.project && <Meetings readOnly={lapsed} />}
         </div>
       )}
 
@@ -567,7 +569,7 @@ function TeamChat({
             className={`${inputCls} !py-2`}
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder="Message your team"
+            placeholder="Message your team (mention @designer, @qa… to ask a stand-in)"
             maxLength={4000}
           />
           <button

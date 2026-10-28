@@ -64,4 +64,4 @@ export const useWorkspace = (enabled = true) =>
   });
 
 export const memberName = (m: TeamMember | undefined) =>
-  !m ? "Unassigned" : m.is_standin ? "Stand-in" : (m.profile?.full_name ?? "Teammate");
+  !m ? "Unassigned" : m.is_standin ? "AI stand-in" : (m.profile?.full_name ?? "Teammate");

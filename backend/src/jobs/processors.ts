@@ -9,6 +9,8 @@ import { runMatching } from "../services/teams.js";
 import { generateOffers, expireOffers } from "../services/offers.js";
 import { issueCertificate } from "../services/certification.js";
 import { processCampaign } from "../services/emailCampaigns.js";
+import { runStandinWork, runAllStandinWork } from "../services/standins.js";
+import { processMeeting } from "../services/meetings.js";
 
 type Processor = (data: any) => Promise<unknown>;
 
@@ -17,12 +19,17 @@ export const processors: Record<JobName, Processor> = {
   grade_deliverable: ({ deliverableId }) => gradeDeliverable(deliverableId),
   grade_demo: (d) => gradeDemo(d),
   process_payment_event: ({ eventId }) => processWebhookEvent(eventId),
-  run_matching: () => runMatching(),
+  run_matching: async () => {
+    await runMatching();
+    await runAllStandinWork();
+  },
   expire_offers: () => expireOffers(),
   generate_offers: ({ userId }) => generateOffers(userId),
   compute_project_results: ({ instanceId, onlyIfComplete }) => computeProjectResults(instanceId, Boolean(onlyIfComplete)),
   issue_certificate: ({ userId }) => issueCertificate(userId),
   send_campaign: ({ campaignId }) => processCampaign(campaignId),
+  standin_work: ({ teamId }) => runStandinWork(teamId),
+  process_meeting: ({ meetingId }) => processMeeting(meetingId),
   nudges: async () => {
     await sendNudges();
     await compileStandups();

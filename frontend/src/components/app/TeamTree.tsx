@@ -62,7 +62,9 @@ export function TeamTree({ members, teamName }: { members: TreeMember[]; teamNam
           <div className="font-display font-bold">{focus.name}</div>
           <div className="text-xs text-muted-foreground">
             {focus.role}
-            {focus.isStandin ? " · scripted stand-in until a real teammate joins" : ""}
+            {focus.isStandin
+              ? " · Huzzler AI stand-in: does this role's tasks until a real teammate joins"
+              : ""}
           </div>
           {focus.owns?.length ? (
             <ul className="mt-2 list-disc pl-4 text-xs text-muted-foreground">

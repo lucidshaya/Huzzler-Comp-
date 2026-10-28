@@ -6,10 +6,11 @@ import { distance, formTeams, tzBandOf, type Candidate, type FormedTeam, type Sq
 import { chooseOpenSeat, chooseSquad, type AiDecision, type PersonSummary } from "../ai/matching.js";
 import { STANDIN_AFTER_HOURS, ARCHETYPE_IDS, MAX_TEAM_SIZE } from "../domain/constants.js";
 import { projectStatus } from "../domain/journey.js";
-import { TEAM_WELCOME, STANDIN_REPLIES } from "../content/templates.js";
+import { TEAM_WELCOME } from "../content/templates.js";
 import { getJourney, transition } from "./journey.js";
 import { addRoleTasks, startProject } from "./projects.js";
 import { recordDecision } from "../lib/decisions.js";
+import { enqueue } from "../jobs/queue.js";
 
 export async function roleNames(): Promise<Map<string, string>> {
   const { data } = await db.from("roles").select("id, name");
@@ -473,22 +474,14 @@ export async function removeMember(userId: string, reason: string, opts: { journ
     "standin",
   );
   await db.from("team_tasks").update({ assignee_id: null, assignee_member_id: standin.id }).eq("assignee_member_id", m.id).neq("status", "done");
-  await postSystemMessage(m.team_id, `A teammate (${names.get(m.role_id)}) has left the team. A Huzzler stand-in covers the role until a new teammate joins.`);
+  await postSystemMessage(m.team_id, `A teammate (${names.get(m.role_id)}) has left the team. A Huzzler AI stand-in picks up their open tasks until a new teammate joins.`);
+  await enqueue("standin_work", { teamId: m.team_id });
   if (opts.journeyTo) {
     // Back into the pool for a new cohort: their old offer is spent.
     await db.from("offers").update({ status: "superseded" }).eq("user_id", userId).eq("status", "accepted");
     const j = await getJourney(userId);
     if (j.status !== opts.journeyTo) await transition(userId, opts.journeyTo, reason);
   }
-}
-
-export async function maybeStandinReply(teamId: string, body: string) {
-  const { data: standins } = await db.from("team_members").select("standin_name").eq("team_id", teamId).eq("is_standin", true).eq("status", "active");
-  if (!standins?.length) return;
-  const mentioned = standins.find((s) => s.standin_name && (body.toLowerCase().includes("stand-in") || body.includes("@standin")));
-  if (!mentioned) return;
-  const reply = STANDIN_REPLIES[Math.floor(Math.random() * STANDIN_REPLIES.length)];
-  await postSystemMessage(teamId, reply, "standin", mentioned.standin_name!);
 }
 
 export async function myTeam(userId: string) {

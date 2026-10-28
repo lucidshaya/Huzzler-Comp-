@@ -46,6 +46,7 @@ type Detail = {
     status: string;
     score: number | null;
     submitted_at: string;
+    standin_member_id?: string | null;
     grade: {
       id?: string;
       score: number;
@@ -131,7 +132,9 @@ function TaskPage() {
             <Card key={d.id}>
               <CardTitle
                 aside={
-                  d.status === "graded" ? (
+                  d.standin_member_id ? (
+                    <Pill tone="muted">AI stand-in · not graded</Pill>
+                  ) : d.status === "graded" ? (
                     <ScoreBadge score={d.score} />
                   ) : (
                     <Pill tone="gold">
@@ -142,9 +145,12 @@ function TaskPage() {
                   )
                 }
               >
-                Submission · {fmtDateTime(d.submitted_at)}
+                {d.standin_member_id ? "Huzzler AI stand-in" : "Submission"} ·{" "}
+                {fmtDateTime(d.submitted_at)}
               </CardTitle>
-              <p className="line-clamp-6 whitespace-pre-wrap text-sm text-muted-foreground">
+              <p
+                className={`whitespace-pre-wrap text-sm text-muted-foreground ${d.standin_member_id ? "max-h-96 overflow-y-auto" : "line-clamp-6"}`}
+              >
                 {d.content}
               </p>
               {d.links.length > 0 && (
