@@ -1,7 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { env } from "../config/env.js";
 import { weightedRubricScore } from "../domain/grading.js";
-import { callStructured, AiUnavailableError, type StructuredCall } from "./aiClient.js";
+import { aiConfigured, callStructured, AiUnavailableError, type StructuredCall } from "./aiClient.js";
 import { ModelGrade, type SharedGrade } from "./schemas.js";
 import { getRubric, rubricWeights } from "./rubrics.js";
 import { GRADING_RULES, PROMPT_VERSIONS, rubricBlock } from "./prompts.js";
@@ -27,7 +27,7 @@ export async function gradeWithRubric(req: GradeRequest): Promise<GradeOutcome> 
   const rubric = getRubric(req.rubricId);
   const weights = rubricWeights(rubric);
 
-  if (!env.ANTHROPIC_API_KEY) {
+  if (!aiConfigured()) {
     if (env.AI_MOCK && env.NODE_ENV !== "production") return mockGrade(req, rubric.version, Object.keys(weights));
     throw new AiUnavailableError();
   }
@@ -95,7 +95,7 @@ function mockGrade(req: GradeRequest, rubricVersion: string, criteria: string[])
     score: weightedRubricScore(criteria_breakdown, Object.fromEntries(criteria.map((c) => [c, 1]))),
     criteria_breakdown,
     strengths: "Mock grading is on: this score is based on length only.",
-    gaps: "Configure ANTHROPIC_API_KEY to get real rubric feedback.",
+    gaps: "Connect the AI key to get real rubric feedback.",
     next_steps: ["Re-grade once AI grading is enabled."],
     feedback: "This is a development mock grade.",
     flags: { possible_prompt_injection: false, possible_ai_generated: false },

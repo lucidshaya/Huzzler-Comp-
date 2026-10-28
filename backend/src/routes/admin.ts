@@ -23,6 +23,7 @@ import { resetHelpCorpus } from "../services/help.js";
 import { answerAppeal, listAppeals, resolveGrade, reviewQueue } from "../services/grading.js";
 import { fundPool, grantTokens, paidMembers, poolSummary, updatePrice } from "../services/tokens.js";
 import { createInvite, InviteInput, listInvites, portalFor, resendInvite, revokeInvite, staffHome, STAFF_ROLES } from "../services/staff.js";
+import { aiConfigured, aiProvider } from "../ai/aiClient.js";
 
 // ---------------------------------------------------------------------------
 // Staff sign-in by username. The username -> email mapping stays server-side.
@@ -119,7 +120,8 @@ adminRouter.get(
         by_day: costByDay,
         calls: calls?.length ?? 0,
         failures: (calls ?? []).filter((c) => !c.success).length,
-        configured: Boolean(env.ANTHROPIC_API_KEY),
+        configured: aiConfigured(),
+        provider: aiProvider(),
       },
       pass_rates: { onboarding: rate(tests), projects: rate(projects) },
       queues: { review: reviewQueue ?? 0, appeals: appealsOpen ?? 0, integrity: flagsOpen ?? 0 },

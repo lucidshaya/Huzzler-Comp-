@@ -143,3 +143,18 @@ describe("test pool drafts are checked before they're saved", () => {
     await expect(generateTests("u1", { role_id: "software_engineer", test_no: 1, brief: "assess async JS", count: 1, difficulty: "standard" })).rejects.toMatchObject({ status: 503 });
   });
 });
+
+describe("DeepSeek cost accounting", () => {
+  it("doubles the price during DeepSeek peak hours only", async () => {
+    const { costUsd, deepseekPeak } = await import("../src/ai/features.js");
+    const u = { input: 1_000_000, output: 1_000_000, cacheRead: 0, cacheWrite: 0 };
+    const offPeak = new Date("2026-10-28T12:00:00Z"); // Wednesday midday
+    const peak = new Date("2026-10-28T07:00:00Z"); // Wednesday 07:00 UTC (08:00 Lagos)
+    const weekend = new Date("2026-10-31T07:00:00Z"); // Saturday
+    expect(deepseekPeak(peak)).toBe(true);
+    expect(deepseekPeak(weekend)).toBe(false);
+    expect(costUsd("deepseek-flash", u, false, offPeak)).toBeCloseTo(0.75);
+    expect(costUsd("deepseek-flash", u, false, peak)).toBeCloseTo(1.5);
+    expect(costUsd("claude-haiku-5-5", u, false, peak)).toBeCloseTo(0.6);
+  });
+});

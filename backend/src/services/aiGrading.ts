@@ -106,7 +106,7 @@ async function logGradeDecision(
       ...(r.grade?.strengths ? [{ label: "Strengths", detail: r.grade.strengths.slice(0, 400) }] : []),
       ...(r.grade?.gaps ? [{ label: "Gaps", detail: r.grade.gaps.slice(0, 400) }] : []),
       ...(r.state === "needs_review" ? [{ label: "Safety net", detail: r.reason || "Flagged for a human." }] : []),
-      ...(r.state === "awaiting_ai" ? [{ label: "Waiting", detail: "Once ANTHROPIC_API_KEY is set, the retry job grades everything parked here." }] : []),
+      ...(r.state === "awaiting_ai" ? [{ label: "Waiting", detail: "Once the AI key is set, the retry job grades everything parked here." }] : []),
     ],
     confidence: r.score === null ? null : r.state === "needs_review" ? 0.5 : 0.85,
     latencyMs: r.latencyMs ?? null,

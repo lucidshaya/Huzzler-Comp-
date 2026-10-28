@@ -5,7 +5,7 @@ import { notify } from "../lib/notify.js";
 import { audit } from "../lib/audit.js";
 import { badRequest, conflict, notFound } from "../lib/errors.js";
 import { MAX_TEAM_SIZE, ROLE_IDS } from "../domain/constants.js";
-import { aiConfigured, callStructured } from "../ai/aiClient.js";
+import { aiConfigured, aiProvider, callStructured } from "../ai/aiClient.js";
 import { PROMPT_VERSIONS } from "../ai/prompts.js";
 import { wbsFromLibrary } from "../content/bank/projects.js";
 import { createTeam, loadPool, postSystemMessage, roleNames, runMatching } from "./teams.js";
@@ -178,7 +178,7 @@ export async function createBrief(actorId: string, input: BriefInput) {
   await recordDecision({
     kind: "wbs",
     engine: generatedBy === "ai" ? "ai" : "rules",
-    model: generatedBy === "ai" ? (await featureConfig("aipm_wbs")).model : null,
+    model: generatedBy === "ai" ? (await featureConfig("aipm_wbs", aiProvider() ?? "anthropic")).model : null,
     subjectType: "partner_brief",
     subjectId: brief.id,
     summary: `Turned ${input.company}'s brief "${input.title}" into ${wbs.role_tasks.length} tasks across ${byRole.size} roles and ${wbs.milestones.length} milestones (${days} days).`,
@@ -459,7 +459,7 @@ export async function activity() {
 // AI reasoning: how the AI PM (or the rules engine standing in for it) thinks
 // ---------------------------------------------------------------------------
 
-const AI_FEATURES: AiFeature[] = ["onboarding_grading", "project_grading", "second_grading", "demo_grading", "mentor_chat", "aipm_wbs", "help_bot", "workstation", "integrity_review"];
+const AI_FEATURES: AiFeature[] = ["onboarding_grading", "project_grading", "second_grading", "demo_grading", "mentor_chat", "aipm_wbs", "help_bot", "workstation", "integrity_review", "squad_matching", "team_review", "test_generation"];
 
 export async function aiStatus() {
   const monthStart = new Date();
@@ -468,7 +468,7 @@ export async function aiStatus() {
   const [{ data: calls }, { data: decisions }, models] = await Promise.all([
     db.from("ai_calls").select("feature, cost_usd, success, latency_ms").gte("created_at", monthStart.toISOString()),
     db.from("ai_decisions").select("kind, engine, status").gte("created_at", monthStart.toISOString()),
-    Promise.all(AI_FEATURES.map(async (f) => [f, (await featureConfig(f)).model] as const)),
+    Promise.all(AI_FEATURES.map(async (f) => [f, (await featureConfig(f, aiProvider() ?? "anthropic")).model] as const)),
   ]);
   const byFeature: Record<string, { calls: number; cost_usd: number; failures: number }> = {};
   for (const c of calls ?? []) {

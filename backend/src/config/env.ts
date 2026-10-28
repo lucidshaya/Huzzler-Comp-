@@ -21,6 +21,9 @@ const Env = z.object({
   // Left empty until the AI phase is switched on. Without it, AI-graded work waits in
   // `awaiting_ai` (or gets a deterministic mock grade when AI_MOCK=true in development).
   ANTHROPIC_API_KEY: z.string().optional(),
+  DEEPSEEK_API_KEY: z.string().optional(),
+  // Which provider callStructured uses. Default: DeepSeek when its key is set, else Claude.
+  AI_PROVIDER: z.enum(["anthropic", "deepseek"]).optional(),
   AI_MOCK: bool(false),
   AI_MONTHLY_BUDGET_USD: z.coerce.number().default(500),
   USD_TO_NGN: z.coerce.number().default(1550),

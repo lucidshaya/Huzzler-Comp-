@@ -2,7 +2,7 @@ import { db } from "../lib/supabase.js";
 import { env } from "../config/env.js";
 import { forbidden, HttpError } from "../lib/errors.js";
 import { HINTS_PER_TASK, MENTOR_DAILY_LIMIT } from "../domain/constants.js";
-import { callStructured, AiUnavailableError, AiBudgetError, AiOutputError } from "../ai/aiClient.js";
+import { aiConfigured, callStructured, AiUnavailableError, AiBudgetError, AiOutputError } from "../ai/aiClient.js";
 import { MentorReply } from "../ai/schemas.js";
 import { MENTOR_RULES, PROMPT_VERSIONS } from "../ai/prompts.js";
 import { faqLookup, retrieveForMentor } from "../ai/rag.js";
@@ -80,7 +80,7 @@ export async function askMentor(userId: string, taskId: string, question: string
     return { reply: data.reply, source: "ai" as const };
   } catch (err) {
     if (err instanceof AiUnavailableError || err instanceof AiBudgetError || err instanceof AiOutputError) {
-      const reply = env.ANTHROPIC_API_KEY
+      const reply = aiConfigured()
         ? "The mentor can't answer right now. Try rephrasing, or ask your PM in team chat."
         : "Mentor chat isn't switched on yet. Re-read the three hints and ask your team in chat — they're the fastest help.";
       await db.from("mentor_messages").insert({ user_id: userId, task_id: taskId, role: "assistant", content: reply, source: "fallback" });
