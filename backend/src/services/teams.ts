@@ -111,7 +111,9 @@ async function aiReviewSquad(archetype: string, t: FormedTeam, pool: Candidate[]
 
 /** Squad matching: the rules engine forms valid squads; the AI (when the key is set) chooses between valid alternatives. Run on accept and on a schedule. */
 export async function runMatching() {
-  // First fill stand-in seats on existing teams with real people.
+  // Real people before stand-ins: seat anyone placed without a squad, merge squads that each have a
+  // single real person, then fill stand-in seats with people who are waiting.
+  await consolidateSquads();
   await backfillStandins();
 
   const pool = await loadPool();
@@ -213,8 +215,11 @@ async function fillSeat(seat: Seat, cand: Candidate) {
     subjectId: seat.team_id,
     summary: `Moved a waiting ${seat.role_id.replace(/_/g, " ")} into a stand-in seat on an active squad.`,
     reasoning: [
-      { label: "Open seat", detail: `The squad had a stand-in covering ${seat.role_id.replace(/_/g, " ")}; real people always replace stand-ins first.` },
-      { label: "Fit", detail: `Same company type (${cand.archetypeId}); candidate score band ${cand.scoreBand * 10}s vs squad ${(seat.teams?.score_band ?? 7) * 10}s.` },
+      { label: "Open seat", detail: `The squad had a stand-in covering ${seat.role_id.replace(/_/g, " ")}; real people always replace stand-ins, and squads with real people are filled first.` },
+      {
+        label: "Fit",
+        detail: `${seat.teams?.archetype_id === cand.archetypeId ? "Same company type" : `Joins real teammates on a ${seat.teams?.archetype_id ?? "different"} project (accepted ${cand.archetypeId})`}; score band ${cand.scoreBand * 10}s vs squad ${(seat.teams?.score_band ?? 7) * 10}s.`,
+      },
     ],
     confidence: 0.8,
   });
@@ -223,24 +228,133 @@ async function fillSeat(seat: Seat, cand: Candidate) {
 const openSeatsQuery = () =>
   db.from("team_members").select("id, team_id, role_id, teams:team_id(archetype_id, score_band, current_level, status)").eq("is_standin", true).eq("status", "active");
 
-/** Replace stand-ins with real people from the same archetype and nearby score band. */
+/**
+ * Replace stand-ins with real people. Squads that already have real people come first (so real
+ * people are paired with each other), then the same company type, then the closest score band.
+ */
 export async function backfillStandins() {
-  const { data: seats } = await openSeatsQuery();
-  if (!seats?.length) return 0;
   const pool = await loadPool();
   let filled = 0;
-  for (const seat of seats as unknown as Seat[]) {
-    if (seat.teams?.status !== "active") continue;
-    const band = seat.teams.score_band ?? 7;
-    const cand = pool
-      .filter((c) => c.roleId === seat.role_id && c.archetypeId === seat.teams!.archetype_id && Math.abs(c.scoreBand - band) <= 1)
-      .sort((a, b) => a.waitingSince.getTime() - b.waitingSince.getTime())[0];
-    if (!cand) continue;
-    pool.splice(pool.indexOf(cand), 1);
+  for (const cand of pool.sort((a, b) => a.waitingSince.getTime() - b.waitingSince.getTime())) {
+    const seat = await bestSeat(cand.roleId, { archetypeId: cand.archetypeId, scoreBand: cand.scoreBand });
+    if (!seat) continue;
     await fillSeat(seat, cand);
     filled++;
   }
   return filled;
+}
+
+/** Active real (non-stand-in) members per active team. */
+async function realCounts() {
+  const { data } = await db.from("team_members").select("team_id").eq("status", "active").eq("is_standin", false);
+  const counts = new Map<string, number>();
+  for (const m of data ?? []) counts.set(m.team_id, (counts.get(m.team_id) ?? 0) + 1);
+  return counts;
+}
+
+/**
+ * The best stand-in seat for a role: on a squad with the most real people (never an all-stand-in
+ * squad), preferring the same company type, the given project level, and the closest score band.
+ */
+async function bestSeat(roleId: string, prefer: { archetypeId?: string; level?: number; scoreBand?: number; excludeTeam?: string }) {
+  const [{ data: seats }, counts] = await Promise.all([openSeatsQuery().eq("role_id", roleId), realCounts()]);
+  const options = ((seats ?? []) as unknown as Seat[]).filter(
+    (x) => x.teams?.status === "active" && x.team_id !== prefer.excludeTeam && (counts.get(x.team_id) ?? 0) > 0 && (prefer.level === undefined || x.teams.current_level === prefer.level),
+  );
+  const rank = (x: Seat) => [
+    -(counts.get(x.team_id) ?? 0),
+    x.teams!.archetype_id === prefer.archetypeId ? 0 : 1,
+    prefer.scoreBand === undefined ? 0 : Math.abs((x.teams!.score_band ?? 7) - prefer.scoreBand),
+  ];
+  return options.sort((a, b) => {
+    const ra = rank(a);
+    const rb = rank(b);
+    return ra[0] - rb[0] || ra[1] - rb[1] || ra[2] - rb[2];
+  })[0];
+}
+
+/** Moves an already-placed person into a stand-in seat on another squad (same project level). */
+async function moveIntoSeat(seat: Seat, userId: string, fromTeam: string | null, why: string) {
+  if (fromTeam) {
+    await db.from("team_members").update({ status: "left", left_at: new Date().toISOString() }).eq("team_id", fromTeam).eq("user_id", userId).eq("status", "active");
+  }
+  await db.from("team_members").update({ status: "replaced", left_at: new Date().toISOString() }).eq("id", seat.id);
+  const member = must(await db.from("team_members").insert({ team_id: seat.team_id, user_id: userId, role_id: seat.role_id }).select().single(), "member");
+  await db.from("team_tasks").update({ assignee_id: userId, assignee_member_id: member.id }).eq("assignee_member_id", seat.id).neq("status", "done");
+  await postSystemMessage(seat.team_id, `🎉 A real teammate has joined and is taking over the stand-in's seat. Say hello!`);
+  await notify(userId, "team.placed", "You've got real teammates", "We've moved you into a squad with other real people. Your new board and team chat are in Team workspace.");
+  await recordDecision({
+    kind: "squad_matching",
+    engine: "rules",
+    userId,
+    teamId: seat.team_id,
+    subjectType: "team",
+    subjectId: seat.team_id,
+    summary: `Moved a ${seat.role_id.replace(/_/g, " ")} into a stand-in seat so real people work together.`,
+    reasoning: [
+      { label: "Why", detail: why },
+      { label: "Rule", detail: "Real people are paired with real people first; stand-ins only cover seats nobody can fill yet." },
+    ],
+    confidence: 0.85,
+  });
+}
+
+/** Closes a squad nobody real is left in (its stand-ins and open project go with it). */
+async function disbandIfEmpty(teamId: string) {
+  const counts = await realCounts();
+  if ((counts.get(teamId) ?? 0) > 0) return;
+  await db.from("teams").update({ status: "disbanded" }).eq("id", teamId).eq("status", "active");
+  await db.from("team_members").update({ status: "left", left_at: new Date().toISOString() }).eq("team_id", teamId).eq("status", "active");
+  await db.from("project_instances").update({ status: "completed" }).eq("team_id", teamId).eq("status", "active");
+  logger.info({ teamId }, "squad disbanded after its real member moved");
+}
+
+const PLACED_STATES = ["PLACED", "PROJECT_1", "PROJECT_2", "PROJECT_3", "PROJECT_4", "PROJECT_5"];
+const levelOf = (status: string) => (status.startsWith("PROJECT_") ? Number(status.slice(8)) : 0);
+
+/**
+ * Pairs real people together:
+ * 1. Anyone placed (journey PLACED / PROJECT_n) without an active squad gets a stand-in seat for
+ *    their role on a squad with real people at their project level.
+ * 2. A squad with a single real person merges into another squad with real people at the same
+ *    project level, if it has a stand-in seat for that role; the emptied squad is disbanded.
+ */
+export async function consolidateSquads() {
+  let moved = 0;
+  const { data: placed } = await db.from("user_journey").select("user_id, status").in("status", PLACED_STATES);
+  const { data: active } = await db.from("team_members").select("user_id, team_id, role_id, joined_at").eq("status", "active").eq("is_standin", false);
+  const teamOf = new Map((active ?? []).map((m) => [m.user_id, m]));
+
+  // 1. Orphans.
+  const orphans = (placed ?? []).filter((j) => !teamOf.has(j.user_id));
+  if (orphans.length) {
+    const { data: profs } = await db.from("profiles").select("id, role_id").in("id", orphans.map((o) => o.user_id));
+    const roleOf = new Map((profs ?? []).map((p) => [p.id, p.role_id as string | null]));
+    for (const o of orphans) {
+      const role = roleOf.get(o.user_id);
+      if (!role) continue;
+      const seat = await bestSeat(role, { level: Math.max(1, levelOf(o.status)) });
+      if (!seat) continue;
+      await moveIntoSeat(seat, o.user_id, null, "They were placed but had no active squad.");
+      moved++;
+    }
+  }
+
+  // 2. Solo squads: merge the newer one into the older one.
+  const { data: teams } = await db.from("teams").select("id, current_level, created_at, archetype_id").eq("status", "active").order("created_at");
+  for (const t of (teams ?? []).slice().reverse()) {
+    const counts = await realCounts();
+    if ((counts.get(t.id) ?? 0) !== 1) continue;
+    const solo = (await db.from("team_members").select("user_id, role_id").eq("team_id", t.id).eq("status", "active").eq("is_standin", false).single()).data;
+    if (!solo?.user_id) continue;
+    const seat = await bestSeat(solo.role_id, { level: t.current_level, archetypeId: t.archetype_id, excludeTeam: t.id });
+    if (!seat || !seat.teams || seat.teams.current_level !== t.current_level) continue;
+    await moveIntoSeat(seat, solo.user_id, t.id, "They were the only real person in their squad; this squad already has real people at the same project.");
+    await disbandIfEmpty(t.id);
+    moved++;
+  }
+  if (moved) logger.info({ moved }, "squads consolidated");
+  return moved;
 }
 
 const activeTeamOf = async (userId: string) =>
@@ -258,10 +372,8 @@ export async function placeNow(userId: string): Promise<string | null> {
   const me = pool.find((c) => c.userId === userId);
   if (!me) return null;
 
-  const { data: seats } = await openSeatsQuery().eq("role_id", me.roleId);
-  const seat = ((seats ?? []) as unknown as Seat[])
-    .filter((x) => x.teams?.status === "active" && x.teams.archetype_id === me.archetypeId)
-    .sort((a, b) => Math.abs((a.teams!.score_band ?? 7) - me.scoreBand) - Math.abs((b.teams!.score_band ?? 7) - me.scoreBand))[0];
+  // A stand-in seat on a squad that already has real people comes first, whatever the company type.
+  const seat = await bestSeat(me.roleId, { archetypeId: me.archetypeId, scoreBand: me.scoreBand });
   if (seat) {
     await fillSeat(seat, me);
     return seat.team_id;
