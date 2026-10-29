@@ -7,7 +7,6 @@ import {
   CalendarCheck,
   Coins,
   ExternalLink,
-  Flag,
   GitBranch,
   ListChecks,
   MessageSquare,
@@ -47,6 +46,7 @@ import { HustlerPanel } from "@/components/app/Hustler";
 import { Workstation } from "@/components/app/Workstation";
 import { Meetings } from "@/components/app/Meetings";
 import { ProjectBrief } from "@/components/app/ProjectBrief";
+import { CheckIn } from "@/components/app/CheckIn";
 
 type Tab = "board" | "squad" | "workstation" | "deliverables";
 
@@ -148,6 +148,7 @@ function Workspace() {
     isMine: x.assignee_id === me.user.id,
     isStandin: !x.assignee_id,
     due_at: x.due_at,
+    steps: x.checklist,
   }));
   const myTasks = (w?.tasks ?? []).filter((x) => x.assignee_id === me.user.id);
   // Tasks still waiting for this person's work.
@@ -188,6 +189,7 @@ function Workspace() {
         }
         actions={
           <>
+            {w?.project && !lapsed && <CheckIn checkedIn={w.checkedInToday} compact />}
             {toSubmit.length > 0 && !lapsed && (
               <button
                 onClick={() => navigate({ search: { tab: "deliverables" }, replace: true })}
@@ -275,7 +277,7 @@ function Workspace() {
           </div>
           <div className="flex flex-col gap-4">
             {toSubmit.length > 0 && !lapsed && <SubmitList tasks={toSubmit} compact />}
-            {w?.project && !w.checkedInToday && !lapsed && <CheckIn />}
+            {w?.project && !lapsed && <CheckIn checkedIn={w.checkedInToday} />}
             <HustlerPanel tasks={myTasks} />
           </div>
         </div>
@@ -476,32 +478,33 @@ function Standups({
   });
   return (
     <div className="flex flex-col gap-4">
-      {hasProject && !checkedIn && !lapsed && <CheckIn />}
+      {hasProject && !lapsed && <CheckIn checkedIn={checkedIn} />}
       <Card>
         <CardTitle icon={CalendarCheck}>Stand-ups this week</CardTitle>
-        <div className="flex max-h-[300px] flex-col gap-3 overflow-y-auto">
+        <div className="flex max-h-[420px] flex-col gap-4 overflow-y-auto">
           {(data ?? []).length === 0 && (
             <p className="text-sm text-muted-foreground">No stand-ups yet this week.</p>
           )}
           {(data ?? []).map((c) => (
             <div key={c.id} className="flex gap-3">
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-[11px] font-bold text-primary ring-2 ring-primary/25">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-xs font-bold text-primary ring-2 ring-primary/25">
                 {new Date(c.checkin_date).toLocaleDateString("en-NG", { weekday: "short" })}
               </div>
-              <div className="min-w-0 text-xs">
-                <div className="font-display text-sm font-bold">
+              <div className="min-w-0 text-sm">
+                <div className="font-display font-bold">
                   {(c.profile?.full_name ?? "Teammate").split(" ")[0]}
                 </div>
-                <div className="text-muted-foreground">
-                  <b className="text-foreground">Did:</b> {c.yesterday} ·{" "}
+                <p className="mt-0.5 text-muted-foreground">
+                  <b className="text-foreground">Did:</b> {c.yesterday}
+                </p>
+                <p className="text-muted-foreground">
                   <b className="text-foreground">Next:</b> {c.today}
-                  {c.blockers && (
-                    <>
-                      {" "}
-                      · <b className="text-[color:var(--fire)]">Blocked:</b> {c.blockers}
-                    </>
-                  )}
-                </div>
+                </p>
+                {c.blockers && (
+                  <p className="text-muted-foreground">
+                    <b className="text-[color:var(--fire)]">Blocked:</b> {c.blockers}
+                  </p>
+                )}
               </div>
             </div>
           ))}
@@ -592,7 +595,7 @@ function TeamChat({
   });
 
   return (
-    <div className="card-duo flex h-[460px] flex-col">
+    <div className="card-duo flex h-[560px] flex-col">
       <div className="flex items-center gap-2 border-b border-border px-4 py-3 font-display text-sm font-bold">
         <MessageSquare className="h-4 w-4 text-primary" /> Team chat
       </div>
@@ -607,11 +610,11 @@ function TeamChat({
               : (m.author_label ?? "Huzzler");
           return (
             <div key={m.id} className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
-              <div className="mb-0.5 text-[10px] font-semibold text-muted-foreground">
+              <div className="mb-1 text-xs font-semibold text-muted-foreground">
                 {who} · {fmtDateTime(m.created_at)}
               </div>
               <div
-                className={`max-w-[90%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm ${mine ? "bg-primary text-primary-foreground" : m.kind === "system" ? "border border-primary/30 bg-primary/5" : m.kind === "standin" ? "border border-dashed border-border bg-muted" : "bg-muted"}`}
+                className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-[15px] leading-relaxed ${mine ? "bg-primary text-primary-foreground" : m.kind === "system" ? "border border-primary/30 bg-primary/5" : m.kind === "standin" ? "border border-dashed border-border bg-muted" : "bg-muted"}`}
               >
                 {m.body}
               </div>
@@ -619,7 +622,7 @@ function TeamChat({
           );
         })}
         {(messages ?? []).length === 0 && (
-          <p className="text-center text-xs text-muted-foreground">Say hello to your team 👋</p>
+          <p className="text-center text-sm text-muted-foreground">Say hello to your team 👋</p>
         )}
       </div>
       {!readOnly && (
@@ -648,61 +651,6 @@ function TeamChat({
         </form>
       )}
     </div>
-  );
-}
-
-function CheckIn() {
-  const qc = useQueryClient();
-  const [f, setF] = useState({ yesterday: "", today: "", blockers: "" });
-  const m = useMutation({
-    mutationFn: () => api("/checkins", { body: { ...f, blockers: f.blockers || undefined } }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["workspace"] });
-      void qc.invalidateQueries({ queryKey: ["team", "checkins"] });
-    },
-  });
-  return (
-    <Card>
-      <CardTitle icon={CalendarCheck}>Daily check-in</CardTitle>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          m.mutate();
-        }}
-        className="flex flex-col gap-2"
-      >
-        <input
-          aria-label="What did you do yesterday?"
-          className={`${inputCls} !py-2`}
-          placeholder="What did you do yesterday?"
-          value={f.yesterday}
-          onChange={(e) => setF({ ...f, yesterday: e.target.value })}
-          required
-        />
-        <input
-          aria-label="What will you do today?"
-          className={`${inputCls} !py-2`}
-          placeholder="What will you do today?"
-          value={f.today}
-          onChange={(e) => setF({ ...f, today: e.target.value })}
-          required
-        />
-        <input
-          aria-label="Anything blocking you?"
-          className={`${inputCls} !py-2`}
-          placeholder="Anything blocking you? (optional)"
-          value={f.blockers}
-          onChange={(e) => setF({ ...f, blockers: e.target.value })}
-        />
-        <ErrorNote error={m.error} />
-        <button disabled={m.isPending} className="btn-duo !py-2 text-sm">
-          Post check-in
-        </button>
-      </form>
-      <p className="mt-2 text-[11px] text-muted-foreground">
-        Check-ins are compiled into a team summary at 5pm WAT.
-      </p>
-    </Card>
   );
 }
 

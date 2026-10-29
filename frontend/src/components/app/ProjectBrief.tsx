@@ -72,7 +72,7 @@ export function ProjectBrief({ team, ws, myId }: { team: Team; ws: Workspace; my
       </div>
 
       <Section icon={Compass} title="What you're building" open>
-        <p className="whitespace-pre-line text-sm">{project.template.brief}</p>
+        <p className="whitespace-pre-line text-[15px] leading-relaxed">{project.template.brief}</p>
         {g && <p className="mt-2 text-sm text-muted-foreground">{g.purpose}</p>}
       </Section>
 
@@ -121,13 +121,20 @@ export function ProjectBrief({ team, ws, myId }: { team: Team; ws: Workspace; my
                     >
                       {t.title}
                     </Link>
-                    <span className="text-xs text-muted-foreground">Due {fmtDate(t.due_at)}</span>
+                    <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                      {t.checklist && (
+                        <Pill tone={t.checklist.done === t.checklist.total ? "green" : "muted"}>
+                          {t.checklist.done}/{t.checklist.total} steps
+                        </Pill>
+                      )}
+                      Due {fmtDate(t.due_at)}
+                    </span>
                   </div>
                   {t.description && (
                     <p className="mt-1 text-sm text-muted-foreground">{t.description}</p>
                   )}
                   {waitsOn.length > 0 && (
-                    <p className="mt-2 text-xs">
+                    <p className="mt-2 text-sm">
                       <b>Starts from:</b>{" "}
                       {waitsOn
                         .map(
@@ -137,7 +144,7 @@ export function ProjectBrief({ team, ws, myId }: { team: Team; ws: Workspace; my
                     </p>
                   )}
                   {feeds.length > 0 && (
-                    <p className="mt-1 text-xs">
+                    <p className="mt-1 text-sm">
                       <b>Hand off to:</b>{" "}
                       {feeds.map((x) => `${owner(x)} for ${x.title}`).join(", ")}
                     </p>
@@ -181,7 +188,7 @@ export function ProjectBrief({ team, ws, myId }: { team: Team; ws: Workspace; my
 
       {g && (
         <Section icon={Upload} title="How to submit your work" open={openAll}>
-          <ol className="flex list-decimal flex-col gap-1.5 pl-5 text-sm">
+          <ol className="flex list-decimal flex-col gap-2 pl-5 text-[15px] leading-relaxed">
             {g.how_to_submit.map((s) => (
               <li key={s}>{s}</li>
             ))}
@@ -276,7 +283,7 @@ function Section({
 
 function Bullets({ items }: { items: string[] }) {
   return (
-    <ul className="flex list-disc flex-col gap-1.5 pl-5 text-sm">
+    <ul className="flex list-disc flex-col gap-2 pl-5 text-[15px] leading-relaxed">
       {items.map((x) => (
         <li key={x}>{x}</li>
       ))}

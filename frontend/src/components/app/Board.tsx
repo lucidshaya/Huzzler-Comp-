@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Bot, Clock } from "lucide-react";
+import { Bot, CheckSquare, Clock } from "lucide-react";
 import { fmtDate } from "./ui";
 
 export type BoardTask = {
@@ -11,6 +11,8 @@ export type BoardTask = {
   isMine?: boolean;
   isStandin?: boolean;
   due_at?: string | null;
+  /** Checklist progress, when the task has one. */
+  steps?: { done: number; total: number } | null;
 };
 
 export const COLUMNS: Array<{ key: string; label: string }> = [
@@ -29,7 +31,7 @@ export function Board({ tasks, linkable = true }: { tasks: BoardTask[]; linkable
         return (
           <section
             key={c.key}
-            className="w-[250px] shrink-0 snap-start rounded-xl border border-border bg-muted/30 p-2"
+            className="w-[260px] shrink-0 snap-start rounded-xl border border-border bg-muted/30 p-2"
             aria-label={c.label}
           >
             <div className="mb-2 flex items-center justify-between px-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -42,7 +44,21 @@ export function Board({ tasks, linkable = true }: { tasks: BoardTask[]; linkable
                     className={`rounded-lg border bg-card p-3 text-left transition-colors ${t.isMine ? "border-primary/50" : "border-border"} ${linkable ? "hover:border-primary" : ""}`}
                   >
                     <div className="font-display text-sm font-bold leading-snug">{t.title}</div>
-                    <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                    {t.steps && (
+                      <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                        <CheckSquare className="h-3.5 w-3.5 shrink-0" />
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full bg-[color:var(--brand-green)]"
+                            style={{
+                              width: `${(t.steps.done / Math.max(1, t.steps.total)) * 100}%`,
+                            }}
+                          />
+                        </div>
+                        {t.steps.done}/{t.steps.total}
+                      </div>
+                    )}
+                    <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
                       <span className="flex min-w-0 items-center gap-1 truncate">
                         {t.isStandin && <Bot className="h-3 w-3 shrink-0" />}
                         {t.isMine ? "You" : t.assignee} · {t.role}

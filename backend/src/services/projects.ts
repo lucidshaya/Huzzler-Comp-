@@ -10,6 +10,7 @@ import { peerScore, projectTotal, reliabilityScore, round2 } from "../domain/gra
 import { projectStatus } from "../domain/journey.js";
 import { PROJECT_INTRO, STANDUP_SUMMARY, NUDGE_OVERDUE } from "../content/templates.js";
 import { projectGuide } from "../content/projectGuide.js";
+import { checklistsEnabled, progressOf, type Checklist } from "./checklists.js";
 import { transition, getJourney } from "./journey.js";
 import { postSystemMessage, removeMember, assertTeamMember, ensureSeated } from "./teams.js";
 import { gradeSubjectWithAi } from "./aiGrading.js";
@@ -91,6 +92,7 @@ export async function startProject(teamId: string, level: number) {
   }
   // Stand-ins start on their unblocked tasks straight away so dependants aren't held up.
   if ((members ?? []).some((m) => m.is_standin)) await enqueue("standin_work", { teamId });
+  await enqueue("task_checklists", { instanceId: instance.id }, { jobId: `checklists-${instance.id}` });
 
   await db.from("teams").update({ current_level: level }).eq("id", teamId);
   for (const m of members ?? []) {
@@ -128,7 +130,10 @@ export async function addRoleTasks(teamId: string, memberId: string, userId: str
       assignee_id: userId, assignee_member_id: memberId, title: t.title, description: t.description, hints: t.hints.slice(0, HINTS_PER_TASK),
       rubric_id: `${t.role_id}.project`, due_at: mByKey.get(t.milestone_key)?.due_at ?? project.due_at, sort_order: 100 + i, status: "todo",
     }));
-  if (rows.length) must(await db.from("team_tasks").insert(rows).select("id"), "joiner tasks");
+  if (rows.length) {
+    must(await db.from("team_tasks").insert(rows).select("id"), "joiner tasks");
+    await enqueue("task_checklists", { instanceId: project.id }, { jobId: `checklists-${project.id}` });
+  }
   return rows.length;
 }
 
@@ -150,10 +155,24 @@ export async function workspace(userId: string) {
     db.from("project_results").select("project_instance_id, total, passed, deliverables_score, team_score, peer_score, reliability_score").eq("user_id", userId),
     db.from("teams").select("archetype_id").eq("id", m.team_id).single(),
   ]);
+  const lists = await taskChecklists(project.id, userId);
   return {
-    project, milestones: milestones ?? [], tasks: tasks ?? [], checkedInToday: Boolean(myCheckin), results: results ?? [],
+    project, milestones: milestones ?? [], tasks: (tasks ?? []).map((t) => ({ ...t, checklist: lists.get(t.id) ?? null })), checkedInToday: Boolean(myCheckin), results: results ?? [],
     guide: projectGuide(project.level), roadmap: team ? await roadmap(team.archetype_id) : [],
   };
+}
+
+/** Checklist progress per task, and a nudge to write any of this person's that are missing. */
+async function taskChecklists(instanceId: string, userId: string) {
+  const out = new Map<string, { done: number; total: number }>();
+  if (!(await checklistsEnabled())) return out;
+  const { data } = await db.from("team_tasks").select("id, assignee_id, checklist").eq("project_instance_id", instanceId);
+  for (const t of data ?? []) {
+    const p = progressOf(t.checklist as Checklist | null);
+    if (p) out.set(t.id, p);
+  }
+  if ((data ?? []).some((t) => t.assignee_id === userId && !t.checklist)) await enqueue("task_checklists", { instanceId }, { jobId: `checklists-${instanceId}` });
+  return out;
 }
 
 /** The five projects a squad of this company type works through, newest approved version of each. */
@@ -208,7 +227,9 @@ export async function getTaskDetail(userId: string, taskId: string) {
   const hints = (task.hints as string[]).map((h, i) => (unlocked.has(i) ? { index: i, text: h } : { index: i, locked: true }));
   const ids = (deliverables ?? []).map((d) => d.id);
   const { data: grades } = ids.length ? await db.from("grades").select("id, subject_id, score, criteria, strengths, gaps, next_steps, feedback").in("subject_id", ids).eq("is_final", true) : { data: [] };
-  return { task, hints, mentorOpen: unlocked.size >= HINTS_PER_TASK, deliverables: (deliverables ?? []).map((d) => ({ ...d, grade: (grades ?? []).find((g) => g.subject_id === d.id) ?? null })) };
+  const listsOn = await checklistsEnabled();
+  if (task.assignee_id && task.checklist === null && listsOn) await enqueue("task_checklists", { instanceId: task.project_instance_id }, { jobId: `checklists-${task.project_instance_id}` });
+  return { task, hints, checklist: (task.checklist as Checklist | null | undefined) ?? null, checklistsOn: listsOn, mentorOpen: unlocked.size >= HINTS_PER_TASK, deliverables: (deliverables ?? []).map((d) => ({ ...d, grade: (grades ?? []).find((g) => g.subject_id === d.id) ?? null })) };
 }
 
 /** Hints unlock strictly in order. */

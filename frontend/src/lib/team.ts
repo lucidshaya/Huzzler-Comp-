@@ -28,6 +28,7 @@ export type WorkspaceTask = {
   title: string;
   description?: string;
   depends_on?: string[] | null;
+  checklist?: { done: number; total: number } | null;
   status: string;
   due_at: string | null;
 };

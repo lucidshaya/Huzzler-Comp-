@@ -19,7 +19,8 @@ export type JobName =
   | "issue_certificate"
   | "send_campaign"
   | "standin_work"
-  | "process_meeting";
+  | "process_meeting"
+  | "task_checklists";
 
 const BACKOFF_MS = 10_000;
 

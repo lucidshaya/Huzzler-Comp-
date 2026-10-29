@@ -12,6 +12,7 @@ import { processCampaign } from "../services/emailCampaigns.js";
 import { runStandinWork, runAllStandinWork } from "../services/standins.js";
 import { processMeeting } from "../services/meetings.js";
 import { pruneOldLogs, runOpsChecks } from "../services/ops.js";
+import { generateChecklists } from "../services/checklists.js";
 
 type Processor = (data: any) => Promise<unknown>;
 
@@ -33,6 +34,7 @@ export const processors: Record<JobName, Processor> = {
   send_campaign: ({ campaignId }) => processCampaign(campaignId),
   standin_work: ({ teamId }) => runStandinWork(teamId),
   process_meeting: ({ meetingId }) => processMeeting(meetingId),
+  task_checklists: ({ instanceId }) => generateChecklists(instanceId),
   nudges: async () => {
     await sendNudges();
     await compileStandups();

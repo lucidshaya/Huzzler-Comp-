@@ -20,6 +20,7 @@ import {
 import { Appeal } from "@/components/app/Appeal";
 import { HzSelect } from "@/components/app/HzSelect";
 import { DetailSkeleton } from "@/components/app/Skeleton";
+import { TaskChecklist, type Checklist } from "@/components/app/TaskChecklist";
 
 export const Route = createFileRoute("/_app/workspace/task/$taskId")({
   head: () => ({ meta: [{ title: "Task · Huzzler" }] }),
@@ -38,6 +39,8 @@ type Detail = {
     project: { level: number; status: string };
   };
   hints: Array<{ index: number; text?: string; locked?: boolean }>;
+  checklist: Checklist | null;
+  checklistsOn?: boolean;
   mentorOpen: boolean;
   deliverables: Array<{
     id: string;
@@ -72,8 +75,13 @@ function TaskPage() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["task", taskId],
     queryFn: () => api<Detail>(`/tasks/${taskId}`),
-    refetchInterval: (q) =>
-      q.state.data?.deliverables.some((d) => d.status === "grading") ? 8000 : false,
+    refetchInterval: (q) => {
+      const d = q.state.data;
+      if (d?.deliverables.some((x) => x.status === "grading")) return 8000;
+      // The checklist is written in the background the first time a task is opened.
+      if (d?.checklistsOn && !d.checklist && d.task.assignee_id) return 5000;
+      return false;
+    },
   });
   const setStatus = useMutation({
     mutationFn: (status: string) => api(`/tasks/${taskId}`, { method: "PATCH", body: { status } }),
@@ -140,6 +148,13 @@ function TaskPage() {
             <CardTitle>Task brief</CardTitle>
             <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{task.description}</p>
           </Card>
+          {data.checklistsOn && task.assignee_id && (
+            <TaskChecklist
+              taskId={taskId}
+              checklist={data.checklist}
+              editable={mine && !readOnly}
+            />
+          )}
           {mine && !readOnly && task.status !== "done" && <SubmitDeliverable taskId={taskId} />}
           {data.deliverables.map((d) => (
             <Card key={d.id}>

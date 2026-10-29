@@ -10,6 +10,7 @@ import { CanvasInput, RunInput, runTool, saveCanvas, workstationState } from "..
 import { myTeam, assertTeamMember } from "../services/teams.js";
 import { standinReply } from "../services/standins.js";
 import { later } from "../lib/notify.js";
+import { checkStep } from "../services/checklists.js";
 import { workspace, updateTask, getTaskDetail, unlockHint, submitDeliverable, submitCheckin, submitPeerReviews, submitDemo, ciToken } from "../services/projects.js";
 import { mentorHistory, askMentor } from "../services/mentor.js";
 import { addMeeting, decideMeeting, getMeetingNotes, listMeetings } from "../services/meetings.js";
@@ -90,6 +91,10 @@ teamRouter.patch("/tasks/:id", h(async (req) =>
   updateTask(uid(req), req.params.id, parse(z.object({ status: z.enum(["todo", "in_progress", "blocked", "review"]).optional(), sort_order: z.number().int().optional(), due_at: z.string().datetime().optional() }), req.body)),
 ));
 teamRouter.post("/tasks/:id/hints", h(async (req) => unlockHint(uid(req), req.params.id)));
+teamRouter.post("/tasks/:id/checklist", h(async (req) => {
+  const { step_id, done } = parse(z.object({ step_id: z.string().min(1).max(20), done: z.boolean() }), req.body);
+  return checkStep(uid(req), req.params.id, step_id, done);
+}));
 teamRouter.post("/tasks/:id/deliverables", h(async (req) =>
   submitDeliverable(uid(req), req.params.id, parse(z.object({
     content: z.string().min(20).max(30_000),
