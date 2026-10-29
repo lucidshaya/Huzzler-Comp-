@@ -25,6 +25,7 @@ import { Route as AppProfileRouteImport } from './routes/_app/profile'
 import { Route as AppResultsRouteImport } from './routes/_app/results'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppSupportRouteImport } from './routes/_app/support'
+import { Route as AppTutorialRouteImport } from './routes/_app/tutorial'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminLoginRouteImport } from './routes/admin/login'
 import { Route as AipmIndexRouteImport } from './routes/aipm/index'
@@ -118,6 +119,11 @@ const AppSupportRoute = AppSupportRouteImport.update({
   path: '/support',
   getParentRoute: () => AppRoute,
 } as any)
+const AppTutorialRoute = AppTutorialRouteImport.update({
+  id: '/tutorial',
+  path: '/tutorial',
+  getParentRoute: () => AppRoute,
+} as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/admin/',
   path: '/admin/',
@@ -200,6 +206,7 @@ export interface FileRoutesByFullPath {
   '/results': typeof AppResultsRoute
   '/settings': typeof AppSettingsRoute
   '/support': typeof AppSupportRoute
+  '/tutorial': typeof AppTutorialRoute
   '/admin/login': typeof AdminLoginRoute
   '/aipm/login': typeof AipmLoginRoute
   '/billing/callback': typeof BillingCallbackRoute
@@ -230,6 +237,7 @@ export interface FileRoutesByTo {
   '/results': typeof AppResultsRoute
   '/settings': typeof AppSettingsRoute
   '/support': typeof AppSupportRoute
+  '/tutorial': typeof AppTutorialRoute
   '/admin/login': typeof AdminLoginRoute
   '/aipm/login': typeof AipmLoginRoute
   '/billing/callback': typeof BillingCallbackRoute
@@ -262,6 +270,7 @@ export interface FileRoutesById {
   '/_app/results': typeof AppResultsRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/support': typeof AppSupportRoute
+  '/_app/tutorial': typeof AppTutorialRoute
   '/admin/login': typeof AdminLoginRoute
   '/aipm/login': typeof AipmLoginRoute
   '/billing/callback': typeof BillingCallbackRoute
@@ -294,6 +303,7 @@ export interface FileRouteTypes {
     | '/results'
     | '/settings'
     | '/support'
+    | '/tutorial'
     | '/admin/login'
     | '/aipm/login'
     | '/billing/callback'
@@ -324,6 +334,7 @@ export interface FileRouteTypes {
     | '/results'
     | '/settings'
     | '/support'
+    | '/tutorial'
     | '/admin/login'
     | '/aipm/login'
     | '/billing/callback'
@@ -355,6 +366,7 @@ export interface FileRouteTypes {
     | '/_app/results'
     | '/_app/settings'
     | '/_app/support'
+    | '/_app/tutorial'
     | '/admin/login'
     | '/aipm/login'
     | '/billing/callback'
@@ -502,6 +514,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSupportRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/tutorial': {
+      id: '/_app/tutorial'
+      path: '/tutorial'
+      fullPath: '/tutorial'
+      preLoaderRoute: typeof AppTutorialRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/admin/': {
       id: '/admin/'
       path: '/admin'
@@ -607,6 +626,7 @@ interface AppRouteChildren {
   AppResultsRoute: typeof AppResultsRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppSupportRoute: typeof AppSupportRoute
+  AppTutorialRoute: typeof AppTutorialRoute
   AppTestsTestNoRoute: typeof AppTestsTestNoRoute
   AppTestsIndexRoute: typeof AppTestsIndexRoute
   AppWorkspaceIndexRoute: typeof AppWorkspaceIndexRoute
@@ -624,6 +644,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppResultsRoute: AppResultsRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppSupportRoute: AppSupportRoute,
+  AppTutorialRoute: AppTutorialRoute,
   AppTestsTestNoRoute: AppTestsTestNoRoute,
   AppTestsIndexRoute: AppTestsIndexRoute,
   AppWorkspaceIndexRoute: AppWorkspaceIndexRoute,

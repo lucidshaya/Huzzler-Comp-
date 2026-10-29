@@ -40,8 +40,9 @@ export const MAX_TEAM_SIZE = 7;
 
 export const GRACE_DAYS = 7;
 export const BACKFILL_AFTER_LAPSE_DAYS = 3;
-export const INACTIVITY_WARN_DAYS = 5;
-export const INACTIVITY_REMOVE_DAYS = 10;
+// No check-ins, deliverables, chat or meeting notes on an active project: warned, then removed.
+export const INACTIVITY_WARN_DAYS = 2;
+export const INACTIVITY_REMOVE_DAYS = 3;
 export const REFUND_WINDOW_HOURS = 48;
 
 export const MENTOR_DAILY_LIMIT = 10;

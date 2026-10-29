@@ -21,6 +21,7 @@ import {
   Coins,
   LifeBuoy,
   Compass,
+  GraduationCap,
   type LucideIcon,
 } from "lucide-react";
 import { ThemeToggle } from "@/lib/theme";
@@ -76,6 +77,7 @@ function navFor(me: Me): NavItem[] {
     },
     { to: "/certificate", label: "Certificate", short: "Certificate", icon: Award, locked: !paid },
     { to: "/billing", label: "Billing", short: "Billing", icon: Wallet },
+    { to: "/tutorial", label: "Platform tutorial", short: "Tutorial", icon: GraduationCap },
     { to: "/support", label: "Help & support", short: "Help", icon: LifeBuoy },
     { to: "/profile", label: "Profile", short: "Profile", icon: UserRound },
   ];

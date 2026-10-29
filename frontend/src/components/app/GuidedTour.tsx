@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { useRouterState } from "@tanstack/react-router";
 import { ArrowLeft, ArrowRight, Sparkles, X } from "lucide-react";
 import { hasPaid, type Me } from "@/lib/journey";
 
@@ -108,7 +109,10 @@ export function GuidedTour({ me }: { me: Me }) {
   const steps = full ? stepsFor(me) : whatsNew(me);
   const step = steps[i];
 
+  // The tutorial page comes first for new people; the tour opens once they move on from it.
+  const onTutorial = useRouterState({ select: (s) => s.location.pathname.startsWith("/tutorial") });
   useEffect(() => {
+    if (onTutorial) return;
     let seen = true;
     try {
       // Either tour counts as seen; existing users only see "What's new" once.
@@ -117,16 +121,19 @@ export function GuidedTour({ me }: { me: Me }) {
       /* storage blocked: don't auto-open */
     }
     const t = seen ? null : setTimeout(() => setOpen(true), 900);
+    return () => {
+      if (t) clearTimeout(t);
+    };
+  }, [onTutorial]);
+
+  useEffect(() => {
     const replay = () => {
       setFull(true);
       setI(0);
       setOpen(true);
     };
     window.addEventListener(START_TOUR_EVENT, replay);
-    return () => {
-      if (t) clearTimeout(t);
-      window.removeEventListener(START_TOUR_EVENT, replay);
-    };
+    return () => window.removeEventListener(START_TOUR_EVENT, replay);
   }, []);
 
   const measure = useCallback(() => {

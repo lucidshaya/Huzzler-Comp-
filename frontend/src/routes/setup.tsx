@@ -8,6 +8,7 @@ import { ROLES, useMe, useRefreshMe, hasPaid } from "@/lib/journey";
 import { ErrorNote, Field, inputCls, Notice, Spinner } from "@/components/app/ui";
 import { ThemeToggle } from "@/lib/theme";
 import { HzSelect } from "@/components/app/HzSelect";
+import { tutorialSeen } from "@/lib/tutorial";
 
 export const Route = createFileRoute("/setup")({
   ssr: false,
@@ -87,7 +88,16 @@ function Setup() {
           </ol>
           {step === "profile" && <ProfileStep onDone={() => setStep("phone")} />}
           {step === "phone" && <PhoneStep onDone={() => setStep("field")} />}
-          {step === "field" && <FieldStep onDone={() => navigate({ to: "/dashboard" })} />}
+          {step === "field" && (
+            <FieldStep
+              onDone={() =>
+                // New members go through the platform tutorial first.
+                tutorialSeen()
+                  ? navigate({ to: "/dashboard" })
+                  : navigate({ to: "/tutorial", search: { welcome: true } })
+              }
+            />
+          )}
         </div>
       </main>
     </div>

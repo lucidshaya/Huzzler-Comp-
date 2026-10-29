@@ -1,31 +1,20 @@
+import type { ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Award,
-  CheckCircle2,
-  Circle,
-  Download,
-  ExternalLink,
-  Linkedin,
-  Share2,
-} from "lucide-react";
+import { Check, Copy, Download, ExternalLink, Linkedin, Share2 } from "lucide-react";
 import { api } from "@/lib/api";
-import { useMe } from "@/lib/journey";
-import {
-  Card,
-  CardTitle,
-  ErrorNote,
-  PageHeader,
-  Pill,
-  ScoreBadge,
-  Spinner,
-} from "@/components/app/ui";
+import { roleName, useMe } from "@/lib/journey";
+import { ErrorNote, Pill, Progress } from "@/components/app/ui";
 import { ListPageSkeleton } from "@/components/app/Skeleton";
+import { hzToast } from "@/components/app/Toast";
 
 export const Route = createFileRoute("/_app/certificate")({
   head: () => ({ meta: [{ title: "Certificate · Huzzler" }] }),
   component: Certificate,
 });
+
+const PASS_MARK = 70;
+const PEER_REVIEWS = 2;
 
 type Status = {
   eligible: boolean;
@@ -41,6 +30,20 @@ type Status = {
   pdf: { url: string; cert_code: string } | null;
 };
 
+/** What a project still needs, in plain words. */
+function projectState(p: Status["projects"][number]): { done: boolean; note: string } {
+  const missing = Math.max(0, PEER_REVIEWS - p.peer_reviews);
+  if (p.passed && !missing) return { done: true, note: "Complete" };
+  if (p.passed)
+    return {
+      done: false,
+      note: `Passed. Needs ${missing} more peer review${missing === 1 ? "" : "s"}`,
+    };
+  if (p.score != null)
+    return { done: false, note: `Scored below ${PASS_MARK}%. Finish your remediation task` };
+  return { done: false, note: "Not graded yet" };
+}
+
 function Certificate() {
   const { data: me } = useMe();
   const { data, isLoading, error, refetch } = useQuery({
@@ -49,117 +52,232 @@ function Certificate() {
   });
   if (isLoading || !me) return <ListPageSkeleton rows={4} label="Loading certificate" />;
   if (error || !data) return <ErrorNote error={error} onRetry={() => refetch()} />;
+
   const code = data.pdf?.cert_code;
-  const verifyUrl = code ? `${window.location.origin}/verify/${code}` : "";
+  const projects = data.projects.map((p) => ({ ...p, ...projectState(p) }));
+  const met =
+    projects.filter((p) => p.done).length +
+    Number(data.identity_verified) +
+    Number(data.open_integrity_flags === 0);
+  const total = projects.length + 2;
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
-      <PageHeader
-        chip="Certification"
-        title={code ? "You're certified 🎓" : "Your path to certification"}
-        body={
-          code
-            ? "Share your certificate and portfolio anywhere. Anyone can verify it."
-            : "Pass all 5 projects (70%+ each) with at least 2 peer reviews per project, verify your identity, and have no open integrity flags."
-        }
-      />
-      {code && (
-        <Card className="ring-2 ring-primary/40">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                Certificate ID
-              </div>
-              <div className="font-mono text-2xl font-bold">{code}</div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <a
-                href={data.pdf!.url}
-                target="_blank"
-                rel="noreferrer"
-                className="btn-duo !py-2 !px-4 text-sm"
-              >
-                <Download className="h-4 w-4" /> PDF
-              </a>
-              <a
-                href={`/verify/${code}`}
-                target="_blank"
-                rel="noreferrer"
-                className="btn-duo-outline !py-2 !px-4 text-sm"
-              >
-                <ExternalLink className="h-4 w-4" /> Verify page
-              </a>
-              <a
-                href={`https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=${encodeURIComponent("Huzzler Certificate of Experience")}&organizationName=Huzzler&certId=${code}&certUrl=${encodeURIComponent(verifyUrl)}`}
-                target="_blank"
-                rel="noreferrer"
-                className="btn-duo-outline !py-2 !px-4 text-sm"
-              >
-                <Linkedin className="h-4 w-4" /> Add to LinkedIn
-              </a>
-              {me.profile.username && (
-                <Link
-                  to="/u/$username"
-                  params={{ username: me.profile.username }}
-                  className="btn-duo-outline !py-2 !px-4 text-sm"
-                >
-                  <Share2 className="h-4 w-4" /> Portfolio
-                </Link>
-              )}
-            </div>
-          </div>
-        </Card>
-      )}
-      <Card>
-        <CardTitle icon={Award}>Requirements</CardTitle>
-        <ul className="flex flex-col gap-2">
-          {data.projects.map((p) => (
-            <li
-              key={p.level}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm"
-            >
-              <span className="flex items-center gap-2">
-                {p.passed ? (
-                  <CheckCircle2 className="h-4 w-4 text-primary" />
-                ) : (
-                  <Circle className="h-4 w-4 text-muted-foreground" />
-                )}
-                <b>P{p.level}</b> {p.name}
-              </span>
-              <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                {p.peer_reviews} peer reviews <ScoreBadge score={p.score} />
-              </span>
-            </li>
-          ))}
-          <li className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
-            <span className="flex items-center gap-2">
-              {data.identity_verified ? (
-                <CheckCircle2 className="h-4 w-4 text-primary" />
-              ) : (
-                <Circle className="h-4 w-4 text-muted-foreground" />
-              )}{" "}
-              Identity verified
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-14 pb-8">
+      <header className="flex flex-col gap-3">
+        <span className="chip w-fit">Certificate</span>
+        <h1 className="font-display text-3xl font-bold tracking-tight">
+          {code ? "Your certificate" : "Your path to a certificate"}
+        </h1>
+        <p className="max-w-2xl text-base leading-relaxed text-muted-foreground">
+          {code
+            ? "Share it with employers. Anyone with the link can check that it's genuine."
+            : "Your certificate is issued automatically once every requirement below is met."}
+        </p>
+      </header>
+
+      {code ? (
+        <Issued
+          code={code}
+          pdfUrl={data.pdf!.url}
+          name={me.profile.full_name ?? "Huzzler member"}
+          role={roleName(me.profile.role_id)}
+          username={me.profile.username}
+        />
+      ) : (
+        <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-6">
+          <div className="flex items-baseline justify-between gap-4">
+            <span className="font-display text-lg font-bold">
+              {met} of {total} requirements met
             </span>
+            <span className="text-sm text-muted-foreground">
+              {Math.round((met / total) * 100)}%
+            </span>
+          </div>
+          <Progress value={(met / total) * 100} />
+        </div>
+      )}
+
+      <section className="flex flex-col gap-5" aria-labelledby="req-projects">
+        <div>
+          <h2 id="req-projects" className="font-display text-xl font-bold tracking-tight">
+            Projects
+          </h2>
+          <p className="mt-1 text-[15px] text-muted-foreground">
+            Pass each project with {PASS_MARK}% or more and get at least {PEER_REVIEWS} peer reviews
+            on it.
+          </p>
+        </div>
+        <ul className="divide-y divide-border rounded-2xl border border-border">
+          {projects.map((p) => (
+            <Requirement
+              key={p.level}
+              done={p.done}
+              title={`Project ${p.level}: ${p.name}`}
+              note={p.note}
+            >
+              <dl className="flex gap-6 text-sm">
+                <div className="text-right">
+                  <dt className="text-xs text-muted-foreground">Score</dt>
+                  <dd className="font-semibold tabular-nums">
+                    {p.score == null ? "—" : `${Math.round(p.score)}%`}
+                  </dd>
+                </div>
+                <div className="text-right">
+                  <dt className="text-xs text-muted-foreground">Peer reviews</dt>
+                  <dd className="font-semibold tabular-nums">
+                    {Math.min(p.peer_reviews, PEER_REVIEWS)} of {PEER_REVIEWS}
+                  </dd>
+                </div>
+              </dl>
+            </Requirement>
+          ))}
+        </ul>
+      </section>
+
+      <section className="flex flex-col gap-5" aria-labelledby="req-account">
+        <div>
+          <h2 id="req-account" className="font-display text-xl font-bold tracking-tight">
+            Account checks
+          </h2>
+          <p className="mt-1 text-[15px] text-muted-foreground">
+            These confirm the certificate belongs to you and your work is your own.
+          </p>
+        </div>
+        <ul className="divide-y divide-border rounded-2xl border border-border">
+          <Requirement
+            done={data.identity_verified}
+            title="Identity verified"
+            note={
+              data.identity_verified
+                ? "Your ID has been checked"
+                : "Upload a government ID in Settings. It takes a minute."
+            }
+          >
             {!data.identity_verified && (
-              <Link to="/settings" className="text-xs font-bold text-primary">
+              <Link to="/settings" className="btn-duo-outline !px-4 !py-2 text-sm">
                 Upload ID
               </Link>
             )}
-          </li>
-          <li className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
-            <span className="flex items-center gap-2">
-              {data.open_integrity_flags === 0 ? (
-                <CheckCircle2 className="h-4 w-4 text-primary" />
-              ) : (
-                <Circle className="h-4 w-4 text-muted-foreground" />
-              )}{" "}
-              No open integrity flags
-            </span>
+          </Requirement>
+          <Requirement
+            done={data.open_integrity_flags === 0}
+            title="No open integrity flags"
+            note={
+              data.open_integrity_flags === 0
+                ? "Nothing to review"
+                : "Some of your work is being reviewed. We'll contact you if we need anything."
+            }
+          >
             {data.open_integrity_flags > 0 && <Pill tone="gold">Under review</Pill>}
-          </li>
+          </Requirement>
         </ul>
-      </Card>
+      </section>
+
       {code && <Opportunities open={me.profile.open_to_opportunities} />}
+    </div>
+  );
+}
+
+function Requirement({
+  done,
+  title,
+  note,
+  children,
+}: {
+  done: boolean;
+  title: string;
+  note: string;
+  children?: ReactNode;
+}) {
+  return (
+    <li className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-start gap-4">
+        <span
+          className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full ${done ? "bg-primary text-primary-foreground" : "border-2 border-border"}`}
+          aria-label={done ? "Done" : "Not done yet"}
+        >
+          {done && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+        </span>
+        <div>
+          <div className="font-semibold">{title}</div>
+          <div className="mt-0.5 text-sm text-muted-foreground">{note}</div>
+        </div>
+      </div>
+      {children && <div className="pl-10 sm:pl-0">{children}</div>}
+    </li>
+  );
+}
+
+function Issued({
+  code,
+  pdfUrl,
+  name,
+  role,
+  username,
+}: {
+  code: string;
+  pdfUrl: string;
+  name: string;
+  role: string;
+  username: string | null;
+}) {
+  const verifyUrl = `${window.location.origin}/verify/${code}`;
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(verifyUrl);
+      hzToast.success("Link copied", "Paste it into your CV, email or LinkedIn.");
+    } catch {
+      hzToast.error("Couldn't copy the link", verifyUrl);
+    }
+  };
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="rounded-2xl border border-border bg-card p-2">
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-primary/30 px-6 py-12 text-center">
+          <img src="/huzzler-mark.svg" alt="" className="mb-4 h-10 w-10" />
+          <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+            Certificate of Experience
+          </span>
+          <span className="mt-2 font-display text-3xl font-bold tracking-tight">{name}</span>
+          <span className="text-[15px] text-muted-foreground">{role}</span>
+          <span className="mt-6 text-xs text-muted-foreground">Certificate ID</span>
+          <span className="font-mono text-base font-semibold">{code}</span>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <a href={pdfUrl} target="_blank" rel="noreferrer" className="btn-duo !px-4 !py-2 text-sm">
+          <Download className="h-4 w-4" /> Download PDF
+        </a>
+        <button type="button" onClick={copy} className="btn-duo-outline !px-4 !py-2 text-sm">
+          <Copy className="h-4 w-4" /> Copy verify link
+        </button>
+        <a
+          href={`https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=${encodeURIComponent("Huzzler Certificate of Experience")}&organizationName=Huzzler&certId=${code}&certUrl=${encodeURIComponent(verifyUrl)}`}
+          target="_blank"
+          rel="noreferrer"
+          className="btn-duo-outline !px-4 !py-2 text-sm"
+        >
+          <Linkedin className="h-4 w-4" /> Add to LinkedIn
+        </a>
+        <a
+          href={`/verify/${code}`}
+          target="_blank"
+          rel="noreferrer"
+          className="btn-duo-outline !px-4 !py-2 text-sm"
+        >
+          <ExternalLink className="h-4 w-4" /> Open verify page
+        </a>
+        {username && (
+          <Link
+            to="/u/$username"
+            params={{ username }}
+            className="btn-duo-outline !px-4 !py-2 text-sm"
+          >
+            <Share2 className="h-4 w-4" /> Portfolio
+          </Link>
+        )}
+      </div>
     </div>
   );
 }
@@ -187,12 +305,14 @@ function Opportunities({ open }: { open: boolean }) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["opp-requests"] }),
   });
   return (
-    <Card>
-      <CardTitle icon={Share2}>Opportunities</CardTitle>
-      <label className="flex items-start justify-between gap-4 rounded-xl border border-border p-3">
+    <section className="flex flex-col gap-5" aria-labelledby="partner-opps">
+      <h2 id="partner-opps" className="font-display text-xl font-bold tracking-tight">
+        Partner companies
+      </h2>
+      <label className="flex items-start justify-between gap-6 rounded-2xl border border-border p-5">
         <span>
-          <span className="block text-sm font-semibold">Open to opportunities</span>
-          <span className="block text-xs text-muted-foreground">
+          <span className="block font-semibold">Open to opportunities</span>
+          <span className="mt-1 block text-sm leading-relaxed text-muted-foreground">
             Let Huzzler recommend you to partner companies. Your profile is only shared with a
             company after you approve that specific company.
           </span>
@@ -206,14 +326,14 @@ function Opportunities({ open }: { open: boolean }) {
         />
       </label>
       {(reqs.data ?? []).length > 0 && (
-        <ul className="mt-3 flex flex-col gap-2">
+        <ul className="divide-y divide-border rounded-2xl border border-border">
           {reqs.data!.map((r) => (
             <li
               key={r.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm"
+              className="flex flex-col gap-3 p-5 text-sm sm:flex-row sm:items-center sm:justify-between"
             >
               <span>
-                <b>{r.opportunity.company_name}</b>{" "}
+                <span className="block font-semibold">{r.opportunity.company_name}</span>
                 <span className="text-muted-foreground">
                   {[r.opportunity.level, r.opportunity.location].filter(Boolean).join(" · ")}
                 </span>
@@ -222,13 +342,13 @@ function Opportunities({ open }: { open: boolean }) {
                 <span className="flex gap-2">
                   <button
                     onClick={() => respond.mutate({ id: r.id, accept: true })}
-                    className="btn-duo !py-1.5 !px-3 text-xs"
+                    className="btn-duo !px-3 !py-1.5 text-xs"
                   >
                     Share my profile
                   </button>
                   <button
                     onClick={() => respond.mutate({ id: r.id, accept: false })}
-                    className="btn-duo-outline !py-1.5 !px-3 text-xs"
+                    className="btn-duo-outline !px-3 !py-1.5 text-xs"
                   >
                     No thanks
                   </button>
@@ -241,6 +361,6 @@ function Opportunities({ open }: { open: boolean }) {
         </ul>
       )}
       <ErrorNote error={toggle.error ?? respond.error} />
-    </Card>
+    </section>
   );
 }

@@ -2,10 +2,10 @@ import crypto from "node:crypto";
 import { db, must } from "../lib/supabase.js";
 import { env } from "../config/env.js";
 import { logger } from "../lib/logger.js";
-import { notify } from "../lib/notify.js";
+import { notify, emailUser, emailLayout } from "../lib/notify.js";
 import { render } from "../lib/templates.js";
 import { badRequest, conflict, forbidden, notFound } from "../lib/errors.js";
-import { HINTS_PER_TASK, MAX_FAILED_PROJECTS, PROJECT_PASS_MARK } from "../domain/constants.js";
+import { HINTS_PER_TASK, INACTIVITY_REMOVE_DAYS, INACTIVITY_WARN_DAYS, MAX_FAILED_PROJECTS, PROJECT_PASS_MARK } from "../domain/constants.js";
 import { peerScore, projectTotal, reliabilityScore, round2 } from "../domain/grading.js";
 import { projectStatus } from "../domain/journey.js";
 import { PROJECT_INTRO, STANDUP_SUMMARY, NUDGE_OVERDUE } from "../content/templates.js";
@@ -458,20 +458,57 @@ async function handleFailedProject(userId: string, teamId: string, level: number
   await postSystemMessage(teamId, `A teammate has a remediation task from project ${level}. They stay with the team.`);
 }
 
-/** Inactivity: 5 days silent -> warning; 10 days -> removed and backfilled. */
+/**
+ * Inactivity: no squad work (check-ins, deliverables, chat, meeting notes) on an active project for
+ * INACTIVITY_WARN_DAYS -> warning; INACTIVITY_REMOVE_DAYS -> removed from the squad, a stand-in takes the
+ * seat, and they choose a new opportunity. Signing in alone doesn't count. The clock starts no earlier
+ * than when they joined or the project started.
+ */
 export async function runInactivityCheck() {
-  const { data: members } = await db.from("team_members").select("user_id").eq("status", "active").not("user_id", "is", null);
-  const ids = (members ?? []).map((m) => m.user_id as string);
-  if (!ids.length) return;
-  const { data: journeys } = await db.from("user_journey").select("user_id, last_active_at, status").in("user_id", ids);
-  for (const j of journeys ?? []) {
-    const last = j.last_active_at ? new Date(j.last_active_at).getTime() : Date.now();
+  const { data: members } = await db.from("team_members").select("user_id, team_id, joined_at").eq("status", "active").not("user_id", "is", null);
+  if (!members?.length) return;
+  const { data: projects } = await db.from("project_instances").select("team_id, started_at").eq("status", "active").in("team_id", [...new Set(members.map((m) => m.team_id))]);
+  const started = new Map((projects ?? []).map((p) => [p.team_id as string, new Date(p.started_at).getTime()]));
+  // Squads between projects (or waiting on grades) have nothing to do yet.
+  const working = members.filter((m) => started.has(m.team_id));
+  if (!working.length) return;
+
+  const ids = working.map((m) => m.user_id as string);
+  const since = new Date(Date.now() - INACTIVITY_REMOVE_DAYS * DAY).toISOString();
+  const [checkins, deliverables, messages, meetings, journeys, warnings] = await Promise.all([
+    db.from("checkins").select("user_id, created_at").in("user_id", ids).gte("created_at", since),
+    db.from("deliverables").select("user_id, created_at").in("user_id", ids).gte("created_at", since),
+    db.from("messages").select("user_id, created_at").in("user_id", ids).eq("kind", "user").gte("created_at", since),
+    db.from("team_meetings").select("user_id:created_by, created_at").in("created_by", ids).gte("created_at", since),
+    db.from("user_journey").select("user_id, status").in("user_id", ids),
+    db.from("notifications").select("user_id, created_at").in("user_id", ids).eq("type", "team.inactive").gte("created_at", since),
+  ]);
+  for (const r of [checkins, deliverables, messages, meetings, journeys, warnings]) if (r.error) throw new Error(`inactivity check: ${r.error.message}`);
+  const lastWork = new Map<string, number>();
+  for (const r of [...checkins.data!, ...deliverables.data!, ...messages.data!, ...meetings.data!] as Array<{ user_id: string; created_at: string }>) {
+    lastWork.set(r.user_id, Math.max(lastWork.get(r.user_id) ?? 0, new Date(r.created_at).getTime()));
+  }
+  const status = new Map(journeys.data!.map((j) => [j.user_id as string, j.status as string]));
+  const warnedAt = new Map<string, number>();
+  for (const w of warnings.data!) warnedAt.set(w.user_id, Math.max(warnedAt.get(w.user_id) ?? 0, new Date(w.created_at).getTime()));
+
+  for (const m of working) {
+    // A lapsed plan has its own path (handleLapsedMember / backfillLapsed).
+    if (status.get(m.user_id) === "LAPSED") continue;
+    const last = Math.max(lastWork.get(m.user_id) ?? 0, new Date(m.joined_at).getTime(), started.get(m.team_id)!);
     const days = (Date.now() - last) / DAY;
-    if (days >= 10) {
-      await removeMember(j.user_id, "inactive for 10 days", { journeyTo: "OFFER_PENDING" });
-      await notify(j.user_id, "team.removed", "You've been removed from your team", "You were inactive for 10 days. Your progress is saved; you'll be offered a place in a new cohort.");
-    } else if (days >= 5 && days < 6) {
-      await notify(j.user_id, "team.inactive", "Your team misses you", "You haven't been active for 5 days. After 10 days your role is given to someone else.");
+    // Nobody is removed without a warning first (e.g. already past the line when this rule shipped).
+    const warned = (warnedAt.get(m.user_id) ?? 0) > last;
+    if (days >= INACTIVITY_REMOVE_DAYS && warned) {
+      await removeMember(m.user_id, `inactive for ${INACTIVITY_REMOVE_DAYS} days`, { journeyTo: "OFFER_PENDING" });
+      const body = `There were no check-ins, deliverables or messages from you for ${INACTIVITY_REMOVE_DAYS} days, so an AI stand-in has taken your seat. Your progress is saved. Choose a new opportunity to join another squad.`;
+      await notify(m.user_id, "team.removed", "You've been removed from your squad", body);
+      await emailUser(m.user_id, "You've been removed from your Huzzler squad", emailLayout("You've been removed from your squad", `<p>${body}</p>`, { label: "Choose a new opportunity", url: `${env.APP_URL}/opportunities` }));
+      await enqueue("generate_offers", { userId: m.user_id });
+    } else if (days >= INACTIVITY_WARN_DAYS && !warned) {
+      const body = `You haven't checked in, submitted work or messaged your squad for ${INACTIVITY_WARN_DAYS} days. Do one of those within 24 hours or your seat goes to an AI stand-in and you'll need to choose a new opportunity.`;
+      await notify(m.user_id, "team.inactive", "Your squad needs you", body);
+      await emailUser(m.user_id, "Your Huzzler squad needs you", emailLayout("Your squad needs you", `<p>${body}</p>`, { label: "Open your workspace", url: `${env.APP_URL}/workspace` }));
     }
   }
 }
