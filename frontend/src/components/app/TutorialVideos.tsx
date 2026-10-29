@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { ArrowRight, Play, PlayCircle, X } from "lucide-react";
 import type { Me } from "@/lib/journey";
@@ -16,9 +17,11 @@ export function VideoDialog({
   initial,
   onClose,
   autoPlay = true,
+  label = "Tutorial video",
   intro,
   footer,
 }: {
+  label?: string;
   videos: TutorialVideo[];
   initial?: string;
   onClose: () => void;
@@ -39,7 +42,8 @@ export function VideoDialog({
     };
   }, [onClose]);
 
-  return (
+  // Portalled to <body>: inside the blurred header, `fixed` would be trapped to the header's box.
+  return createPortal(
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm sm:p-6"
       onClick={onClose}
@@ -54,7 +58,7 @@ export function VideoDialog({
         <header className="flex items-start justify-between gap-4 px-5 pb-4 pt-5 sm:px-6">
           <div className="min-w-0">
             <span className="text-xs font-bold uppercase tracking-widest text-primary">
-              Tutorial video · {video.length}
+              {label} · {video.length}
             </span>
             <h2 className="mt-1 font-display text-xl font-bold tracking-tight">{video.title}</h2>
             {intro ?? <p className="mt-1 text-sm text-muted-foreground">{video.blurb}</p>}
@@ -108,7 +112,8 @@ export function VideoDialog({
           {footer && <div className="border-t border-border px-5 py-4 sm:px-6">{footer}</div>}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -119,20 +124,20 @@ export function TutorialVideoButton() {
     select: (s) => (s.location.search as { tab?: string } | undefined)?.tab,
   });
   const [open, setOpen] = useState(false);
-  const videos = videosFor(pathname, tab);
+  const { label, videos } = videosFor(pathname, tab);
   return (
     <>
       <button
         onClick={() => setOpen(true)}
         data-tour="tutorial-video"
-        aria-label={`Tutorial video: ${videos[0].title}`}
+        aria-label={`${label} video: ${videos[0].title}`}
         title={videos[0].title}
         className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-bold text-primary-foreground shadow-[0_6px_16px_-8px_var(--primary)] transition-transform hover:scale-[1.03] active:scale-95"
       >
         <PlayCircle className="h-4 w-4" />
-        <span className="hidden sm:inline">Tutorial video</span>
+        <span className="hidden sm:inline">{label}</span>
       </button>
-      {open && <VideoDialog videos={videos} onClose={() => setOpen(false)} />}
+      {open && <VideoDialog videos={videos} label={label} onClose={() => setOpen(false)} />}
     </>
   );
 }
@@ -152,6 +157,7 @@ export function PlatformTourPopup({ me }: { me: Me }) {
   return (
     <VideoDialog
       videos={[PLATFORM_TOUR]}
+      label="Platform tutorial"
       autoPlay={false}
       onClose={close}
       intro={

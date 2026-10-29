@@ -56,20 +56,26 @@ export const GUIDES: TutorialVideo[] = [
 
 const byId = (id: string) => [PLATFORM_TOUR, ...GUIDES].find((v) => v.id === id)!;
 
-/** The videos for the section someone is in, most relevant first. */
-export function videosFor(pathname: string, tab?: string): TutorialVideo[] {
-  const ids = (() => {
-    if (/^\/(tests|begin|results)/.test(pathname)) return ["onboarding-tests", "platform-tour"];
-    if (pathname.startsWith("/opportunities")) return ["first-day-in-a-squad"];
-    if (pathname.startsWith("/workspace/task")) return ["checkins-deliverables-grades"];
+/** The section someone is in: its button label and its videos, most relevant first. */
+export function videosFor(
+  pathname: string,
+  tab?: string,
+): { label: string; videos: TutorialVideo[] } {
+  const [label, ids] = ((): [string, string[]] => {
+    if (/^\/(tests|begin|results)/.test(pathname))
+      return ["Onboarding tests tutorial", ["onboarding-tests", "platform-tour"]];
+    if (pathname.startsWith("/opportunities"))
+      return ["Opportunities tutorial", ["first-day-in-a-squad"]];
+    if (pathname.startsWith("/workspace/task"))
+      return ["Task & deliverables tutorial", ["checkins-deliverables-grades"]];
     if (pathname.startsWith("/workspace"))
       return tab === "squad"
-        ? ["first-day-in-a-squad", "checkins-deliverables-grades"]
-        : ["checkins-deliverables-grades", "first-day-in-a-squad"];
-    if (pathname.startsWith("/certificate")) return ["getting-certified"];
-    return ["platform-tour"];
+        ? ["Teamwork tutorial", ["first-day-in-a-squad", "checkins-deliverables-grades"]]
+        : ["Workspace tutorial", ["checkins-deliverables-grades", "first-day-in-a-squad"]];
+    if (pathname.startsWith("/certificate")) return ["Certificate tutorial", ["getting-certified"]];
+    return ["Platform tutorial", ["platform-tour"]];
   })();
-  return ids.map(byId);
+  return { label, videos: ids.map(byId) };
 }
 
 // The platform tour opens by itself once, after payment and before the onboarding tests.
