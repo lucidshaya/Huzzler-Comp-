@@ -11,6 +11,7 @@ const state = vi.hoisted(() => ({
   ai: true,
   calls: 0,
   reply: null as unknown,
+  lastText: "",
   helpFlag: { enabled: false, value: { ai: false } } as { enabled: boolean; value: { ai: boolean } },
 }));
 
@@ -43,8 +44,9 @@ vi.mock("../src/ai/aiClient.js", async (orig) => {
   return {
     ...real,
     aiConfigured: () => state.ai,
-    callStructured: async () => {
+    callStructured: async (call: { userContent: Array<{ text: string }> }) => {
       state.calls++;
+      state.lastText = call.userContent.map((c) => c.text).join("\n");
       return { model: "claude-haiku-5-5", data: state.reply };
     },
   };
@@ -77,6 +79,16 @@ describe("help bot with AI on", () => {
     expect(r).toMatchObject({ source: "ai", answer: "Hi! What can I help you with?", handoff: null });
   });
 
+  it("answers FAQ questions with the model too, with the person's profile in the prompt", async () => {
+    const { askHelp } = await import("../src/services/help.js");
+    state.helpFlag = { enabled: true, value: { ai: true } };
+    state.reply = { answer: "Open Billing and pay with Paystack.", answered_from_reference: true, needs_person: false };
+    const r = await askHelp("u4", "How do I pay for my plan?");
+    expect(state.calls).toBe(1);
+    expect(state.lastText).toContain("<profile>");
+    expect(r.source).toBe("ai");
+  });
+
   it("offers a person when the model says the problem needs one", async () => {
     const { askHelp } = await import("../src/services/help.js");
     state.helpFlag = { enabled: true, value: { ai: true } };
@@ -99,6 +111,16 @@ describe("help bot dead ends", () => {
     const r = deadEnd([q("my test won't submit")], "my test won't submit");
     expect(r.stuck).toBe(false);
     expect(r.reason).toMatch(/already/);
+  });
+
+  it("refers to a person after five questions, and stops the model if none were answered", async () => {
+    const { deadEnd } = await import("../src/services/help.js");
+    const five = ["pay", "tests", "squad", "tokens", "certificate"].map((t) => q(`question about ${t}`));
+    expect(deadEnd(five.slice(0, 4), "question about offers").reason).toBeNull();
+    const sixth = deadEnd(five, "question about offers");
+    expect(sixth).toMatchObject({ stuck: false });
+    expect(sixth.reason).toMatch(/person/);
+    expect(deadEnd([...five.slice(0, 4), q("question about grades", false)], "question about offers").stuck).toBe(true);
   });
 
   it("stops the model after repeated misses", async () => {

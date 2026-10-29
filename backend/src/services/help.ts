@@ -7,7 +7,7 @@ import { HelpReply } from "../ai/schemas.js";
 import { PLATFORM_GUIDE } from "../content/helpGuide.js";
 
 const DAILY_LIMIT = 40;
-const CONFIDENT = 0.6; // normalised lexical score above which we answer straight from the FAQ
+const CONFIDENT = 0.6; // normalised lexical score above which the FAQ answer stands on its own (no AI)
 const RELATED = 0.25;
 
 type Doc = { id: string; kind: "faq" | "kb"; title: string; body: string; role_id: string | null; tokens: string[] };
@@ -102,6 +102,7 @@ export async function search(question: string, roleId: string | null, k = 4) {
 }
 
 const WINDOW_MS = 30 * 60_000;
+const MAX_PROMPTS = 5;
 // Someone asking about something broken or account-specific usually needs a person, not the FAQ.
 const PROBLEM = /\b(won'?t|can'?t|cannot|isn'?t|doesn'?t|didn'?t|not working|not showing|error|bug|broken|stuck|missing|failed|charged|wrong|still)\b/i;
 
@@ -125,27 +126,79 @@ export function deadEnd(prior: PriorQuery[], question: string) {
   const repeat = prior.some((p) => overlap(p.question, question) >= 0.6);
   const unanswered = prior.filter((p) => !p.answered).length;
   const unhelpful = prior.some((p) => p.helpful === false);
-  const stuck = unanswered >= 3 || prior.length >= 10 || (repeat && (unhelpful || unanswered >= 1));
+  const asked = prior.length + 1;
+  // Past MAX_PROMPTS questions a person is always offered; with no answer in sight the model stops.
+  const many = asked > MAX_PROMPTS;
+  const stuck =
+    unanswered >= 3 ||
+    asked >= 10 ||
+    (repeat && (unhelpful || unanswered >= 1)) ||
+    (many && (repeat || unhelpful || unanswered >= 1));
   const reason = stuck
     ? "It looks like I'm not getting you an answer. A person from the Huzzler team can sort this out."
     : repeat
       ? "You've asked about this already, so a person may get you there faster."
       : unanswered >= 2 || unhelpful
         ? "If these answers aren't helping, a person from the Huzzler team can take a look."
-        : prior.length + 1 >= 6
-          ? "Still looking? A person from the Huzzler team can help directly."
+        : many
+          ? "You've asked a few questions now. If you're still stuck, a person from the Huzzler team can help directly."
           : null;
   return { stuck, reason };
+}
+
+const day = (d: string | null | undefined) => (d ? new Date(d).toISOString().slice(0, 10) : null);
+
+/**
+ * What the bot knows about the person asking: their own account only, so it can answer "what's
+ * next for me?"-style questions. Best effort: a failed lookup just leaves that line out.
+ */
+export async function helpContext(userId: string): Promise<string> {
+  const [profile, journey, attempt, offers, member, tasks, wallet, tickets] = await Promise.all([
+    db.from("profiles").select("full_name, role:role_id(name)").eq("id", userId).maybeSingle(),
+    db.from("user_journey").select("status, plan_id, access_expires_at, grace_until, attempts_used, next_attempt_at, failed_projects").eq("user_id", userId).maybeSingle(),
+    db.from("test_attempts").select("attempt_no, status, weighted_score").eq("user_id", userId).order("attempt_no", { ascending: false }).limit(1).maybeSingle(),
+    db.from("offers").select("expires_at").eq("user_id", userId).eq("status", "pending"),
+    db.from("team_members").select("team_id, role:role_id(name), team:team_id(name)").eq("user_id", userId).eq("status", "active").order("joined_at", { ascending: false }).limit(1).maybeSingle(),
+    db.from("team_tasks").select("title, status, due_at").eq("assignee_id", userId).neq("status", "done").order("due_at", { ascending: true }).limit(5),
+    db.from("token_wallets").select("balance").eq("user_id", userId).maybeSingle(),
+    db.from("support_tickets").select("id", { count: "exact", head: true }).eq("user_id", userId).in("status", ["open", "awaiting_user"]),
+  ]);
+  const one = <T,>(r: { data: unknown }) => (r.data && !Array.isArray(r.data) ? (r.data as T) : null);
+  const many = <T,>(r: { data: unknown }) => (Array.isArray(r.data) ? (r.data as T[]) : []);
+  const name = (v: unknown) => (Array.isArray(v) ? v[0]?.name : (v as { name?: string } | null)?.name) ?? null;
+
+  const p = one<{ full_name: string | null; role: unknown }>(profile);
+  const j = one<{ status: string; plan_id: string | null; access_expires_at: string | null; grace_until: string | null; attempts_used: number; next_attempt_at: string | null; failed_projects: number }>(journey);
+  const a = one<{ attempt_no: number; status: string; weighted_score: number | null }>(attempt);
+  const m = one<{ team_id: string; role: unknown; team: unknown }>(member);
+  let project: { level: number; due_at: string; template: unknown } | null = null;
+  if (m) project = one(await db.from("project_instances").select("level, due_at, template:template_id(title)").eq("team_id", m.team_id).eq("status", "active").maybeSingle());
+
+  const lines = [
+    p?.full_name && `First name: ${p.full_name.split(" ")[0]}`,
+    name(p?.role) && `Field: ${name(p?.role)}`,
+    j && `Journey stage: ${j.status}`,
+    j?.plan_id && `Plan: ${j.plan_id === "monthly" ? "monthly (₦2,500/month)" : "one-time (₦5,000)"}${j.access_expires_at ? `, access until ${day(j.access_expires_at)}` : ""}`,
+    j?.grace_until && `Last payment failed; renew by ${day(j.grace_until)} to keep their place`,
+    a && `Onboarding tests: attempt ${a.attempt_no} of 2, ${a.status}${a.weighted_score != null ? `, weighted score ${Math.round(a.weighted_score)}%` : ""}${j?.next_attempt_at ? `, retake opens ${day(j.next_attempt_at)}` : ""}`,
+    many(offers).length > 0 && `Pending internship offers: ${many(offers).length}, first expires ${day(many<{ expires_at: string }>(offers)[0].expires_at)}`,
+    m && `Squad: ${name(m.team) ?? "their squad"}, role ${name(m.role) ?? "unknown"}`,
+    project && `Current project: ${project.level} of 5 (${name(project.template) ?? (project.template as { title?: string } | null)?.title ?? "untitled"}), due ${day(project.due_at)}`,
+    j && j.failed_projects > 0 && `Failed projects so far: ${j.failed_projects} (two means leaving the squad)`,
+    ...many<{ title: string; status: string; due_at: string | null }>(tasks).map((t) => `Open task: "${t.title}" (${t.status}${t.due_at ? `, due ${day(t.due_at)}` : ""})`),
+    one<{ balance: number }>(wallet) && `Token balance: ${one<{ balance: number }>(wallet)!.balance}`,
+    (tickets as { count?: number | null }).count ? `Open support reports: ${(tickets as { count?: number | null }).count}` : null,
+  ];
+  return lines.filter(Boolean).join("\n");
 }
 
 export async function askHelp(userId: string, question: string, history: HelpTurn[] = []) {
   const start = new Date();
   start.setUTCHours(0, 0, 0, 0);
-  const [{ count }, { data: recent }, { data: profile }, { data: journey }] = await Promise.all([
+  const [{ count }, { data: recent }, { data: profile }] = await Promise.all([
     db.from("help_queries").select("id", { count: "exact", head: true }).eq("user_id", userId).gte("created_at", start.toISOString()),
     db.from("help_queries").select("question, answered, helpful, top_faq_id").eq("user_id", userId).gte("created_at", new Date(Date.now() - WINDOW_MS).toISOString()).order("created_at", { ascending: false }).limit(20),
     db.from("profiles").select("role_id").eq("id", userId).single(),
-    db.from("user_journey").select("status").eq("user_id", userId).maybeSingle(),
   ]);
   if ((count ?? 0) >= DAILY_LIMIT) throw new HttpError(429, "You've asked a lot of questions today. Report an issue and a person will help.", "HELP_LIMIT");
 
@@ -162,12 +215,9 @@ export async function askHelp(userId: string, question: string, history: HelpTur
   let source: "faq" | "ai" | "none" = "none";
   let needsPerson = false;
 
-  if (top && top.doc.kind === "faq" && top.score >= CONFIDENT) {
-    answer = top.doc.body;
-    source = "faq";
-  } else if (!end.stuck && aiConfigured() && (await helpAiEnabled())) {
-    // The platform guide is always in the reference, so greetings and "how do I start" questions
-    // get answered even when no FAQ matches.
+  // DeepSeek (or Claude) answers when it's on, grounded in the FAQ hits, the platform guide and the
+  // person's own account. The FAQ text alone is the fallback.
+  if (!end.stuck && aiConfigured() && (await helpAiEnabled())) {
     const turns = history.slice(-6).map((t) => `${t.from === "user" ? "User" : "Huzzler help"}: ${t.text.slice(0, 600)}`).join("\n");
     try {
       const { data } = await callStructured({
@@ -181,7 +231,7 @@ export async function askHelp(userId: string, question: string, history: HelpTur
           {
             type: "text",
             text: [
-              `<user>\nJourney stage: ${journey?.status ?? "unknown"}\n</user>`,
+              `<profile>\n${(await helpContext(userId).catch(() => "")) || "Nothing on file yet."}\n</profile>`,
               hits.length ? `<reference>\n${hits.map((h) => `## ${h.doc.title}\n${h.doc.body}`).join("\n\n")}\n</reference>` : "",
               turns ? `<conversation>\n${turns}\n</conversation>` : "",
               `<question>\n${question}\n</question>`,
@@ -198,7 +248,7 @@ export async function askHelp(userId: string, question: string, history: HelpTur
       if (!(err instanceof AiUnavailableError || err instanceof AiBudgetError || err instanceof AiOutputError)) throw err;
     }
   }
-  if (!answer && top && top.doc.kind === "faq" && top.score >= 0.3) {
+  if (!answer && top && top.doc.kind === "faq" && top.score >= (end.stuck ? CONFIDENT : 0.3)) {
     answer = top.doc.body;
     source = "faq";
   }
