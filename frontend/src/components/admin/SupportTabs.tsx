@@ -144,7 +144,9 @@ function StaffThreadView({ id, onBack }: { id: string; onBack: () => void }) {
   });
   const [reply, setReply] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
-  useEffect(() => endRef.current?.scrollIntoView({ block: "end" }), [data?.messages.length]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "end" });
+  }, [data?.messages.length]);
   const invalidate = () => qc.invalidateQueries({ queryKey: ["admin", "support"] });
   const send = useMutation({
     mutationFn: () => api(`/admin/support/${id}/messages`, { body: { body: reply } }),

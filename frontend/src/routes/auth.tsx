@@ -439,7 +439,9 @@ function ResendLink({ email }: { email: string }) {
 function CheckInbox({ email, onBack }: { email: string; onBack: () => void }) {
   const { left, start } = useCooldown(60);
   const [sent, setSent] = useState("");
-  useEffect(() => start(), []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    void start();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const resend = async () => {
     const { error } = await supabase().auth.resend({
       type: "signup",

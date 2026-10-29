@@ -316,7 +316,10 @@ export function TicketThread({ ticketId }: { ticketId: string }) {
   const [shot, setShot] = useState<{ path: string; preview: string } | null>(null);
   const [showShot, setShowShot] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
-  useEffect(() => endRef.current?.scrollIntoView({ block: "end" }), [data?.messages.length]);
+  // Braces matter: newer browsers return a Promise from scroll methods, and React would call it as cleanup.
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "end" });
+  }, [data?.messages.length]);
   useEffect(() => {
     // Live updates when staff reply (RLS lets users read only their own tickets).
     const ch = supabase()
@@ -683,10 +686,9 @@ function HelpBot({ onReport }: { onReport: (asked: string[]) => void }) {
     mutationFn: ({ id, helpful }: { id: string; helpful: boolean }) =>
       api("/help/feedback", { body: { id, helpful } }),
   });
-  useEffect(
-    () => listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" }),
-    [msgs.length, ask.isPending],
-  );
+  useEffect(() => {
+    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
+  }, [msgs.length, ask.isPending]);
   const asked = msgs.filter((m) => m.from === "user").map((m) => m.text);
   const submit = (text: string) => {
     const t = text.trim();
