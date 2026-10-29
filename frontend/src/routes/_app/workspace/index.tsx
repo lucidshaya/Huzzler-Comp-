@@ -46,6 +46,7 @@ import { WorkspaceSkeleton } from "@/components/app/Skeleton";
 import { HustlerPanel } from "@/components/app/Hustler";
 import { Workstation } from "@/components/app/Workstation";
 import { Meetings } from "@/components/app/Meetings";
+import { ProjectBrief } from "@/components/app/ProjectBrief";
 
 type Tab = "board" | "squad" | "workstation" | "deliverables";
 
@@ -157,6 +158,8 @@ function Workspace() {
   const done = tasks.filter((x) => x.status === "done").length;
   const allDone = tasks.length > 0 && done === tasks.length;
   const pastDue = w?.project ? new Date(w.project.due_at) < new Date() : false;
+  // The full brief leads until this person has started their work, then sits under the board.
+  const briefFirst = myTasks.every((x) => x.status === "todo");
 
   return (
     <div className="flex flex-col gap-6">
@@ -235,6 +238,7 @@ function Workspace() {
       {tab === "board" && (
         <div className="grid gap-4 lg:grid-cols-3">
           <div className="flex flex-col gap-4 lg:col-span-2">
+            {w?.project && briefFirst && <ProjectBrief team={t} ws={w} myId={me.user.id} />}
             <Card>
               <CardTitle icon={Target}>Board</CardTitle>
               {w?.project ? (
@@ -243,27 +247,10 @@ function Workspace() {
                 <EmptyState icon={Target} title="Next project starting soon" />
               )}
             </Card>
-            {w?.project && (
-              <Card>
-                <CardTitle icon={Flag}>Brief & milestones</CardTitle>
-                <p className="text-sm text-muted-foreground">{w.project.template.brief}</p>
-                <ol className="mt-4 flex flex-col gap-2">
-                  {w.milestones.map((m) => (
-                    <li
-                      key={m.id}
-                      className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
-                    >
-                      <span className="font-semibold">{m.title}</span>
-                      <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                        {fmtDate(m.due_at)}{" "}
-                        <Pill tone={m.status === "open" ? "muted" : "green"}>{m.status}</Pill>
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-                {CODE_ROLES.includes(me.profile.role_id ?? "") && (
-                  <CiInfo projectId={w.project.id} repoUrl={w.project.repo_url} />
-                )}
+            {w?.project && !briefFirst && <ProjectBrief team={t} ws={w} myId={me.user.id} />}
+            {w?.project && CODE_ROLES.includes(me.profile.role_id ?? "") && (
+              <Card className="!pt-1">
+                <CiInfo projectId={w.project.id} repoUrl={w.project.repo_url} />
               </Card>
             )}
             {w?.project && (allDone || pastDue) && !lapsed && (

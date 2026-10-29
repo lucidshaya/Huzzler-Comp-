@@ -22,13 +22,13 @@ export const TEAM_WELCOME = `👋 Welcome to {{team_name}}! You're building for 
 
 Your squad: {{roster}}.
 
-First project: "{{project_title}}" — due {{due_date}}. Your tasks are on the board. Post your first daily check-in today, and say hi here.`;
+First project: "{{project_title}}" — due {{due_date}}. Open the Board and read the Project brief first: what you're building, what done looks like, your part and who you hand off to, and how to submit. Then post your first daily check-in and say hi here.`;
 
 export const PROJECT_INTRO = `🚀 Project {{level}} has started: "{{project_title}}" ({{days}} days, due {{due_date}}).
 
 {{brief}}
 
-Each of you has tasks on the board. Hints unlock in order on every task; mentor chat opens after the third hint.`;
+The full Project brief is on the Board: goals, what done looks like, each person's part and hand-offs, and how it's graded. Each of you has tasks there. Hints unlock in order on every task; mentor chat opens after the third hint.`;
 
 export const STANDUP_SUMMARY = `📋 Daily standup — {{date}}
 {{entries}}

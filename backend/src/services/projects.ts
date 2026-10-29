@@ -9,6 +9,7 @@ import { HINTS_PER_TASK, INACTIVITY_REMOVE_DAYS, INACTIVITY_WARN_DAYS, MAX_FAILE
 import { peerScore, projectTotal, reliabilityScore, round2 } from "../domain/grading.js";
 import { projectStatus } from "../domain/journey.js";
 import { PROJECT_INTRO, STANDUP_SUMMARY, NUDGE_OVERDUE } from "../content/templates.js";
+import { projectGuide } from "../content/projectGuide.js";
 import { transition, getJourney } from "./journey.js";
 import { postSystemMessage, removeMember, assertTeamMember, ensureSeated } from "./teams.js";
 import { gradeSubjectWithAi } from "./aiGrading.js";
@@ -142,13 +143,25 @@ export async function workspace(userId: string) {
   if (!m) return null;
   const project = await currentProject(m.team_id);
   if (!project) return { project: null, milestones: [], tasks: [] };
-  const [{ data: milestones }, { data: tasks }, { data: myCheckin }, { data: results }] = await Promise.all([
+  const [{ data: milestones }, { data: tasks }, { data: myCheckin }, { data: results }, { data: team }] = await Promise.all([
     db.from("milestones").select("*").eq("project_instance_id", project.id).order("due_at"),
     db.from("team_tasks").select("id, milestone_id, role_id, assignee_id, assignee_member_id, title, description, depends_on, due_at, status, sort_order").eq("project_instance_id", project.id).order("sort_order"),
     db.from("checkins").select("id").eq("project_instance_id", project.id).eq("user_id", userId).eq("checkin_date", new Date().toISOString().slice(0, 10)).maybeSingle(),
     db.from("project_results").select("project_instance_id, total, passed, deliverables_score, team_score, peer_score, reliability_score").eq("user_id", userId),
+    db.from("teams").select("archetype_id").eq("id", m.team_id).single(),
   ]);
-  return { project, milestones: milestones ?? [], tasks: tasks ?? [], checkedInToday: Boolean(myCheckin), results: results ?? [] };
+  return {
+    project, milestones: milestones ?? [], tasks: tasks ?? [], checkedInToday: Boolean(myCheckin), results: results ?? [],
+    guide: projectGuide(project.level), roadmap: team ? await roadmap(team.archetype_id) : [],
+  };
+}
+
+/** The five projects a squad of this company type works through, newest approved version of each. */
+async function roadmap(archetypeId: string) {
+  const { data } = await db.from("project_templates").select("level, version, title, brief, length_days").eq("archetype_id", archetypeId).eq("status", "approved").order("version", { ascending: false });
+  const byLevel = new Map<number, { level: number; title: string; brief: string; length_days: number }>();
+  for (const t of data ?? []) if (!byLevel.has(t.level)) byLevel.set(t.level, { level: t.level, title: t.title, brief: t.brief, length_days: t.length_days });
+  return [...byLevel.values()].sort((a, b) => a.level - b.level);
 }
 
 async function loadTaskForUser(userId: string, taskId: string) {

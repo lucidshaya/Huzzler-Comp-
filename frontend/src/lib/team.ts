@@ -27,8 +27,22 @@ export type WorkspaceTask = {
   assignee_member_id: string | null;
   title: string;
   description?: string;
+  depends_on?: string[] | null;
   status: string;
   due_at: string | null;
+};
+export type ProjectGuide = {
+  purpose: string;
+  goals: string[];
+  done: string[];
+  skills: string[];
+  phases: Array<{ milestone: string; what: string }>;
+  tips: string[];
+  how_to_submit: string[];
+  teamwork: string[];
+  grading: string[];
+  pass_mark: number;
+  after: string;
 };
 export type WorkspaceData = {
   project: {
@@ -38,12 +52,14 @@ export type WorkspaceData = {
     due_at: string;
     started_at: string;
     repo_url: string | null;
-    template: { title: string; brief: string };
+    template: { title: string; brief: string; length_days?: number };
   } | null;
-  milestones: Array<{ id: string; title: string; due_at: string; status: string }>;
+  milestones: Array<{ id: string; key?: string; title: string; due_at: string; status: string }>;
   tasks: WorkspaceTask[];
   checkedInToday: boolean;
   results: Array<{ project_instance_id: string; total: number; passed: boolean }>;
+  guide?: ProjectGuide;
+  roadmap?: Array<{ level: number; title: string; brief: string; length_days: number }>;
 } | null;
 
 export const useTeam = (enabled = true) =>
