@@ -68,7 +68,16 @@ supportRouter.get("/help/suggestions", h(async (req) => {
   const { data } = await db.from("profiles").select("role_id").eq("id", uid(req)).single();
   return suggestedQuestions(data?.role_id ?? null);
 }));
-supportRouter.post("/help/ask", h(async (req) => askHelp(uid(req), parse(z.object({ question: z.string().trim().min(2).max(500) }), req.body).question)));
+supportRouter.post("/help/ask", h(async (req) => {
+  const b = parse(
+    z.object({
+      question: z.string().trim().min(2).max(500),
+      history: z.array(z.object({ from: z.enum(["user", "bot"]), text: z.string().max(2000) })).max(12).optional(),
+    }),
+    req.body,
+  );
+  return askHelp(uid(req), b.question, b.history);
+}));
 supportRouter.post("/help/feedback", h(async (req) => {
   const b = parse(z.object({ id: z.string().uuid(), helpful: z.boolean() }), req.body);
   return helpFeedback(uid(req), b.id, b.helpful);

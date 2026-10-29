@@ -56,6 +56,7 @@ beforeEach(() => {
   state.reply = null;
   state.helpFlag = { enabled: false, value: { ai: false } };
 });
+beforeEach(async () => (await import("../src/services/help.js")).resetHelpCorpus());
 
 describe("help bot is retrieval-only by default", () => {
   it("never calls the model while the help_bot AI flag is off", async () => {
@@ -63,6 +64,48 @@ describe("help bot is retrieval-only by default", () => {
     const r = await askHelp("u1", "pay plan billing question about something else entirely");
     expect(state.calls).toBe(0);
     expect(["faq", "none"]).toContain(r.source);
+  });
+});
+
+describe("help bot with AI on", () => {
+  it("answers greetings and off-FAQ questions from the platform guide", async () => {
+    const { askHelp } = await import("../src/services/help.js");
+    state.helpFlag = { enabled: true, value: { ai: true } };
+    state.reply = { answer: "Hi! What can I help you with?", answered_from_reference: true, needs_person: false };
+    const r = await askHelp("u2", "hello there");
+    expect(state.calls).toBe(1);
+    expect(r).toMatchObject({ source: "ai", answer: "Hi! What can I help you with?", handoff: null });
+  });
+
+  it("offers a person when the model says the problem needs one", async () => {
+    const { askHelp } = await import("../src/services/help.js");
+    state.helpFlag = { enabled: true, value: { ai: true } };
+    state.reply = { answer: "Try refreshing first.", answered_from_reference: true, needs_person: true };
+    const r = await askHelp("u3", "my grade disappeared from the results page");
+    expect(r.handoff).toMatch(/person/);
+  });
+});
+
+describe("help bot dead ends", () => {
+  const q = (question: string, answered = true, helpful: boolean | null = null) => ({ question, answered, helpful, top_faq_id: null });
+
+  it("lets a fresh question through", async () => {
+    const { deadEnd } = await import("../src/services/help.js");
+    expect(deadEnd([], "How do I pay?")).toEqual({ stuck: false, reason: null });
+  });
+
+  it("suggests a person when the same question comes back", async () => {
+    const { deadEnd } = await import("../src/services/help.js");
+    const r = deadEnd([q("my test won't submit")], "my test won't submit");
+    expect(r.stuck).toBe(false);
+    expect(r.reason).toMatch(/already/);
+  });
+
+  it("stops the model after repeated misses", async () => {
+    const { deadEnd } = await import("../src/services/help.js");
+    expect(deadEnd([q("my test won't submit", false)], "test won't submit still").stuck).toBe(true);
+    expect(deadEnd([q("a", false), q("b", false), q("c", false)], "something new").stuck).toBe(true);
+    expect(deadEnd([q("refund please", true, false)], "refund please").stuck).toBe(true);
   });
 });
 

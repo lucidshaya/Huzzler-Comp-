@@ -33,6 +33,7 @@ export type MentorReply = z.infer<typeof MentorReply>;
 export const HelpReply = z.object({
   answer: z.string(),
   answered_from_reference: z.boolean(),
+  needs_person: z.boolean(),
 });
 export type HelpReply = z.infer<typeof HelpReply>;
 

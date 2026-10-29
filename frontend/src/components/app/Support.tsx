@@ -451,6 +451,8 @@ type BotMsg = {
   /** The question this reply answers, used to pre-fill a report. */
   question?: string;
   failed?: boolean;
+  /** Set when the bot isn't getting them there: shows a "Talk to a person" card. */
+  handoff?: string | null;
 };
 
 /** The floating help bubble. A crash inside it stays inside the panel instead of taking down the page. */
@@ -581,13 +583,17 @@ function HelpWidgetPanel() {
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             {tab === "ask" && (
               <HelpBot
-                onReport={(question) => {
+                onReport={(asked) => {
+                  const last = asked.at(-1);
                   setPrefill(
-                    question
+                    last
                       ? {
                           category: "other",
-                          subject: question.slice(0, 140),
-                          body: `I asked the help bot: "${question}"\n\nWhat I need help with: `,
+                          subject: last.slice(0, 140),
+                          body: `What I asked the help bot:\n${asked
+                            .slice(-5)
+                            .map((a) => `- ${a}`)
+                            .join("\n")}\n\nWhat I still need help with: `,
                         }
                       : undefined,
                   );
@@ -614,11 +620,11 @@ function HelpWidgetPanel() {
   );
 }
 
-function HelpBot({ onReport }: { onReport: (question?: string) => void }) {
+function HelpBot({ onReport }: { onReport: (asked: string[]) => void }) {
   const [msgs, setMsgs] = useState<BotMsg[]>([
     {
       from: "bot",
-      text: "Hi! 👋 Ask me anything about Huzzler — payments, tests, teams, certificates. If I can't help, I'll get you to a person.",
+      text: "Hi! Ask me anything about Huzzler: payments, tests, your squad, certificates. If I can't help, I'll get you to a person.",
     },
   ]);
   const [q, setQ] = useState("");
@@ -629,16 +635,37 @@ function HelpBot({ onReport }: { onReport: (question?: string) => void }) {
     staleTime: 300_000,
   });
   const ask = useMutation({
-    mutationFn: (question: string) =>
-      api<{ id: string | null; answer: string; source: string; related: string[] }>("/help/ask", {
-        body: { question },
+    mutationFn: ({ question, history }: { question: string; history: BotMsg[] }) =>
+      api<{
+        id: string | null;
+        answer: string;
+        source: string;
+        related: string[];
+        handoff: string | null;
+      }>("/help/ask", {
+        // Earlier turns (not the greeting) so follow-ups like "what about monthly?" make sense.
+        body: {
+          question,
+          history: history
+            .slice(1, -1)
+            .slice(-8)
+            .map(({ from, text }) => ({ from, text })),
+        },
       }),
-    onSuccess: (r, question) =>
+    onSuccess: (r, { question }) =>
       setMsgs((m) => [
         ...m,
-        { from: "bot", text: r.answer, id: r.id, related: r.related, source: r.source, question },
+        {
+          from: "bot",
+          text: r.answer,
+          id: r.id,
+          related: r.related,
+          source: r.source,
+          question,
+          handoff: r.handoff,
+        },
       ]),
-    onError: (e, question) =>
+    onError: (e, { question }) =>
       setMsgs((m) => [
         ...m,
         {
@@ -660,12 +687,14 @@ function HelpBot({ onReport }: { onReport: (question?: string) => void }) {
     () => listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" }),
     [msgs.length, ask.isPending],
   );
+  const asked = msgs.filter((m) => m.from === "user").map((m) => m.text);
   const submit = (text: string) => {
     const t = text.trim();
     if (t.length < 2 || ask.isPending) return;
-    setMsgs((m) => [...m, { from: "user", text: t }]);
+    const next: BotMsg[] = [...msgs, { from: "user", text: t }];
+    setMsgs(next);
     setQ("");
-    ask.mutate(t);
+    ask.mutate({ question: t, history: next });
   };
   return (
     <div className="flex h-full flex-col gap-3">
@@ -683,7 +712,7 @@ function HelpBot({ onReport }: { onReport: (question?: string) => void }) {
             {m.from === "bot" && m.id && (
               <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                 {m.source === "faq" && <span>From the Huzzler FAQ</span>}
-                {m.source === "ai" && <span>Huzzler AI answer from the FAQ</span>}
+                {m.source === "ai" && <span>Huzzler AI</span>}
                 {!m.rated ? (
                   <span className="flex items-center gap-1">
                     Helpful?
@@ -701,7 +730,19 @@ function HelpBot({ onReport }: { onReport: (question?: string) => void }) {
                       aria-label="Not helpful"
                       onClick={() => {
                         rate.mutate({ id: m.id!, helpful: false });
-                        setMsgs((x) => x.map((y, j) => (j === i ? { ...y, rated: true } : y)));
+                        setMsgs((x) =>
+                          x.map((y, j) =>
+                            j === i
+                              ? {
+                                  ...y,
+                                  rated: true,
+                                  handoff:
+                                    y.handoff ??
+                                    "Sorry that didn't help. A person from the Huzzler team can take a look.",
+                                }
+                              : y,
+                          ),
+                        );
                       }}
                       className="rounded p-1 hover:text-red-500"
                     >
@@ -713,13 +754,18 @@ function HelpBot({ onReport }: { onReport: (question?: string) => void }) {
                 )}
               </div>
             )}
-            {m.from === "bot" && (m.source === "none" || m.failed) && (
-              <button
-                onClick={() => onReport(m.question)}
-                className="mt-1.5 text-xs font-bold text-primary hover:underline"
-              >
-                Report an issue →
-              </button>
+            {m.from === "bot" && (m.handoff || m.failed) && (
+              <div className="mt-2 w-full max-w-[90%] rounded-2xl border border-primary/40 bg-primary/5 p-3">
+                <p className="text-sm">
+                  {m.handoff ?? "A person from the Huzzler team can help with this."}
+                </p>
+                <button
+                  onClick={() => onReport(asked)}
+                  className="btn-duo mt-2.5 !px-3 !py-1.5 text-xs"
+                >
+                  <LifeBuoy className="h-3.5 w-3.5" /> Talk to a person
+                </button>
+              </div>
             )}
             {m.related && m.related.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -788,7 +834,7 @@ function HelpBot({ onReport }: { onReport: (question?: string) => void }) {
         </button>
       </form>
       <button
-        onClick={() => onReport()}
+        onClick={() => onReport(asked)}
         className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-primary"
       >
         <LifeBuoy className="h-3.5 w-3.5" /> Talk to a person instead

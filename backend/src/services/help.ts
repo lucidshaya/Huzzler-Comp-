@@ -4,6 +4,7 @@ import { embed, toPgVector } from "../ai/embeddings.js";
 import { aiConfigured, callStructured, AiBudgetError, AiOutputError, AiUnavailableError } from "../ai/aiClient.js";
 import { HELP_RULES, PROMPT_VERSIONS } from "../ai/prompts.js";
 import { HelpReply } from "../ai/schemas.js";
+import { PLATFORM_GUIDE } from "../content/helpGuide.js";
 
 const DAILY_LIMIT = 40;
 const CONFIDENT = 0.6; // normalised lexical score above which we answer straight from the FAQ
@@ -29,6 +30,7 @@ const SYNONYMS: Record<string, string[]> = {
 };
 const expand = (tokens: string[]) => [...new Set(tokens.flatMap((t) => [t, ...(SYNONYMS[t] ?? []).map(stem)]))];
 
+let aiFlag: { at: number; on: boolean } | null = null;
 let corpus: { at: number; docs: Doc[]; df: Map<string, number>; avgLen: number } | null = null;
 
 async function loadCorpus() {
@@ -48,14 +50,16 @@ async function loadCorpus() {
   corpus = { at: Date.now(), docs, df, avgLen };
   return corpus;
 }
-export const resetHelpCorpus = () => (corpus = null);
+export const resetHelpCorpus = () => {
+  corpus = null;
+  aiFlag = null;
+};
 
 /**
  * The help bot is retrieval-only by default: it answers from the FAQ and knowledge base and hands
  * anything else to a person. An LLM rewrite of the retrieved answer only runs when an admin turns on
  * feature_flags['help_bot'] with value {"ai": true}.
  */
-let aiFlag: { at: number; on: boolean } | null = null;
 export async function helpAiEnabled() {
   if (!aiFlag || Date.now() - aiFlag.at > 60_000) {
     const { data } = await db.from("feature_flags").select("enabled, value").eq("key", "help_bot").maybeSingle();
@@ -97,13 +101,56 @@ export async function search(question: string, roleId: string | null, k = 4) {
   return ranked.slice(0, k);
 }
 
-export async function askHelp(userId: string, question: string) {
+const WINDOW_MS = 30 * 60_000;
+// Someone asking about something broken or account-specific usually needs a person, not the FAQ.
+const PROBLEM = /\b(won'?t|can'?t|cannot|isn'?t|doesn'?t|didn'?t|not working|not showing|error|bug|broken|stuck|missing|failed|charged|wrong|still)\b/i;
+
+type PriorQuery = { question: string; answered: boolean; helpful: boolean | null; top_faq_id: string | null };
+export type HelpTurn = { from: "user" | "bot"; text: string };
+
+const overlap = (a: string, b: string) => {
+  const x = new Set(tokenize(a));
+  const y = new Set(tokenize(b));
+  if (!x.size || !y.size) return 0;
+  let both = 0;
+  for (const t of x) if (y.has(t)) both++;
+  return both / new Set([...x, ...y]).size;
+};
+
+/**
+ * Has this person hit a dead end with the bot? Looks at their questions from the last 30 minutes.
+ * `stuck` means more AI won't help: skip the model and point them to a person.
+ */
+export function deadEnd(prior: PriorQuery[], question: string) {
+  const repeat = prior.some((p) => overlap(p.question, question) >= 0.6);
+  const unanswered = prior.filter((p) => !p.answered).length;
+  const unhelpful = prior.some((p) => p.helpful === false);
+  const stuck = unanswered >= 3 || prior.length >= 10 || (repeat && (unhelpful || unanswered >= 1));
+  const reason = stuck
+    ? "It looks like I'm not getting you an answer. A person from the Huzzler team can sort this out."
+    : repeat
+      ? "You've asked about this already, so a person may get you there faster."
+      : unanswered >= 2 || unhelpful
+        ? "If these answers aren't helping, a person from the Huzzler team can take a look."
+        : prior.length + 1 >= 6
+          ? "Still looking? A person from the Huzzler team can help directly."
+          : null;
+  return { stuck, reason };
+}
+
+export async function askHelp(userId: string, question: string, history: HelpTurn[] = []) {
   const start = new Date();
   start.setUTCHours(0, 0, 0, 0);
-  const { count } = await db.from("help_queries").select("id", { count: "exact", head: true }).eq("user_id", userId).gte("created_at", start.toISOString());
+  const [{ count }, { data: recent }, { data: profile }, { data: journey }] = await Promise.all([
+    db.from("help_queries").select("id", { count: "exact", head: true }).eq("user_id", userId).gte("created_at", start.toISOString()),
+    db.from("help_queries").select("question, answered, helpful, top_faq_id").eq("user_id", userId).gte("created_at", new Date(Date.now() - WINDOW_MS).toISOString()).order("created_at", { ascending: false }).limit(20),
+    db.from("profiles").select("role_id").eq("id", userId).single(),
+    db.from("user_journey").select("status").eq("user_id", userId).maybeSingle(),
+  ]);
   if ((count ?? 0) >= DAILY_LIMIT) throw new HttpError(429, "You've asked a lot of questions today. Report an issue and a person will help.", "HELP_LIMIT");
 
-  const { data: profile } = await db.from("profiles").select("role_id").eq("id", userId).single();
+  const prior = (Array.isArray(recent) ? recent : []) as PriorQuery[];
+  const end = deadEnd(prior, question);
   const hits = await search(question, profile?.role_id ?? null);
   const top = hits[0];
   const related = hits
@@ -113,23 +160,32 @@ export async function askHelp(userId: string, question: string) {
 
   let answer: string | null = null;
   let source: "faq" | "ai" | "none" = "none";
+  let needsPerson = false;
 
   if (top && top.doc.kind === "faq" && top.score >= CONFIDENT) {
     answer = top.doc.body;
     source = "faq";
-  } else if (aiConfigured() && hits.length && (await helpAiEnabled())) {
+  } else if (!end.stuck && aiConfigured() && (await helpAiEnabled())) {
+    // The platform guide is always in the reference, so greetings and "how do I start" questions
+    // get answered even when no FAQ matches.
+    const turns = history.slice(-6).map((t) => `${t.from === "user" ? "User" : "Huzzler help"}: ${t.text.slice(0, 600)}`).join("\n");
     try {
       const { data } = await callStructured({
         feature: "help_bot",
         userId,
         roleId: profile?.role_id ?? null,
         promptVersion: PROMPT_VERSIONS.help,
-        cachedSystem: [HELP_RULES],
+        cachedSystem: [HELP_RULES, `<guide>\n${PLATFORM_GUIDE}\n</guide>`],
         schema: HelpReply,
         userContent: [
           {
             type: "text",
-            text: `<reference>\n${hits.map((h) => `## ${h.doc.title}\n${h.doc.body}`).join("\n\n")}\n</reference>\n\n<question>\n${question}\n</question>`,
+            text: [
+              `<user>\nJourney stage: ${journey?.status ?? "unknown"}\n</user>`,
+              hits.length ? `<reference>\n${hits.map((h) => `## ${h.doc.title}\n${h.doc.body}`).join("\n\n")}\n</reference>` : "",
+              turns ? `<conversation>\n${turns}\n</conversation>` : "",
+              `<question>\n${question}\n</question>`,
+            ].filter(Boolean).join("\n\n"),
           },
         ],
       });
@@ -137,14 +193,16 @@ export async function askHelp(userId: string, question: string) {
         answer = data.answer;
         source = "ai";
       }
+      needsPerson = data.needs_person;
     } catch (err) {
       if (!(err instanceof AiUnavailableError || err instanceof AiBudgetError || err instanceof AiOutputError)) throw err;
     }
   }
   if (!answer && top && top.doc.kind === "faq" && top.score >= 0.3) {
-    answer = `${top.doc.body}\n\nNot quite what you asked? Report an issue and a person from the Huzzler team will reply.`;
+    answer = top.doc.body;
     source = "faq";
   }
+  if (!answer || source === "faq") needsPerson ||= PROBLEM.test(question);
 
   const { data: logged } = await db
     .from("help_queries")
@@ -152,11 +210,20 @@ export async function askHelp(userId: string, question: string) {
     .select("id")
     .single();
 
+  const handoff =
+    end.reason ??
+    (needsPerson
+      ? "This sounds like something a person should look at. Send it to the Huzzler team and they'll reply here."
+      : !answer
+        ? "I don't have an answer for that. A person from the Huzzler team can help."
+        : null);
+
   return {
     id: logged?.id ?? null,
-    answer: answer ?? "I don't have an answer for that yet. Tap “Report an issue” and a person from the Huzzler team will get back to you.",
+    answer: answer ?? (end.stuck ? "Let's get you to a person instead of going round in circles." : "I'm not sure about that one."),
     source,
-    related,
+    related: end.stuck ? [] : related,
+    handoff,
   };
 }
 
