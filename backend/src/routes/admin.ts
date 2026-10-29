@@ -313,14 +313,58 @@ async function assertAnotherAdmin(exceptId: string) {
   if (!count) throw badRequest("Huzzler needs at least one admin. Make someone else an admin first.");
 }
 
+/** Records an ID decision, closes the waiting check and tells the learner. */
+async function decideIdentity(actorId: string, userId: string, verified: boolean, note: string | undefined, ip: string | undefined) {
+  await db.from("profiles").update({ identity_verified: verified }).eq("id", userId);
+  await db.from("reports").update({ status: verified ? "actioned" : "dismissed", resolved_by: actorId }).eq("target_type", "identity_check").eq("target_id", userId).eq("status", "open");
+  await audit(actorId, "user.verify_identity", "profile", userId, { verified, note }, ip);
+  await notify(
+    userId,
+    "identity.reviewed",
+    verified ? "Your ID is verified" : "We couldn't verify your ID",
+    verified
+      ? "Thanks. Your identity is verified, so your certificate will be issued as soon as everything else is complete."
+      : `Please upload a clearer, valid government ID in Profile → Account & privacy.${note ? ` Reason: ${note}` : ""}`,
+  );
+  if (verified) await enqueue("issue_certificate", { userId });
+}
+
 adminRouter.post(
   "/users/:id/verify-identity",
   moderators,
   h(async (req) => {
-    const { verified } = parse(z.object({ verified: z.boolean() }), req.body);
-    await db.from("profiles").update({ identity_verified: verified }).eq("id", req.params.id);
-    await audit(uid(req), "user.verify_identity", "profile", req.params.id, { verified }, req.ip);
-    if (verified) await enqueue("issue_certificate", { userId: req.params.id });
+    const { verified, note } = parse(z.object({ verified: z.boolean(), note: z.string().max(300).optional() }), req.body);
+    await decideIdentity(uid(req), req.params.id, verified, note, req.ip);
+  }),
+);
+
+// Uploaded IDs waiting for a decision, oldest first, each with a short-lived link to the file.
+adminRouter.get(
+  "/identity-checks",
+  moderators,
+  h(async () => {
+    const { data } = await db
+      .from("reports")
+      .select("id, target_id, reason, created_at")
+      .eq("target_type", "identity_check")
+      .eq("status", "open")
+      .order("created_at")
+      .limit(50);
+    // reports.target_id has no foreign key (it can point at anything), so profiles are looked up separately.
+    const ids = [...new Set((data ?? []).map((r) => r.target_id))];
+    const { data: people } = ids.length ? await db.from("profiles").select("id, full_name, username, role_id").in("id", ids) : { data: [] };
+    const byId = new Map((people ?? []).map((p) => [p.id, p]));
+    return Promise.all(
+      (data ?? []).map(async (r) => ({
+        id: r.id,
+        user_id: r.target_id,
+        name: byId.get(r.target_id)?.full_name ?? "Unknown",
+        username: byId.get(r.target_id)?.username ?? null,
+        role_id: byId.get(r.target_id)?.role_id ?? null,
+        submitted_at: r.created_at,
+        file_url: (await db.storage.from("submissions").createSignedUrl(r.reason, 600)).data?.signedUrl ?? null,
+      })),
+    );
   }),
 );
 

@@ -60,18 +60,26 @@ const TESTS = [
   },
 ];
 
-const CONSENTS: Array<{ type: string; label: string; detail: string; required: boolean }> = [
+const CONSENTS: Array<{
+  type: string;
+  label: string;
+  detail: string;
+  required: boolean;
+  href?: "/terms" | "/privacy";
+}> = [
   {
     type: "terms",
     label: "I accept the Terms of Service",
     detail: "How Huzzler works, payments, refunds and conduct.",
     required: true,
+    href: "/terms",
   },
   {
     type: "privacy",
     label: "I accept the Privacy Policy",
     detail: "What data we collect and why, under Nigeria's NDPA.",
     required: true,
+    href: "/privacy",
   },
   {
     type: "ai_grading",
@@ -253,7 +261,22 @@ function ConsentsStep({ onDone }: { onDone: () => void }) {
                 {c.label}
                 {c.required && <span className="text-red-500"> *</span>}
               </span>
-              <span className="block text-xs text-muted-foreground">{c.detail}</span>
+              <span className="block text-xs text-muted-foreground">
+                {c.detail}
+                {c.href && (
+                  <>
+                    {" "}
+                    <a
+                      href={c.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-semibold text-primary underline-offset-2 hover:underline"
+                    >
+                      Read it
+                    </a>
+                  </>
+                )}
+              </span>
             </span>
           </label>
         ))}

@@ -7,6 +7,7 @@ import {
   Brain,
   ChevronLeft,
   Gavel,
+  HeartPulse,
   ChevronRight,
   ClipboardList,
   FileText,
@@ -33,11 +34,14 @@ import {
 } from "@/components/aipm/Views";
 import { AiView, GradingView } from "@/components/aipm/Intelligence";
 import { TestPoolView } from "@/components/aipm/TestPool";
+import { SquadHealthView } from "@/components/aipm/SquadHealth";
 
 export const Route = createFileRoute("/aipm/")({
   ssr: false,
   validateSearch: z.object({
-    tab: z.enum(["briefs", "talent", "board", "grading", "tests", "ai", "reports"]).optional(),
+    tab: z
+      .enum(["briefs", "talent", "board", "health", "grading", "tests", "ai", "reports"])
+      .optional(),
   }),
   head: () => ({
     meta: [{ title: "AI PM Portal · Huzzler" }, { name: "robots", content: "noindex" }],
@@ -49,6 +53,7 @@ const NAV: { key: AipmTab; label: string; icon: LucideIcon }[] = [
   { key: "briefs", label: "Briefs & WBS", icon: FileText },
   { key: "talent", label: "Talent & Squads", icon: Users },
   { key: "board", label: "Sprint Board", icon: Kanban },
+  { key: "health", label: "Squad health", icon: HeartPulse },
   { key: "grading", label: "Project grading", icon: Gavel },
   { key: "tests", label: "Test pool", icon: ClipboardList },
   { key: "ai", label: "AI reasoning", icon: Brain },
@@ -241,6 +246,7 @@ function AipmPortal() {
             {active === "briefs" && <BriefsView onNext={() => goTo("talent")} />}
             {active === "talent" && <TalentView onNext={() => goTo("board")} />}
             {active === "board" && <BoardView />}
+            {active === "health" && <SquadHealthView />}
             {active === "grading" && <GradingView />}
             {active === "tests" && <TestPoolView />}
             {active === "ai" && <AiView />}

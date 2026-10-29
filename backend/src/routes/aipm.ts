@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { squadHealth } from "../services/squadHealth.js";
 import { z } from "zod";
 import { h, parse, uid } from "./util.js";
 import { requireRole } from "../middleware/auth.js";
@@ -33,6 +34,7 @@ aipmRouter.use(requireRole("project_manager"));
 
 aipmRouter.get("/whoami", h(async (req) => ({ id: uid(req), role: req.user!.appRole, aal: req.user!.aal })));
 aipmRouter.get("/overview", h(async () => overview()));
+aipmRouter.get("/squad-health", h(async () => squadHealth()));
 
 aipmRouter.get("/briefs", h(async () => listBriefs()));
 aipmRouter.post("/briefs", h(async (req) => createBrief(uid(req), parse(BriefInput, req.body))));

@@ -5,6 +5,7 @@ import { env } from "../src/config/env.js";
 import { MCQ, SJT } from "../src/content/bank/mcq.js";
 import { PRACTICAL } from "../src/content/bank/practical.js";
 import { PERSONAS, FAQ, EXEMPLARS, buildProjectTemplates } from "../src/content/bank/projects.js";
+import { ROLE_GUIDES } from "../src/content/bank/guides.js";
 import { TEST_TIME_LIMITS_MIN } from "../src/domain/constants.js";
 
 const letters = ["a", "b", "c", "d"];
@@ -89,7 +90,14 @@ async function seedKnowledge() {
       await db.from("calibration_samples").insert({ role_id: e.role_id, rubric_id: e.rubric_id, submission: e.body, human_score: e.score });
     }
   }
-  console.log(`✓ FAQ: ${FAQ.length}, exemplars: ${EXEMPLARS.length}`);
+  for (const g of ROLE_GUIDES) {
+    const { data } = await db.from("kb_documents").select("id").eq("title", g.title).maybeSingle();
+    if (!data) {
+      const { data: doc } = await db.from("kb_documents").insert({ kind: "style_guide", role_id: g.role_id, title: g.title, body: g.body }).select("id").single();
+      await db.from("kb_chunks").insert({ document_id: doc!.id, content: g.body });
+    }
+  }
+  console.log(`✓ FAQ: ${FAQ.length}, exemplars: ${EXEMPLARS.length}, role guides: ${ROLE_GUIDES.length}`);
 }
 
 async function seedAdmin() {

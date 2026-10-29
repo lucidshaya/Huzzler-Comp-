@@ -69,6 +69,11 @@ async function logCall(row: Record<string, unknown>) {
   if (budgetCache && typeof row.cost_usd === "number") budgetCache.spent += row.cost_usd;
 }
 
+/** Which fields failed, e.g. "chart: too small; summary: too big", so failures can be fixed at the prompt. */
+function issueSummary(err: z.ZodError): string {
+  return err.issues.slice(0, 4).map((i) => `${i.path.join(".") || "(root)"}: ${i.code}`).join("; ").slice(0, 300);
+}
+
 /**
  * The single entry point for live Claude calls. Structured output is enforced with a JSON schema
  * (output_config.format) and re-validated with Zod; on a validation failure we retry once, then
@@ -118,7 +123,7 @@ export async function callStructured<T extends z.ZodType>(call: StructuredCall<T
       }
       const parsed = call.schema.safeParse(res.parsed_output);
       if (!parsed.success) {
-        await logCall({ ...base, success: false, error: "schema validation failed" });
+        await logCall({ ...base, success: false, error: `schema validation failed: ${issueSummary(parsed.error)}` });
         lastErr = new AiOutputError(parsed.error.message);
         continue;
       }
@@ -158,7 +163,7 @@ async function callDeepSeek<T extends z.ZodType>(call: StructuredCall<T>, cfg: A
       }
       const parsed = call.schema.safeParse(r.json);
       if (!parsed.success) {
-        await logCall({ ...base, success: false, error: r.json === null ? "empty or invalid JSON" : "schema validation failed" });
+        await logCall({ ...base, success: false, error: r.json === null ? "empty or invalid JSON" : `schema validation failed: ${issueSummary(parsed.error)}` });
         lastErr = new AiOutputError(parsed.error.message);
         continue;
       }

@@ -10,7 +10,14 @@ import { PORTFOLIO_SUMMARY } from "../content/templates.js";
 import { getJourney, transition } from "./journey.js";
 
 export async function certificationStatus(userId: string) {
-  const { data: results } = await db.from("project_results").select("total, passed, peer_review_count, project:project_instance_id(level, team_id)").eq("user_id", userId);
+  const { data: results } = await db.from("project_results").select("project_instance_id, total, passed, peer_review_count, project:project_instance_id(level, team_id)").eq("user_id", userId);
+  // Reviews needed per project: 2, or fewer when the squad had fewer than 3 real people (stand-ins
+  // can't review). Everyone graded on a project has a result row, so the rows count the real members.
+  const instanceIds = (results ?? []).map((r) => r.project_instance_id);
+  const { data: graded } = instanceIds.length ? await db.from("project_results").select("project_instance_id").in("project_instance_id", instanceIds) : { data: [] };
+  const realMembers = new Map<string, number>();
+  for (const g of graded ?? []) realMembers.set(g.project_instance_id, (realMembers.get(g.project_instance_id) ?? 0) + 1);
+  const reviewsNeeded = (instanceId: string) => Math.min(MIN_PEER_REVIEWS_FOR_CERT, Math.max(0, (realMembers.get(instanceId) ?? 1) - 1));
   const byLevel = new Map<number, any>();
   for (const r of (results ?? []) as any[]) {
     const prev = byLevel.get(r.project.level);
@@ -21,13 +28,17 @@ export async function certificationStatus(userId: string) {
   const checks = {
     projects: PROJECT_LEVELS.map((l) => {
       const r = byLevel.get(l.level);
-      return { level: l.level, name: l.name, score: r ? Number(r.total) : null, passed: Boolean(r && r.passed && Number(r.total) >= PROJECT_PASS_MARK), peer_reviews: r?.peer_review_count ?? 0 };
+      return {
+        level: l.level, name: l.name, score: r ? Number(r.total) : null, passed: Boolean(r && r.passed && Number(r.total) >= PROJECT_PASS_MARK),
+        peer_reviews: r?.peer_review_count ?? 0,
+        peer_reviews_needed: r ? reviewsNeeded(r.project_instance_id) : MIN_PEER_REVIEWS_FOR_CERT,
+      };
     }),
     identity_verified: Boolean(profile?.identity_verified),
     open_integrity_flags: openFlags ?? 0,
   };
   const eligible =
-    checks.projects.every((p) => p.passed && p.peer_reviews >= MIN_PEER_REVIEWS_FOR_CERT) && checks.identity_verified && checks.open_integrity_flags === 0;
+    checks.projects.every((p) => p.passed && p.peer_reviews >= p.peer_reviews_needed) && checks.identity_verified && checks.open_integrity_flags === 0;
   return { eligible, ...checks };
 }
 
@@ -38,7 +49,7 @@ export async function issueCertificate(userId: string) {
   if (existing) return existing;
   const status = await certificationStatus(userId);
   if (!status.eligible) {
-    if (!status.identity_verified) await notify(userId, "cert.identity", "Verify your identity to get certified", "Upload a government ID in Settings so we can issue your certificate.");
+    if (!status.identity_verified) await notify(userId, "cert.identity", "Verify your identity to get certified", "Upload a government ID in Profile → Account & privacy so we can issue your certificate.");
     return null;
   }
   const { data: profile } = await db.from("profiles").select("full_name, role_id, username").eq("id", userId).single();

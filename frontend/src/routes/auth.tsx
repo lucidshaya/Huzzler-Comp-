@@ -367,7 +367,25 @@ function AuthPage() {
 
           {mode === "signup" && (
             <p className="mt-5 text-center text-[11px] leading-relaxed text-white/40">
-              You'll review our Terms, Privacy Policy and AI grading notice before you pay.
+              You'll review our{" "}
+              <a
+                href="/terms"
+                target="_blank"
+                rel="noreferrer"
+                className="font-semibold text-primary"
+              >
+                Terms
+              </a>
+              ,{" "}
+              <a
+                href="/privacy"
+                target="_blank"
+                rel="noreferrer"
+                className="font-semibold text-primary"
+              >
+                Privacy Policy
+              </a>{" "}
+              and AI grading notice before you pay.
             </p>
           )}
         </div>

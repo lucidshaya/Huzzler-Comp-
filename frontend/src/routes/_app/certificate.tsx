@@ -24,6 +24,8 @@ type Status = {
     score: number | null;
     passed: boolean;
     peer_reviews: number;
+    /** 2, or fewer when the squad had fewer than 3 real people (AI stand-ins can't review). */
+    peer_reviews_needed?: number;
   }>;
   identity_verified: boolean;
   open_integrity_flags: number;
@@ -32,7 +34,7 @@ type Status = {
 
 /** What a project still needs, in plain words. */
 function projectState(p: Status["projects"][number]): { done: boolean; note: string } {
-  const missing = Math.max(0, PEER_REVIEWS - p.peer_reviews);
+  const missing = Math.max(0, (p.peer_reviews_needed ?? PEER_REVIEWS) - p.peer_reviews);
   if (p.passed && !missing) return { done: true, note: "Complete" };
   if (p.passed)
     return {
@@ -104,7 +106,8 @@ function Certificate() {
           </h2>
           <p className="mt-1 text-[15px] text-muted-foreground">
             Pass each project with {PASS_MARK}% or more and get at least {PEER_REVIEWS} peer reviews
-            on it.
+            on it. In squads with fewer than 3 real people, you need one review from each real
+            teammate, and the AI PM team review stands in for the rest.
           </p>
         </div>
         <ul className="divide-y divide-border rounded-2xl border border-border">
@@ -125,7 +128,9 @@ function Certificate() {
                 <div className="text-right">
                   <dt className="text-xs text-muted-foreground">Peer reviews</dt>
                   <dd className="font-semibold tabular-nums">
-                    {Math.min(p.peer_reviews, PEER_REVIEWS)} of {PEER_REVIEWS}
+                    {(p.peer_reviews_needed ?? PEER_REVIEWS) === 0
+                      ? "Not needed"
+                      : `${Math.min(p.peer_reviews, p.peer_reviews_needed ?? PEER_REVIEWS)} of ${p.peer_reviews_needed ?? PEER_REVIEWS}`}
                   </dd>
                 </div>
               </dl>

@@ -13,8 +13,10 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CallbackRouteImport } from './routes/callback'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SetupRouteImport } from './routes/setup'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as AppBeginRouteImport } from './routes/_app/begin'
 import { Route as AppBillingRouteImport } from './routes/_app/billing'
 import { Route as AppCertificateRouteImport } from './routes/_app/certificate'
@@ -59,6 +61,11 @@ const CallbackRoute = CallbackRouteImport.update({
   path: '/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
@@ -67,6 +74,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
 const SetupRoute = SetupRouteImport.update({
   id: '/setup',
   path: '/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppBeginRoute = AppBeginRouteImport.update({
@@ -194,8 +206,10 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/callback': typeof CallbackRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
+  '/terms': typeof TermsRoute
   '/begin': typeof AppBeginRoute
   '/billing': typeof AppBillingRoute
   '/certificate': typeof AppCertificateRoute
@@ -225,8 +239,10 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/callback': typeof CallbackRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
+  '/terms': typeof TermsRoute
   '/begin': typeof AppBeginRoute
   '/billing': typeof AppBillingRoute
   '/certificate': typeof AppCertificateRoute
@@ -258,8 +274,10 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
   '/callback': typeof CallbackRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
+  '/terms': typeof TermsRoute
   '/_app/begin': typeof AppBeginRoute
   '/_app/billing': typeof AppBillingRoute
   '/_app/certificate': typeof AppCertificateRoute
@@ -291,8 +309,10 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/callback'
+    | '/privacy'
     | '/reset-password'
     | '/setup'
+    | '/terms'
     | '/begin'
     | '/billing'
     | '/certificate'
@@ -322,8 +342,10 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/callback'
+    | '/privacy'
     | '/reset-password'
     | '/setup'
+    | '/terms'
     | '/begin'
     | '/billing'
     | '/certificate'
@@ -354,8 +376,10 @@ export interface FileRouteTypes {
     | '/_app'
     | '/auth'
     | '/callback'
+    | '/privacy'
     | '/reset-password'
     | '/setup'
+    | '/terms'
     | '/_app/begin'
     | '/_app/billing'
     | '/_app/certificate'
@@ -387,8 +411,10 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   AuthRoute: typeof AuthRoute
   CallbackRoute: typeof CallbackRoute
+  PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SetupRoute: typeof SetupRoute
+  TermsRoute: typeof TermsRoute
   AdminLoginRoute: typeof AdminLoginRoute
   AipmLoginRoute: typeof AipmLoginRoute
   BillingCallbackRoute: typeof BillingCallbackRoute
@@ -430,6 +456,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reset-password': {
       id: '/reset-password'
       path: '/reset-password'
@@ -442,6 +475,13 @@ declare module '@tanstack/react-router' {
       path: '/setup'
       fullPath: '/setup'
       preLoaderRoute: typeof SetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/begin': {
@@ -658,8 +698,10 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   AuthRoute: AuthRoute,
   CallbackRoute: CallbackRoute,
+  PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SetupRoute: SetupRoute,
+  TermsRoute: TermsRoute,
   AdminLoginRoute: AdminLoginRoute,
   AipmLoginRoute: AipmLoginRoute,
   BillingCallbackRoute: BillingCallbackRoute,

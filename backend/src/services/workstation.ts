@@ -10,7 +10,7 @@ import { balanceOf, creditTokens, priceOf, spendTokens, tokenPrices } from "./to
 // AI key the output comes from the model; until then a deterministic generator grounded in the
 // user's own project and task (a small retrieval step) produces a realistic result so the flow works.
 
-export const WORKSTATION_ACTIONS = ["code_autocomplete", "docs_extract", "logic_canvas", "data_forge", "voice_summary"] as const;
+export const WORKSTATION_ACTIONS = ["code_autocomplete", "docs_extract", "logic_canvas", "data_forge", "voice_summary", "design_review"] as const;
 export type WorkstationAction = (typeof WORKSTATION_ACTIONS)[number];
 
 /**
@@ -23,7 +23,7 @@ const ROLE_ACTIONS: Record<string, WorkstationAction[]> = {
   qa_engineer: ["code_autocomplete", "docs_extract", "logic_canvas", "voice_summary"],
   data_analyst: ["data_forge", "logic_canvas", "voice_summary"],
   product_manager: ["logic_canvas", "data_forge", "voice_summary"],
-  uiux_designer: ["logic_canvas", "voice_summary"],
+  uiux_designer: ["design_review", "logic_canvas", "voice_summary"],
   technical_writer: ["logic_canvas", "voice_summary"],
   growth_marketer: ["data_forge", "logic_canvas", "voice_summary"],
 };
@@ -35,6 +35,8 @@ export const RunInput = z.discriminatedUnion("action", [
   z.object({ action: z.literal("logic_canvas"), prompt: z.string().trim().min(3).max(200) }),
   z.object({ action: z.literal("data_forge"), question: z.string().trim().min(5).max(500) }),
   z.object({ action: z.literal("voice_summary"), transcript: z.string().trim().min(10).max(4000) }),
+  // The screen as the designer describes it (layout, copy, colours, states), plus an optional link.
+  z.object({ action: z.literal("design_review"), screen: z.string().trim().min(20).max(4000), goal: z.string().trim().max(300).optional(), link: z.string().url().max(500).optional() }),
 ]);
 export type RunInput = z.infer<typeof RunInput>;
 
@@ -107,8 +109,15 @@ export async function runTool(userId: string, input: RunInput) {
       await saveCanvas(userId, nodes);
       output = { ...output, nodes };
     }
-    await db.from("workstation_runs").insert({ user_id: userId, team_id: ctx.teamId, action: input.action, input: { ...input, action: undefined }, output, tokens: price.cost, engine });
-    return { output, engine, cost: price.cost, balance: balanceAfterSpend };
+    // The offline sample isn't worth the price: give the tokens back and say so.
+    let cost = price.cost;
+    let balance = balanceAfterSpend;
+    if (engine === "mock" && price.cost > 0) {
+      balance = await creditTokens(userId, price.cost, "refund", `Refund · ${price.tool} used the offline sample`, ref);
+      cost = 0;
+    }
+    await db.from("workstation_runs").insert({ user_id: userId, team_id: ctx.teamId, action: input.action, input: { ...input, action: undefined }, output, tokens: cost, engine });
+    return { output, engine, cost, balance };
   } catch (err) {
     // Nothing was produced: give the tokens back.
     await creditTokens(userId, price.cost, "refund", `Refund · ${price.tool} run failed`, ref).catch(() => {});
@@ -131,6 +140,12 @@ const AiSchemas = {
   logic_canvas: z.object({ label: z.string().max(60), kind: z.enum(["trigger", "process", "decision", "database", "output"]) }),
   data_forge: z.object({ sql: z.string().max(3000), chart: z.array(z.object({ label: z.string().max(40), value: z.number() })).min(2).max(6), insight: z.string().max(300) }),
   voice_summary: z.object({ shipped: z.string().max(400), today: z.string().max(400), blockers: z.string().max(300) }),
+  design_review: z.object({
+    verdict: z.string().max(300),
+    strengths: z.array(z.string().max(200)).max(4),
+    issues: z.array(z.object({ area: z.string().max(40), problem: z.string().max(240), fix: z.string().max(240), severity: z.enum(["high", "medium", "low"]) })).max(6),
+    accessibility: z.array(z.string().max(200)).max(5),
+  }),
 };
 
 const INSTRUCTIONS: Record<WorkstationAction, string> = {
@@ -139,6 +154,7 @@ const INSTRUCTIONS: Record<WorkstationAction, string> = {
   logic_canvas: "Turn the user's sentence into one flowchart node: a short label (under 8 words) and the best node kind.",
   data_forge: "Write one PostgreSQL query that answers the question for the user's project, plus 2-6 illustrative chart points and a one-sentence insight. Use plausible table names from the project brief.",
   voice_summary: "Turn the stand-up update into: what was shipped/done, what's next today, and blockers ('None.' if there are none). Keep the user's own words where possible.",
+  design_review: "Critique the screen the designer describes, as a senior product designer would: does it serve the goal and the project brief? Give a one-sentence verdict, up to 4 specific strengths, up to 6 issues (area, problem, a concrete fix, severity), and up to 5 accessibility checks against WCAG 2.2 AA (contrast, target size, labels, focus, motion). Don't redesign the whole screen.",
 };
 
 async function aiOutput(userId: string, input: RunInput, ctx: Context): Promise<Record<string, unknown>> {
@@ -251,6 +267,20 @@ export function mockOutput(input: RunInput, ctx: Context): Record<string, unknow
               : "process";
       const label = input.prompt.replace(/\s+/g, " ").trim().slice(0, 60);
       return { node: { id: `n-${crypto.randomBytes(3).toString("hex")}`, label: label[0].toUpperCase() + label.slice(1), kind } };
+    }
+    case "design_review": {
+      const text = input.screen.toLowerCase();
+      const issues: Array<{ area: string; problem: string; fix: string; severity: "high" | "medium" | "low" }> = [];
+      if (!/button|cta|call to action/.test(text)) issues.push({ area: "Primary action", problem: "The description doesn't name a clear primary action.", fix: "Give the screen one prominent button for the main task and make the rest secondary.", severity: "high" });
+      if (!/error|empty|loading/.test(text)) issues.push({ area: "States", problem: "Empty, loading and error states aren't described.", fix: "Design what the screen shows with no data, while loading and when a request fails.", severity: "medium" });
+      if (/grey|gray|light/.test(text)) issues.push({ area: "Contrast", problem: "Light or grey text can fall below 4.5:1 contrast.", fix: "Check body text against its background and darken it until it passes 4.5:1.", severity: "medium" });
+      if (!/mobile|phone|375|responsive/.test(text)) issues.push({ area: "Mobile", problem: "There's no mention of how this works on a phone.", fix: "Sketch the 375px layout: stack columns and keep the primary action within thumb reach.", severity: "low" });
+      return {
+        verdict: `A workable start for "${input.goal ?? ctx.tasks[0] ?? ctx.project}". Tighten the hierarchy and cover every state before handing off.`,
+        strengths: ["The screen has a defined purpose tied to the project brief."],
+        issues,
+        accessibility: ["Text contrast of at least 4.5:1 (3:1 for large text).", "Tap targets of at least 24×24px, ideally 44×44px.", "Every input has a visible label, not just a placeholder.", "A visible focus style on every interactive element."],
+      };
     }
     case "data_forge": {
       const k = keywords(input.question);

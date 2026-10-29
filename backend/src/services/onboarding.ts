@@ -115,7 +115,13 @@ export async function startAttempt(userId: string) {
   }
 
   const attemptNo = (prev?.attempt_no ?? 0) + 1;
-  const attempt = must(await db.from("test_attempts").insert({ user_id: userId, role_id: profile.role_id, attempt_no: attemptNo }).select().single(), "attempt");
+  const inserted = await db.from("test_attempts").insert({ user_id: userId, role_id: profile.role_id, attempt_no: attemptNo }).select().single();
+  // 23514: the database still has the old two-attempt rule (migration 20261029000003 not applied yet).
+  if (inserted.error?.code === "23514") {
+    logger.error({ userId, attemptNo }, "test_attempts attempt_no check rejected a retake");
+    throw conflict("We couldn't open this retake. Our team has been told; please report it from Help & support so we can open it for you.", "ATTEMPT_BLOCKED");
+  }
+  const attempt = must(inserted, "attempt");
 
   // Attempt 2 retakes only tests below 70; passing scores carry over (if the field didn't change).
   const carried = new Map<number, { score: number; test_bank_id: string }>();

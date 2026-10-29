@@ -11,6 +11,7 @@ import { issueCertificate } from "../services/certification.js";
 import { processCampaign } from "../services/emailCampaigns.js";
 import { runStandinWork, runAllStandinWork } from "../services/standins.js";
 import { processMeeting } from "../services/meetings.js";
+import { pruneOldLogs, runOpsChecks } from "../services/ops.js";
 
 type Processor = (data: any) => Promise<unknown>;
 
@@ -22,6 +23,8 @@ export const processors: Record<JobName, Processor> = {
   run_matching: async () => {
     await runMatching();
     await runAllStandinWork();
+    // Every 30 minutes: tell admins about crashes, AI failures, stuck jobs and webhook errors.
+    await runOpsChecks().catch((err) => logger.error({ err: String(err) }, "ops checks failed"));
   },
   expire_offers: () => expireOffers(),
   generate_offers: ({ userId }) => generateOffers(userId),
@@ -37,6 +40,7 @@ export const processors: Record<JobName, Processor> = {
   inactivity_check: async () => {
     await runInactivityCheck();
     await finalizeOverdueProjects();
+    await pruneOldLogs();
   },
   lapse_check: async () => {
     const lapsed = await runLapseCheck();

@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { squadHealth } from "./squadHealth.js";
 import { z } from "zod";
 import { db, anon, must } from "../lib/supabase.js";
 import { env } from "../config/env.js";
@@ -169,7 +170,7 @@ export async function staffHome(userId: string, role: string) {
   const head = { count: "exact" as const, head: true };
   const { data: me } = await db.from("profiles").select("full_name, staff_title, username").eq("id", userId).single();
   const sees = (...roles: string[]) => role === "admin" || roles.includes(role);
-  const [support, onboardingReview, appeals, drafts, helpGaps, listings, pendingOffers, pool] = await Promise.all([
+  const [support, onboardingReview, appeals, drafts, helpGaps, listings, pendingOffers, pool, idChecks, health] = await Promise.all([
     sees("moderator") ? count(db.from("support_tickets").select("id", head).eq("status", "open")) : null,
     sees("moderator") ? count(db.from("test_submissions").select("id", head).in("status", ["needs_review", "awaiting_ai"])) : null,
     sees("moderator") ? count(db.from("appeals").select("id", head).eq("status", "open")) : null,
@@ -178,6 +179,8 @@ export async function staffHome(userId: string, role: string) {
     sees("partnerships", "content_reviewer") ? count(db.from("company_personas").select("id", head).eq("status", "approved")) : null,
     sees("partnerships") ? count(db.from("offers").select("id", head).eq("status", "pending")) : null,
     role === "admin" ? db.from("token_pool").select("balance").eq("id", 1).maybeSingle().then((r) => Number(r.data?.balance ?? 0)) : null,
+    sees("moderator") ? count(db.from("reports").select("id", head).eq("target_type", "identity_check").eq("status", "open")) : null,
+    role === "admin" ? squadHealth().then((h) => h.summary) : null,
   ]);
   return {
     full_name: me?.full_name ?? null,
@@ -193,6 +196,10 @@ export async function staffHome(userId: string, role: string) {
       listings !== null && { key: "listings", label: "Live opportunity listings", value: listings, tab: "opportunities" },
       pendingOffers !== null && { key: "offers", label: "Offers waiting on learners", value: pendingOffers, tab: "opportunities" },
       pool !== null && { key: "pool", label: "Tokens in the funding pool", value: pool, tab: "tokens" },
+      idChecks !== null && { key: "id_checks", label: "ID checks waiting", value: idChecks, tab: "home#id-checks" },
+      health && { key: "at_risk", label: "Members warned for inactivity", value: health.at_risk, tab: "aipm:health" },
+      health && { key: "mostly_ai", label: "Squads that are mostly AI stand-ins", value: health.mostly_ai, tab: "aipm:health" },
+      health && { key: "proposals", label: "Meeting proposals to approve", value: health.pending_proposals, tab: "aipm:health" },
     ].filter(Boolean),
   };
 }

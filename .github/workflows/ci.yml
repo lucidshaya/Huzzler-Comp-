@@ -32,3 +32,36 @@ jobs:
           VITE_SUPABASE_URL: https://example.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: ci-placeholder
           VITE_API_URL: http://localhost:3001
+
+  # The end-to-end smoke test, against the staging database only (never production). Skips with a
+  # warning until the staging secrets exist: STAGING_SUPABASE_URL, STAGING_SUPABASE_ANON_KEY,
+  # STAGING_SUPABASE_SERVICE_ROLE_KEY, and optionally STAGING_ADMIN_USERNAME / STAGING_ADMIN_PASSWORD.
+  e2e-staging:
+    runs-on: ubuntu-latest
+    needs: backend
+    defaults: { run: { working-directory: backend } }
+    env:
+      SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+      ADMIN_USERNAME: ${{ secrets.STAGING_ADMIN_USERNAME }}
+      ADMIN_PASSWORD: ${{ secrets.STAGING_ADMIN_PASSWORD }}
+      PAYSTACK_SECRET_KEY: sk_test_ci
+      AI_MOCK: "true"
+      PORT: "3001"
+    steps:
+      - if: env.SUPABASE_URL == ''
+        working-directory: .
+        run: echo "::warning title=E2E skipped::Add the STAGING_SUPABASE_* repo secrets to run the end-to-end test against staging."
+      - if: env.SUPABASE_URL != ''
+        uses: actions/checkout@v4
+      - if: env.SUPABASE_URL != ''
+        uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: backend/package-lock.json }
+      - if: env.SUPABASE_URL != ''
+        run: npm ci
+      - if: env.SUPABASE_URL != ''
+        run: |
+          npx tsx src/server.ts > api.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:3001/health && break; sleep 1; done
+          npx tsx scripts/e2e-smoke.ts || (tail -50 api.log; exit 1)

@@ -4,9 +4,28 @@ import { db } from "./supabase.js";
 import { env } from "../config/env.js";
 import { logger } from "./logger.js";
 
+// Milestones that also go out by email, so people who aren't signed in don't miss them (offers expire,
+// squads start without them). The button opens the page the notification is about.
+const MILESTONE_EMAILS: Record<string, { label: string; path: string }> = {
+  "onboarding.passed": { label: "See your results", path: "/results" },
+  "onboarding.failed": { label: "See your feedback", path: "/results" },
+  "offers.new": { label: "See your offers", path: "/opportunities" },
+  "offers.expiring": { label: "Choose an offer", path: "/opportunities" },
+  "team.placed": { label: "Meet your squad", path: "/workspace?tab=squad" },
+  "project.result": { label: "See your grades", path: "/workspace" },
+  "project.remediation": { label: "Open your workspace", path: "/workspace" },
+  "appeal.resolved": { label: "See the answer", path: "/results" },
+  "cert.identity": { label: "Verify your identity", path: "/profile" },
+  "identity.reviewed": { label: "Open your profile", path: "/profile" },
+  "cert.issued": { label: "View your certificate", path: "/certificate" },
+  "billing.lapsed": { label: "Renew your plan", path: "/billing" },
+};
+
 export async function notify(userId: string, type: string, title: string, body: string, data: Record<string, unknown> = {}) {
   const { error } = await db.from("notifications").insert({ user_id: userId, type, title, body, data });
   if (error) logger.error({ err: error, type }, "notification insert failed");
+  const mail = MILESTONE_EMAILS[type];
+  if (mail) later(emailUser(userId, title, emailLayout(title, `<p>${escapeHtml(body)}</p>`, { label: mail.label, url: `${env.APP_URL}${mail.path}` })));
 }
 
 /** Escapes user-provided text before it goes into an email's HTML. */
@@ -85,7 +104,8 @@ export async function sendEmail(to: string, subject: string, html: string, opts:
 export async function emailUser(userId: string, subject: string, html: string) {
   try {
     const { data } = await db.auth.admin.getUserById(userId);
-    if (data.user?.email) await sendEmail(data.user.email, subject, html);
+    const to = data.user?.email;
+    if (to && !to.endsWith(".invalid")) await sendEmail(to, subject, html); // deleted accounts
   } catch (err) {
     logger.error({ err: String(err), subject }, "emailUser failed");
   }

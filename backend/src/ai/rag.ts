@@ -33,11 +33,34 @@ export type Retrieved = { title: string; content: string; similarity: number };
 
 export async function retrieveForMentor(roleId: string, query: string, k = 4): Promise<Retrieved[]> {
   const vec = await embed(query);
-  if (!vec) return [];
+  if (!vec) return keywordRetrieve(roleId, query, k);
   const { data } = await db.rpc("match_kb_chunks", {
     query_embedding: toPgVector(vec), filter_role: roleId, filter_kinds: ["reference", "style_guide", "project_doc", "hint"], match_count: k,
   });
   return (data ?? []).map((d: { title: string; content: string; similarity: number }) => ({ title: d.title, content: d.content, similarity: d.similarity }));
+}
+
+/** Without embeddings: the role's guides and references, ranked by shared words with the question. */
+async function keywordRetrieve(roleId: string, query: string, k: number): Promise<Retrieved[]> {
+  const { data } = await db
+    .from("kb_documents")
+    .select("title, body, role_id")
+    .eq("status", "approved")
+    .in("kind", ["reference", "style_guide", "project_doc", "hint"])
+    .or(`role_id.eq.${roleId},role_id.is.null`)
+    .limit(100);
+  const words = new Set(query.toLowerCase().match(/[a-z]{4,}/g) ?? []);
+  return (data ?? [])
+    .map((d) => {
+      const text = `${d.title} ${d.body}`.toLowerCase();
+      const hits = [...words].filter((w) => text.includes(w)).length;
+      // The role's own guide is always worth including, even with no word overlap.
+      const similarity = hits / Math.max(1, words.size) + (d.role_id === roleId ? 0.25 : 0);
+      return { title: d.title, content: d.body, similarity };
+    })
+    .filter((d) => d.similarity > 0)
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, Math.min(k, 2));
 }
 
 /** Stored FAQ answer when the question is close enough (no LLM call). */

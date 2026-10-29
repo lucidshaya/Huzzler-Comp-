@@ -34,7 +34,8 @@ import { hzConfirm } from "@/components/app/Dialogs";
 import { hzToast } from "@/components/app/Toast";
 import { AgentMark } from "@/components/app/AgentMark";
 
-export type AipmTab = "briefs" | "talent" | "board" | "grading" | "tests" | "ai" | "reports";
+export type AipmTab =
+  "briefs" | "talent" | "board" | "health" | "grading" | "tests" | "ai" | "reports";
 
 const useArchetypes = () =>
   useQuery({

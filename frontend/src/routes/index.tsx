@@ -813,15 +813,12 @@ function Index() {
               Hackathon
             </div>
             <div className="flex gap-6 font-semibold">
-              <a href="#" className="hover:text-white">
+              <Link to="/privacy" className="hover:text-white">
                 Privacy
-              </a>
-              <a href="#" className="hover:text-white">
+              </Link>
+              <Link to="/terms" className="hover:text-white">
                 Terms
-              </a>
-              <a href="#" className="hover:text-white">
-                Cookies
-              </a>
+              </Link>
             </div>
           </div>
         </div>

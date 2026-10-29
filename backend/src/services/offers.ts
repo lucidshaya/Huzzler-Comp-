@@ -203,5 +203,36 @@ export async function expireOffers() {
     const { data: open } = await db.from("offers").select("id").eq("user_id", u).in("status", ["pending", "accepted"]);
     if (!open?.length) await enqueue("generate_offers", { userId: u });
   }
+  await remindExpiringOffers();
   return users.length;
+}
+
+/** One reminder (in-app and email) when someone's pending offers have about a day left. */
+export async function remindExpiringOffers() {
+  const now = Date.now();
+  const { data } = await db
+    .from("offers")
+    .select("user_id, expires_at")
+    .eq("status", "pending")
+    .gte("expires_at", new Date(now + 20 * 3_600_000).toISOString())
+    .lt("expires_at", new Date(now + 24 * 3_600_000).toISOString());
+  const users = [...new Set((data ?? []).map((o) => o.user_id))];
+  if (!users.length) return 0;
+  const { data: sent } = await db
+    .from("notifications")
+    .select("user_id")
+    .eq("type", "offers.expiring")
+    .in("user_id", users)
+    .gte("created_at", new Date(now - 48 * 3_600_000).toISOString());
+  const already = new Set((sent ?? []).map((n) => n.user_id));
+  let reminded = 0;
+  for (const u of users) {
+    if (already.has(u)) continue;
+    // Someone who already accepted an offer doesn't need chasing about the rest.
+    const { data: accepted } = await db.from("offers").select("id").eq("user_id", u).eq("status", "accepted").limit(1);
+    if (accepted?.length) continue;
+    await notify(u, "offers.expiring", "Your offers expire in a day", "Accept one of your internship offers within 24 hours to be matched into a squad. After that they expire and you wait for new ones.");
+    reminded++;
+  }
+  return reminded;
 }

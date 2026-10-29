@@ -424,7 +424,9 @@ export async function computeProjectResults(instanceId: string, onlyIfComplete =
       return sub && t.due_at && new Date(sub.submitted_at) <= new Date(t.due_at);
     }).length;
     const reliability = reliabilityScore({ tasksDue: myTasks.length, tasksOnTime: onTime, checkinDays, checkinsDone: (checkins ?? []).filter((c) => c.user_id === u).length });
-    const peer = peerScore(mineReviews);
+    // Squads with no other real member (only AI stand-ins), or whose teammates never reviewed them,
+    // have no peer input: the AI PM team review stands in so nobody loses 15% for something they can't control.
+    const peer = mineReviews.length ? peerScore(mineReviews) : round2(teamScore);
     const { total, passed } = projectTotal({ deliverables, team: teamScore, peer, reliability });
     await db.from("project_results").upsert(
       { project_instance_id: instanceId, user_id: u, deliverables_score: round2(deliverables), team_score: round2(teamScore), peer_score: peer, reliability_score: reliability, total, passed, peer_review_count: mineReviews.length },

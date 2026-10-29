@@ -5,6 +5,7 @@ import rateLimit from "express-rate-limit";
 import { pinoHttp } from "pino-http";
 import { env } from "./config/env.js";
 import { logger } from "./lib/logger.js";
+import { db } from "./lib/supabase.js";
 import { HttpError } from "./lib/errors.js";
 import { publicRouter } from "./routes/public.js";
 import { meRouter } from "./routes/me.js";
@@ -40,6 +41,12 @@ export function createApp() {
   app.use("/api/cv/generate", limiter(60_000, 5));
 
   app.get("/health", (_req, res) => res.json({ ok: true }));
+  // For an uptime monitor: also checks the database answers.
+  app.get("/health/deep", async (_req, res) => {
+    const started = Date.now();
+    const { error } = await db.from("plans").select("id").limit(1);
+    res.status(error ? 503 : 200).json({ ok: !error, db: error ? "down" : "up", ms: Date.now() - started });
+  });
   app.use("/api", publicRouter);
   app.use("/api/admin/auth", adminAuthRouter);
   app.use("/api", requireAuth);

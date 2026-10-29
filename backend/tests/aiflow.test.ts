@@ -143,8 +143,22 @@ describe("Workstation tools follow the role", () => {
     const { actionsFor, WORKSTATION_ACTIONS } = await import("../src/services/workstation.js");
     expect(actionsFor("uiux_designer")).not.toContain("code_autocomplete");
     expect(actionsFor("uiux_designer")).toContain("logic_canvas");
-    expect(actionsFor("software_engineer")).toEqual([...WORKSTATION_ACTIONS]);
+    expect(actionsFor("uiux_designer")).toContain("design_review");
+    expect(actionsFor("software_engineer")).toEqual(WORKSTATION_ACTIONS.filter((a) => a !== "design_review"));
     expect(actionsFor(null)).toEqual([...WORKSTATION_ACTIONS]);
+  });
+
+  it("gives designers an offline critique that flags missing states and actions", async () => {
+    const { mockOutput } = await import("../src/services/workstation.js");
+    const out = mockOutput(
+      { action: "design_review", screen: "A sign-up page with two fields and light grey helper text." },
+      { teamId: null, project: "Pay app", brief: "", tasks: [], roleId: "uiux_designer" },
+    ) as { issues: Array<{ area: string }>; accessibility: string[] };
+    const areas = out.issues.map((i) => i.area);
+    expect(areas).toContain("Primary action");
+    expect(areas).toContain("States");
+    expect(areas).toContain("Contrast");
+    expect(out.accessibility.length).toBeGreaterThan(0);
   });
 });
 

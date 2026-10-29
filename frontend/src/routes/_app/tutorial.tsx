@@ -52,7 +52,7 @@ const STEPS: Step[] = [
   {
     icon: ClipboardCheck,
     title: "Pass the onboarding tests",
-    body: "Five timed tests in your field. Answers save as you go, and you can take breaks between tests. You need 70% overall with no test under 50%, and you get two attempts.",
+    body: "Five timed tests in your field. Answers save as you go, and you can take breaks between tests. You need 70% overall with no test under 50%, and you get three attempts.",
     to: "/tests",
     cta: "Onboarding tests",
   },
@@ -73,7 +73,7 @@ const STEPS: Step[] = [
   {
     icon: Award,
     title: "Get certified",
-    body: "Pass all five projects with at least two peer reviews each and verify your ID. Your certificate comes with a public link that employers can check.",
+    body: "Pass all five projects with at least two peer reviews each (fewer in small squads, since AI stand-ins don't review) and verify your ID. Your certificate comes with a public link that employers can check.",
     to: "/certificate",
     cta: "Certificate",
   },
@@ -155,7 +155,7 @@ const FAQS: Array<{ q: string; a: ReactNode }> = [
   },
   {
     q: "What if I fail the onboarding tests?",
-    a: "Your plan includes two full attempts. After 7 days you retake only the tests you scored under 70% on; passing scores carry over. Your results page shows feedback for every gap.",
+    a: "Your plan includes three attempts. Retake the tests you scored under 70% on right away, then once more after 7 days; passing scores carry over. Your results page shows feedback for every gap.",
   },
   {
     q: "What happens if the timer runs out?",

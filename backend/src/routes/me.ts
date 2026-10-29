@@ -5,6 +5,7 @@ import { db } from "../lib/supabase.js";
 import { env } from "../config/env.js";
 import { aiConfigured } from "../ai/aiClient.js";
 import { audit } from "../lib/audit.js";
+import { later, notifyStaff } from "../lib/notify.js";
 import { h, parse, uid } from "./util.js";
 import { forbidden } from "../lib/errors.js";
 import { ROLE_IDS, CONSENT_VERSIONS, REQUIRED_CONSENTS } from "../domain/constants.js";
@@ -95,7 +96,10 @@ meRouter.post("/identity/upload-url", h(async (req) => {
 meRouter.post("/identity/submitted", h(async (req) => {
   const { path } = parse(z.object({ path: z.string() }), req.body);
   if (!path.startsWith(`${uid(req)}/identity/`)) throw new Error("bad path");
+  // A new upload replaces any check still waiting.
+  await db.from("reports").update({ status: "dismissed" }).eq("target_type", "identity_check").eq("target_id", uid(req)).eq("status", "open");
   await db.from("reports").insert({ reporter_id: uid(req), target_type: "identity_check", target_id: uid(req), reason: path });
+  later(notifyStaff("identity.submitted", "New ID to check", "A learner uploaded an ID for their certificate. Review it under Pending ID checks on the admin home.", { user_id: uid(req) }));
 }));
 
 // Privacy dashboard (NDPA): download everything, delete the account.
