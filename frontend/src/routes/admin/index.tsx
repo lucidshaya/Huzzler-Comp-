@@ -40,6 +40,7 @@ import {
 import { OpportunitiesTab } from "@/components/admin/Opportunities";
 import { TokensTab } from "@/components/admin/Tokens";
 import { HomeTab } from "@/components/admin/Home";
+import { RefreshButton } from "@/components/app/RefreshButton";
 
 export const Route = createFileRoute("/admin/")({
   ssr: false,
@@ -173,6 +174,7 @@ function Admin() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <RefreshButton label="Refresh admin dashboard" done="Admin dashboard is up to date" />
             {who.data.role === "admin" && <MaintenanceToggle />}
             {who.data.role === "admin" && (
               <Link
