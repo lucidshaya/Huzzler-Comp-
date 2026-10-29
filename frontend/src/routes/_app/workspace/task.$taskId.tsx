@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Bot, KeyRound, Lightbulb, Lock, Paperclip, Send, Upload } from "lucide-react";
@@ -84,6 +84,13 @@ function TaskPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["task", taskId] }),
   });
 
+  // "Upload" links land on #submit before the task has loaded: scroll once the form exists.
+  const loaded = Boolean(data && me);
+  useEffect(() => {
+    if (loaded && window.location.hash === "#submit")
+      document.getElementById("submit")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [loaded]);
+
   if (isLoading || !me) return <DetailSkeleton label="Loading task" />;
   if (error || !data) return <ErrorNote error={error} onRetry={() => refetch()} />;
   const { task } = data;
@@ -104,14 +111,19 @@ function TaskPage() {
         body={task.due_at ? `Due ${fmtDate(task.due_at)}` : undefined}
         actions={
           mine && !readOnly && task.status !== "done" && task.status !== "review" ? (
-            <div className="w-44">
-              <HzSelect
-                label="Task status"
-                value={task.status}
-                onChange={(v) => setStatus.mutate(v)}
-                disabled={setStatus.isPending}
-                options={STATUS_OPTIONS.map((o) => ({ value: o.v, label: o.l }))}
-              />
+            <div className="flex flex-wrap items-center gap-2">
+              <a href="#submit" className="btn-duo !px-4 !py-2 text-sm">
+                <Upload className="h-4 w-4" /> Upload your work
+              </a>
+              <div className="w-44">
+                <HzSelect
+                  label="Task status"
+                  value={task.status}
+                  onChange={(v) => setStatus.mutate(v)}
+                  disabled={setStatus.isPending}
+                  options={STATUS_OPTIONS.map((o) => ({ value: o.v, label: o.l }))}
+                />
+              </div>
             </div>
           ) : (
             <Pill tone={task.status === "done" ? "green" : "primary"}>
@@ -125,7 +137,8 @@ function TaskPage() {
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="flex flex-col gap-4 lg:col-span-2">
           <Card>
-            <p className="whitespace-pre-wrap text-sm">{task.description}</p>
+            <CardTitle>Task brief</CardTitle>
+            <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{task.description}</p>
           </Card>
           {mine && !readOnly && task.status !== "done" && <SubmitDeliverable taskId={taskId} />}
           {data.deliverables.map((d) => (
@@ -237,21 +250,25 @@ function TaskPage() {
   );
 }
 
+const MAX_FILES = 10;
+const MAX_BYTES = 10 * 1024 * 1024;
+type Attached = { key: string; name: string; path?: string; error?: string };
+
 function SubmitDeliverable({ taskId }: { taskId: string }) {
   const qc = useQueryClient();
   const [content, setContent] = useState("");
   const [links, setLinks] = useState("");
-  const [files, setFiles] = useState<string[]>([]);
+  const [files, setFiles] = useState<Attached[]>([]);
   const [declared, setDeclared] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [uploadErr, setUploadErr] = useState("");
+  const [dragging, setDragging] = useState(false);
+  const uploading = files.some((f) => !f.path && !f.error);
   const m = useMutation({
     mutationFn: () =>
       api(`/tasks/${taskId}/deliverables`, {
         body: {
           content,
           links: links.split(/\s+/).filter((l) => /^https?:\/\//.test(l)),
-          file_paths: files,
+          file_paths: files.flatMap((f) => (f.path ? [f.path] : [])),
           ai_declaration: declared,
         },
       }),
@@ -263,54 +280,130 @@ function SubmitDeliverable({ taskId }: { taskId: string }) {
       qc.invalidateQueries({ queryKey: ["workspace"] });
     },
   });
-  const onFile = async (f?: File) => {
-    if (!f) return;
-    if (f.size > 10 * 1024 * 1024) return setUploadErr("Files must be under 10 MB.");
-    setUploading(true);
-    setUploadErr("");
-    try {
-      const p = await uploadFile(f);
-      setFiles((x) => [...x, p]);
-    } catch (e) {
-      setUploadErr(e instanceof Error ? e.message : "Upload failed");
-    } finally {
-      setUploading(false);
+  const add = (list: FileList | null) => {
+    const picked = Array.from(list ?? []).slice(0, Math.max(0, MAX_FILES - files.length));
+    for (const f of picked) {
+      const key = `${f.name}-${f.size}-${Math.random()}`;
+      if (f.size > MAX_BYTES) {
+        setFiles((x) => [...x, { key, name: f.name, error: "Over 10 MB" }]);
+        continue;
+      }
+      setFiles((x) => [...x, { key, name: f.name }]);
+      uploadFile(f)
+        .then((path) => setFiles((x) => x.map((y) => (y.key === key ? { ...y, path } : y))))
+        .catch((e) =>
+          setFiles((x) =>
+            x.map((y) =>
+              y.key === key ? { ...y, error: e instanceof Error ? e.message : "Upload failed" } : y,
+            ),
+          ),
+        );
     }
   };
   return (
-    <Card>
-      <CardTitle icon={Upload}>Submit your deliverable</CardTitle>
+    <section id="submit" className="card-duo scroll-mt-24 p-5 ring-2 ring-primary/30 md:p-6">
+      <div className="mb-5 flex items-start gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
+          <Upload className="h-5 w-5" />
+        </span>
+        <div>
+          <h2 className="font-display text-lg font-bold">Submit your work</h2>
+          <p className="text-sm text-muted-foreground">
+            Upload your files, add any links and say what you did. It's graded against this task's
+            rubric.
+          </p>
+        </div>
+      </div>
       <form
         onSubmit={(e) => {
           e.preventDefault();
           m.mutate();
         }}
-        className="flex flex-col gap-3"
+        className="flex flex-col gap-5"
       >
-        <textarea
-          rows={10}
-          className={inputCls}
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="Your deliverable, or a summary of what you did and where to find it (20+ characters)"
-          required
-          minLength={20}
-        />
-        <input
-          className={inputCls}
-          value={links}
-          onChange={(e) => setLinks(e.target.value)}
-          placeholder="Links (PR, Figma, doc) separated by spaces"
-        />
-        <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-primary">
-          <Paperclip className="h-4 w-4" /> {uploading ? "Uploading…" : "Attach a file"}
-          <input type="file" className="sr-only" onChange={(e) => onFile(e.target.files?.[0])} />
+        <label
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            add(e.dataTransfer.files);
+          }}
+          className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-4 py-8 text-center transition-colors ${dragging ? "border-primary bg-primary/10" : "border-primary/40 bg-primary/5 hover:border-primary hover:bg-primary/10"}`}
+        >
+          <Upload className="h-7 w-7 text-primary" />
+          <span className="font-display text-base font-bold">
+            Drag files here or <span className="text-primary underline">browse</span>
+          </span>
+          <span className="text-xs text-muted-foreground">
+            Up to {MAX_FILES} files, 10 MB each: documents, designs, images, exports or a zip
+          </span>
+          <input
+            type="file"
+            multiple
+            className="sr-only"
+            onChange={(e) => {
+              add(e.target.files);
+              e.target.value = "";
+            }}
+          />
         </label>
         {files.length > 0 && (
-          <div className="text-xs text-muted-foreground">{files.length} file(s) attached</div>
+          <ul className="flex flex-col gap-2">
+            {files.map((f) => (
+              <li
+                key={f.key}
+                className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-2 text-sm"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate font-semibold">{f.name}</span>
+                </span>
+                <span className="flex shrink-0 items-center gap-3 text-xs">
+                  {f.error ? (
+                    <span className="font-semibold text-red-500">{f.error}</span>
+                  ) : f.path ? (
+                    <span className="font-semibold text-primary">Uploaded</span>
+                  ) : (
+                    <span className="text-muted-foreground">Uploading…</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setFiles((x) => x.filter((y) => y.key !== f.key))}
+                    className="font-semibold text-muted-foreground hover:text-red-500"
+                  >
+                    Remove
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
-        {uploadErr && <p className="text-xs font-semibold text-red-500">{uploadErr}</p>}
-        <label className="flex items-start gap-2 text-xs">
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-semibold">Links</span>
+          <input
+            className={inputCls}
+            value={links}
+            onChange={(e) => setLinks(e.target.value)}
+            placeholder="Figma, Google Doc, GitHub PR… separate with spaces"
+          />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-semibold">What did you do?</span>
+          <textarea
+            rows={7}
+            className={inputCls}
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="Summarise your work, the decisions you made and where to find everything (20+ characters)"
+            required
+            minLength={20}
+          />
+        </label>
+        <label className="flex items-start gap-2 text-sm">
           <input
             type="checkbox"
             className="mt-0.5 h-4 w-4 accent-[color:var(--primary)]"
@@ -321,13 +414,13 @@ function SubmitDeliverable({ taskId }: { taskId: string }) {
         </label>
         <ErrorNote error={m.error} />
         <button
-          disabled={m.isPending || !declared || content.length < 20}
-          className="btn-duo self-end !py-2.5 disabled:opacity-50"
+          disabled={m.isPending || uploading || !declared || content.length < 20}
+          className="btn-duo self-end !px-5 !py-2.5 disabled:opacity-50"
         >
-          {m.isPending ? "Submitting…" : "Submit for grading"}
+          {uploading ? "Waiting for uploads…" : m.isPending ? "Submitting…" : "Submit for grading"}
         </button>
       </form>
-    </Card>
+    </section>
   );
 }
 

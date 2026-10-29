@@ -138,6 +138,16 @@ describe("help bot dead ends", () => {
   });
 });
 
+describe("Workstation tools follow the role", () => {
+  it("keeps code tools away from designers and gives engineers everything", async () => {
+    const { actionsFor, WORKSTATION_ACTIONS } = await import("../src/services/workstation.js");
+    expect(actionsFor("uiux_designer")).not.toContain("code_autocomplete");
+    expect(actionsFor("uiux_designer")).toContain("logic_canvas");
+    expect(actionsFor("software_engineer")).toEqual([...WORKSTATION_ACTIONS]);
+    expect(actionsFor(null)).toEqual([...WORKSTATION_ACTIONS]);
+  });
+});
+
 const person = (id: string, distance = 0) => ({ user_id: id, name: id, role: "Software Engineer", onboarding_score: 80, timezone: "Africa/Lagos", hours_per_week: 15, waiting_days: 3, distance });
 
 describe("AI squad matching stays inside the rules", () => {

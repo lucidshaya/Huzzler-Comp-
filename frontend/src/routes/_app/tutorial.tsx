@@ -8,7 +8,6 @@ import {
   CalendarCheck,
   Check,
   ChevronDown,
-  Clapperboard,
   ClipboardCheck,
   FileText,
   Lightbulb,
@@ -23,7 +22,8 @@ import {
 import { z } from "zod";
 import { hasPaid, useMe, type JourneyStatus } from "@/lib/journey";
 import { markTutorialSeen } from "@/lib/tutorial";
-import { IntroVideo } from "@/components/app/IntroVideo";
+import { VideoCard } from "@/components/app/TutorialVideos";
+import { GUIDES, PLATFORM_TOUR } from "@/lib/tutorials";
 import { ListPageSkeleton } from "@/components/app/Skeleton";
 
 export const Route = createFileRoute("/_app/tutorial")({
@@ -98,13 +98,6 @@ function currentStep(s: JourneyStatus): number {
   if (s === "CERTIFIED") return STEPS.length;
   return -1;
 }
-
-const GUIDES = [
-  "Taking your onboarding tests",
-  "Your first day in a squad",
-  "Check-ins, deliverables and grades",
-  "Getting certified",
-];
 
 const SQUAD: Array<{ icon: LucideIcon; title: string; body: string; warn?: boolean }> = [
   {
@@ -240,24 +233,18 @@ function Tutorial() {
         aria-labelledby="video-title"
         className="flex scroll-mt-24 flex-col gap-8"
       >
-        <SectionHeading id="video" eyebrow="Watch" title="The overview">
-          A short introduction to Huzzler. A full walkthrough of the platform is on the way.
+        <SectionHeading id="video" eyebrow="Watch" title="The platform tour">
+          Start here. The full walkthrough, then a short guide for each part of the platform. Every
+          page also has a <b className="font-semibold text-foreground">Tutorial video</b> button at
+          the top for the part you're on.
         </SectionHeading>
-        <IntroVideo />
+        <VideoCard video={PLATFORM_TOUR} large />
         <div>
-          <h3 className="mb-4 text-sm font-semibold text-muted-foreground">
-            Short guides, coming soon
-          </h3>
-          <ul className="grid gap-4 sm:grid-cols-2">
+          <h3 className="mb-4 font-display text-base font-bold">Short guides</h3>
+          <ul className="grid gap-5 sm:grid-cols-2">
             {GUIDES.map((g) => (
-              <li
-                key={g}
-                className="flex items-center gap-4 rounded-xl border border-dashed border-border p-3"
-              >
-                <span className="grid aspect-video w-28 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
-                  <Clapperboard className="h-5 w-5" aria-hidden />
-                </span>
-                <span className="text-sm font-semibold leading-snug">{g}</span>
+              <li key={g.id}>
+                <VideoCard video={g} />
               </li>
             ))}
           </ul>

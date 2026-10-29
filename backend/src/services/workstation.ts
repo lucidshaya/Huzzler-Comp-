@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { z } from "zod";
 import { db } from "../lib/supabase.js";
 import { logger } from "../lib/logger.js";
-import { badRequest } from "../lib/errors.js";
+import { badRequest, forbidden } from "../lib/errors.js";
 import { aiConfigured, callStructured, AiBudgetError, AiOutputError, AiUnavailableError } from "../ai/aiClient.js";
 import { balanceOf, creditTokens, priceOf, spendTokens, tokenPrices } from "./tokens.js";
 
@@ -12,6 +12,22 @@ import { balanceOf, creditTokens, priceOf, spendTokens, tokenPrices } from "./to
 
 export const WORKSTATION_ACTIONS = ["code_autocomplete", "docs_extract", "logic_canvas", "data_forge", "voice_summary"] as const;
 export type WorkstationAction = (typeof WORKSTATION_ACTIONS)[number];
+
+/**
+ * Which tools each role gets. Code tools are for the roles that write code; designers, PMs, writers
+ * and marketers get flows, data and stand-up notes instead. Roles not listed (or no role) get all.
+ */
+const ROLE_ACTIONS: Record<string, WorkstationAction[]> = {
+  software_engineer: ["code_autocomplete", "docs_extract", "logic_canvas", "data_forge", "voice_summary"],
+  devops_engineer: ["code_autocomplete", "docs_extract", "logic_canvas", "voice_summary"],
+  qa_engineer: ["code_autocomplete", "docs_extract", "logic_canvas", "voice_summary"],
+  data_analyst: ["data_forge", "logic_canvas", "voice_summary"],
+  product_manager: ["logic_canvas", "data_forge", "voice_summary"],
+  uiux_designer: ["logic_canvas", "voice_summary"],
+  technical_writer: ["logic_canvas", "voice_summary"],
+  growth_marketer: ["data_forge", "logic_canvas", "voice_summary"],
+};
+export const actionsFor = (roleId: string | null): WorkstationAction[] => (roleId && ROLE_ACTIONS[roleId]) || [...WORKSTATION_ACTIONS];
 
 export const RunInput = z.discriminatedUnion("action", [
   z.object({ action: z.literal("code_autocomplete"), code: z.string().max(20_000), filename: z.string().max(120).optional() }),
@@ -55,6 +71,8 @@ export async function workstationState(userId: string) {
     canvas: (canvas?.nodes as CanvasNode[] | undefined) ?? starterCanvas(ctx),
     runs: runs ?? [],
     context: { project: ctx.project, tasks: ctx.tasks },
+    role_id: ctx.roleId,
+    actions: actionsFor(ctx.roleId),
   };
 }
 
@@ -64,8 +82,9 @@ export async function saveCanvas(userId: string, nodes: CanvasNode[]) {
 }
 
 export async function runTool(userId: string, input: RunInput) {
-  const price = await priceOf(input.action);
   const ctx = await contextFor(userId);
+  if (!actionsFor(ctx.roleId).includes(input.action)) throw forbidden("That tool isn't part of your role's Workstation.", "TOOL_NOT_FOR_ROLE");
+  const price = await priceOf(input.action);
   const ref = crypto.randomUUID();
   const balanceAfterSpend = await spendTokens(userId, price.cost, `${price.tool} · ${price.label}`, price.tool, ref);
   try {

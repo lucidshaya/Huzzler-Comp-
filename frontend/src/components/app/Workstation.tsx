@@ -49,6 +49,9 @@ type State = {
     created_at: string;
   }>;
   context: { project: string; tasks: string[] };
+  role_id: string | null;
+  /** The actions this person's role may run (the API enforces the same list). */
+  actions: string[];
 };
 type Tool = "sandbox" | "canvas" | "dataforge" | "voice";
 
@@ -111,24 +114,58 @@ function useRun() {
   return { ...m, topUp, setTopUp };
 }
 
+/** What the Workstation is for, in each role's terms. */
+const ROLE_INTRO: Record<string, { title: string; body: string }> = {
+  uiux_designer: {
+    title: "Design with Huzzler AI tools",
+    body: "Map user flows and screens, and record your stand-up",
+  },
+  product_manager: {
+    title: "Plan with Huzzler AI tools",
+    body: "Map product flows, dig into metrics and record your stand-up",
+  },
+  data_analyst: {
+    title: "Analyse with Huzzler AI tools",
+    body: "Query data, map pipelines and record your stand-up",
+  },
+  growth_marketer: {
+    title: "Grow with Huzzler AI tools",
+    body: "Dig into funnel data, map campaigns and record your stand-up",
+  },
+  technical_writer: {
+    title: "Write with Huzzler AI tools",
+    body: "Map how the product works and record your stand-up",
+  },
+};
+
 export function Workstation() {
-  const [tool, setTool] = useState<Tool>("sandbox");
+  const [picked, setPicked] = useState<Tool | null>(null);
   const [topUp, setTopUp] = useState(false);
   const { data, error, refetch } = useQuery({
     queryKey: ["workstation"],
     queryFn: () => api<State>("/workstation"),
   });
   const price = (action: string) => data?.prices.find((p) => p.action === action)?.cost ?? 0;
+  const tools = TOOLS.filter((t) => !data || t.actions.some((a) => data.actions.includes(a))).map(
+    (t) =>
+      t.key === "canvas" && data?.role_id === "uiux_designer"
+        ? { ...t, label: "Flow Canvas", sub: "User flows & screens" }
+        : t,
+  );
+  const tool = picked && tools.some((t) => t.key === picked) ? picked : tools[0].key;
+  const setTool = setPicked;
+  const intro = (data?.role_id && ROLE_INTRO[data.role_id]) || {
+    title: "Build & ship with Huzzler AI tools",
+    body: "Write code, map system flows, query data and record your stand-up",
+  };
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h2 className="font-display text-xl font-bold tracking-tight">
-            Build & ship with Huzzler AI tools
-          </h2>
+          <h2 className="font-display text-xl font-bold tracking-tight">{intro.title}</h2>
           <p className="max-w-xl text-sm text-muted-foreground">
-            Write code, map system flows, query data and record your stand-up
+            {intro.body}
             {data?.context.project ? ` for ${data.context.project}` : ""}.
           </p>
           {data && !data.ai_enabled && (
@@ -161,11 +198,11 @@ export function Workstation() {
       <ErrorNote error={error} onRetry={() => refetch()} />
 
       <div
-        className="grid grid-cols-2 gap-3 lg:grid-cols-4"
+        className={`grid grid-cols-2 gap-3 ${tools.length >= 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}
         role="tablist"
         aria-label="Workstation tools"
       >
-        {TOOLS.map((t) => {
+        {tools.map((t) => {
           const Icon = t.icon;
           const active = tool === t.key;
           return (

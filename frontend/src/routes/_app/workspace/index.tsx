@@ -49,6 +49,9 @@ import { Meetings } from "@/components/app/Meetings";
 
 type Tab = "board" | "squad" | "workstation" | "deliverables";
 
+/** Roles that write code: only they see the repository and CI setup. */
+const CODE_ROLES = ["software_engineer", "devops_engineer", "qa_engineer"];
+
 export const Route = createFileRoute("/_app/workspace/")({
   validateSearch: z.object({
     tab: z.enum(["board", "squad", "workstation", "deliverables"]).optional(),
@@ -71,7 +74,7 @@ const TABS: Array<{ key: Tab; label: string; icon: LucideIcon }> = [
   { key: "board", label: "Board", icon: Target },
   { key: "squad", label: "Squad", icon: Users },
   { key: "workstation", label: "Workstation", icon: Terminal },
-  { key: "deliverables", label: "Deliverables", icon: Upload },
+  { key: "deliverables", label: "Submit work", icon: Upload },
 ];
 
 function Workspace() {
@@ -146,6 +149,11 @@ function Workspace() {
     due_at: x.due_at,
   }));
   const myTasks = (w?.tasks ?? []).filter((x) => x.assignee_id === me.user.id);
+  // Tasks still waiting for this person's work.
+  const toSubmit = myTasks.filter((x) => x.status !== "done" && x.status !== "review");
+  const daysLeft = w?.project
+    ? Math.ceil((new Date(w.project.due_at).getTime() - Date.now()) / 86_400_000)
+    : null;
   const done = tasks.filter((x) => x.status === "done").length;
   const allDone = tasks.length > 0 && done === tasks.length;
   const pastDue = w?.project ? new Date(w.project.due_at) < new Date() : false;
@@ -156,18 +164,43 @@ function Workspace() {
         chip={`${t.team.persona.name} · Project ${w?.project?.level ?? t.team.current_level} of 5`}
         title={w?.project?.template.title ?? t.team.name}
         body={
-          w?.project
-            ? `${t.team.name} · due ${fmtDate(w.project.due_at)} · ${done}/${tasks.length} tasks done`
-            : t.team.name
+          w?.project ? (
+            <span className="flex flex-wrap items-center gap-2">
+              <span>{t.team.name}</span>
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${daysLeft !== null && daysLeft <= 3 ? "bg-[color:var(--gold)]/20 text-foreground" : "bg-muted text-foreground"}`}
+              >
+                Due {fmtDate(w.project.due_at)}
+                {daysLeft !== null &&
+                  daysLeft >= 0 &&
+                  ` · ${daysLeft} day${daysLeft === 1 ? "" : "s"} left`}
+              </span>
+              <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">
+                {done}/{tasks.length} tasks done
+              </span>
+            </span>
+          ) : (
+            t.team.name
+          )
         }
         actions={
-          <Link
-            to="/billing"
-            hash="tokens"
-            className="inline-flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-bold text-primary hover:bg-primary/15"
-          >
-            <Coins className="h-4 w-4" /> {fmtTokens(wallet.data?.balance ?? 0)} tokens
-          </Link>
+          <>
+            {toSubmit.length > 0 && !lapsed && (
+              <button
+                onClick={() => navigate({ search: { tab: "deliverables" }, replace: true })}
+                className="btn-duo !px-4 !py-2 text-sm"
+              >
+                <Upload className="h-4 w-4" /> Upload work
+              </button>
+            )}
+            <Link
+              to="/billing"
+              hash="tokens"
+              className="inline-flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-bold text-primary hover:bg-primary/15"
+            >
+              <Coins className="h-4 w-4" /> {fmtTokens(wallet.data?.balance ?? 0)} tokens
+            </Link>
+          </>
         }
       />
       {lapsed && <Notice tone="warn">Read-only: your plan has lapsed.</Notice>}
@@ -189,6 +222,11 @@ function Workspace() {
               className={`inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 font-display text-sm font-bold transition-colors ${tab === x.key ? "bg-background text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground"}`}
             >
               <Icon className="h-4 w-4" /> {x.label}
+              {x.key === "deliverables" && toSubmit.length > 0 && (
+                <span className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-primary-foreground">
+                  {toSubmit.length}
+                </span>
+              )}
             </button>
           );
         })}
@@ -223,7 +261,9 @@ function Workspace() {
                     </li>
                   ))}
                 </ol>
-                <CiInfo projectId={w.project.id} repoUrl={w.project.repo_url} />
+                {CODE_ROLES.includes(me.profile.role_id ?? "") && (
+                  <CiInfo projectId={w.project.id} repoUrl={w.project.repo_url} />
+                )}
               </Card>
             )}
             {w?.project && (allDone || pastDue) && !lapsed && (
@@ -247,6 +287,7 @@ function Workspace() {
             )}
           </div>
           <div className="flex flex-col gap-4">
+            {toSubmit.length > 0 && !lapsed && <SubmitList tasks={toSubmit} compact />}
             {w?.project && !w.checkedInToday && !lapsed && <CheckIn />}
             <HustlerPanel tasks={myTasks} />
           </div>
@@ -317,69 +358,107 @@ function Workspace() {
         ))}
 
       {tab === "deliverables" && (
-        <Card>
-          <CardTitle
-            icon={Upload}
-            aside={
-              <span className="text-xs text-muted-foreground">
-                {myTasks.filter((x) => x.status === "done").length} of {myTasks.length} approved
-              </span>
-            }
-          >
-            Your deliverables
-          </CardTitle>
-          {myTasks.length === 0 ? (
-            <EmptyState icon={ListChecks} title="No tasks assigned to you yet" />
-          ) : (
-            <div className="divide-y divide-border">
-              {myTasks.map((x) => {
-                const label =
-                  x.status === "done"
-                    ? "Approved"
-                    : x.status === "review"
-                      ? "Submitted"
-                      : x.status === "blocked"
-                        ? "Blocked"
-                        : "In progress";
-                const tone =
-                  x.status === "done"
-                    ? "green"
-                    : x.status === "review"
-                      ? "gold"
-                      : x.status === "blocked"
-                        ? "red"
-                        : "muted";
-                return (
-                  <div
-                    key={x.id}
-                    className="flex flex-wrap items-center justify-between gap-3 py-3.5"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate font-display text-sm font-bold">{x.title}</div>
-                      <div className="text-xs text-muted-foreground">Due {fmtDate(x.due_at)}</div>
-                    </div>
-                    <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-4">
+          {toSubmit.length > 0 && !lapsed && <SubmitList tasks={toSubmit} />}
+          <Card>
+            <CardTitle
+              icon={ListChecks}
+              aside={
+                <span className="text-xs text-muted-foreground">
+                  {myTasks.filter((x) => x.status === "done").length} of {myTasks.length} approved
+                </span>
+              }
+            >
+              All your tasks
+            </CardTitle>
+            {myTasks.length === 0 ? (
+              <EmptyState icon={ListChecks} title="No tasks assigned to you yet" />
+            ) : (
+              <div className="divide-y divide-border">
+                {myTasks.map((x) => {
+                  const [label, tone] =
+                    x.status === "done"
+                      ? (["Approved", "green"] as const)
+                      : x.status === "review"
+                        ? (["Submitted", "gold"] as const)
+                        : x.status === "blocked"
+                          ? (["Blocked", "red"] as const)
+                          : (["Not submitted", "muted"] as const);
+                  return (
+                    <Link
+                      key={x.id}
+                      to="/workspace/task/$taskId"
+                      params={{ taskId: x.id }}
+                      className="flex flex-wrap items-center justify-between gap-3 py-3.5 hover:text-primary"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate font-display text-sm font-bold">
+                          {x.title}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          Due {fmtDate(x.due_at)}
+                        </span>
+                      </span>
                       <Pill tone={tone}>{label}</Pill>
-                      <Link
-                        to="/workspace/task/$taskId"
-                        params={{ taskId: x.id }}
-                        className={
-                          x.status === "done" || x.status === "review"
-                            ? "btn-duo-outline !py-1.5 !px-3 text-xs"
-                            : "btn-duo !py-1.5 !px-3 text-xs"
-                        }
-                      >
-                        {x.status === "done" || x.status === "review" ? "View" : "Submit"}
-                      </Link>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </Card>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+        </div>
       )}
     </div>
+  );
+}
+
+/** Tasks waiting for this person's work, each with a clear way to upload it. */
+function SubmitList({
+  tasks,
+  compact,
+}: {
+  tasks: Array<{ id: string; title: string; due_at: string | null; status: string }>;
+  compact?: boolean;
+}) {
+  return (
+    <section className="card-duo border-primary/40 bg-primary/5 p-5">
+      <div className="mb-4 flex items-start gap-3">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
+          <Upload className="h-4 w-4" />
+        </span>
+        <div>
+          <h2 className="font-display text-base font-bold">
+            {tasks.length === 1 ? "1 task needs your work" : `${tasks.length} tasks need your work`}
+          </h2>
+          {!compact && (
+            <p className="text-sm text-muted-foreground">
+              Open a task to upload files, add links and submit it for grading.
+            </p>
+          )}
+        </div>
+      </div>
+      <ul className="flex flex-col gap-2">
+        {tasks.slice(0, compact ? 3 : undefined).map((x) => (
+          <li
+            key={x.id}
+            className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 py-2.5"
+          >
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold">{x.title}</span>
+              <span className="text-xs text-muted-foreground">Due {fmtDate(x.due_at)}</span>
+            </span>
+            <Link
+              to="/workspace/task/$taskId"
+              params={{ taskId: x.id }}
+              hash="submit"
+              className="btn-duo shrink-0 !px-3 !py-1.5 text-xs"
+            >
+              <Upload className="h-3.5 w-3.5" /> Upload
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

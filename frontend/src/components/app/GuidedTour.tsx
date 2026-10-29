@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { ArrowLeft, ArrowRight, Sparkles, X } from "lucide-react";
 import { hasPaid, type Me } from "@/lib/journey";
+import { platformTourSeen, PLATFORM_TOUR_DONE } from "@/lib/tutorials";
 
 // First-run guided tour: a spotlight glides from one part of the app to the next with a short note.
 // Shown once per browser on the first visit; "Take the tour" in the account menu replays it.
@@ -109,10 +110,19 @@ export function GuidedTour({ me }: { me: Me }) {
   const steps = full ? stepsFor(me) : whatsNew(me);
   const step = steps[i];
 
-  // The tutorial page comes first for new people; the tour opens once they move on from it.
+  // The tutorial page comes first for new people; the tour opens once they move on from it, and
+  // after the platform-tour video that plays once after payment.
   const onTutorial = useRouterState({ select: (s) => s.location.pathname.startsWith("/tutorial") });
+  const [videoFirst, setVideoFirst] = useState(
+    () => me.journey.status === "PAID" && !platformTourSeen(),
+  );
   useEffect(() => {
-    if (onTutorial) return;
+    const done = () => setVideoFirst(false);
+    window.addEventListener(PLATFORM_TOUR_DONE, done);
+    return () => window.removeEventListener(PLATFORM_TOUR_DONE, done);
+  }, []);
+  useEffect(() => {
+    if (onTutorial || videoFirst) return;
     let seen = true;
     try {
       // Either tour counts as seen; existing users only see "What's new" once.
@@ -124,7 +134,7 @@ export function GuidedTour({ me }: { me: Me }) {
     return () => {
       if (t) clearTimeout(t);
     };
-  }, [onTutorial]);
+  }, [onTutorial, videoFirst]);
 
   useEffect(() => {
     const replay = () => {

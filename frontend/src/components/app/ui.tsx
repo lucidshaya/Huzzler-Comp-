@@ -19,7 +19,9 @@ export function PageHeader({
       <div className="flex flex-col gap-2">
         {chip && <span className="chip w-fit">{chip}</span>}
         <h1 className="font-display text-2xl font-bold tracking-tight md:text-3xl">{title}</h1>
-        {body && <div className="max-w-2xl text-sm text-muted-foreground">{body}</div>}
+        {body && (
+          <div className="max-w-2xl text-[15px] leading-relaxed text-muted-foreground">{body}</div>
+        )}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
     </header>
@@ -128,7 +130,7 @@ export function Pill({
   }[tone];
   return (
     <span
-      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${cls}`}
+      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider ${cls}`}
     >
       {children}
     </span>

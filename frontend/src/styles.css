@@ -43,10 +43,10 @@
 :root {
   --radius: 1rem;
   --background: oklch(1 0 0);
-  --foreground: oklch(0.32 0.01 250);
+  --foreground: oklch(0.27 0.012 250);
   --charcoal: oklch(0.32 0.01 250);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.32 0.01 250);
+  --card-foreground: oklch(0.27 0.012 250);
 
   /* Primary sky #00bfff */
   --primary: oklch(0.76 0.15 233);
@@ -60,7 +60,7 @@
   --secondary: oklch(0.97 0.005 250);
   --secondary-foreground: oklch(0.28 0.01 250);
   --muted: oklch(0.97 0.005 250);
-  --muted-foreground: oklch(0.55 0.01 250);
+  --muted-foreground: oklch(0.47 0.012 250);
 
   --cream: oklch(0.985 0.015 100);
   --gold: oklch(0.86 0.16 90);
@@ -144,7 +144,7 @@
   --secondary: oklch(0.28 0.012 250);
   --secondary-foreground: oklch(0.97 0.005 250);
   --muted: oklch(0.28 0.012 250);
-  --muted-foreground: oklch(0.72 0.01 250);
+  --muted-foreground: oklch(0.78 0.01 250);
   --border: oklch(0.34 0.012 250);
   --ring: oklch(0.78 0.15 233);
 }

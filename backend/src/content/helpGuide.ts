@@ -2,7 +2,7 @@
 // together (and answer "how do I start?"-style questions) without inventing anything.
 // Keep in step with the Platform tutorial page (frontend/src/routes/_app/tutorial.tsx).
 export const PLATFORM_GUIDE = `## How Huzzler works
-Huzzler gives early-career tech talent real work experience: onboarding tests, a practice internship offer, a squad of real teammates in other roles, five projects and a certificate. The Platform tutorial page in the menu walks through all of it.
+Huzzler gives early-career tech talent real work experience: onboarding tests, a practice internship offer, a squad of real teammates in other roles, five projects and a certificate. The Platform tutorial page in the menu walks through all of it with a full platform tour video and short guides. Every page also has a blue "Tutorial video" button at the top that plays the guide for that part of the platform.
 
 Stages, in order:
 1. Set up your profile: name, phone and field. You can switch field for free until you pay, and once more before you pass onboarding.
@@ -14,7 +14,9 @@ Stages, in order:
 
 Starting a project in the Team workspace:
 - The Squad tab shows your teammates, team chat and meeting notes. The project brief and your tasks are in the workspace; open a task to read its brief, due date and hints.
-- Post a daily check-in (what you did, what's next, blockers). Submit work on the task page. Each task has 3 hints, then mentor chat (up to 10 messages a day).
+- Post a daily check-in (what you did, what's next, blockers). To submit work, open the "Submit work" tab (or the "Upload work" button at the top of the workspace), pick the task and use its upload box: drag in files (up to 10, 10 MB each), add links and describe what you did.
+- The Workstation tab has AI tools for your role: engineers, DevOps and QA get the Code Sandbox; designers get the Flow Canvas for user flows and screens; PMs, analysts and marketers get data and flow tools. Every role gets Voice Studio for stand-up notes.
+- Each task has 3 hints, then mentor chat (up to 10 messages a day).
 - Empty roles are covered by a labelled AI stand-in after 24 hours. Mention it in chat, e.g. @designer.
 - Stay active: during a project, 3 days with no check-in, deliverable or chat message means an AI stand-in takes your seat and you choose a new opportunity. A warning email comes after 2 days.
 

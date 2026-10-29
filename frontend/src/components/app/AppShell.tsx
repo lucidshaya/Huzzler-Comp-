@@ -32,6 +32,7 @@ import { fmtTokens, useWallet } from "@/lib/tokens";
 import { HuzzlerLoader } from "./Loader";
 import { HelpWidget } from "./Support";
 import { GuidedTour, startTour } from "./GuidedTour";
+import { PlatformTourPopup, TutorialVideoButton } from "./TutorialVideos";
 import { fmtDateTime } from "./ui";
 
 type NavItem = { to: string; label: string; short: string; icon: LucideIcon; locked?: boolean };
@@ -157,7 +158,8 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
       >
         Skip to content
       </a>
-      <div className="mx-auto flex min-h-screen max-w-[1440px]">
+      {/* The sidebar sits flush with the left edge of the screen; pages get the rest of the width. */}
+      <div className="flex min-h-screen">
         <aside
           className={`hidden shrink-0 flex-col border-r border-border bg-card/40 py-6 transition-[width] duration-300 md:sticky md:top-0 md:flex md:h-screen md:overflow-y-auto ${collapsed ? "w-[84px] px-3" : "w-64 px-4"}`}
         >
@@ -223,6 +225,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <TutorialVideoButton />
                 {(hasPaid(me.journey.status) || me.journey.status === "LAPSED") && <TokenChip />}
                 <Notifications unread={me.unread_notifications} />
                 <ThemeToggle />
@@ -249,7 +252,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
           )}
           <main
             id="main"
-            className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-6 md:px-8 md:pb-12 md:pt-10"
+            className="mx-auto w-full max-w-[1360px] flex-1 px-4 pb-28 pt-6 md:px-8 md:pb-12 md:pt-10"
           >
             {/* Re-keyed per section (first path segment) so each section eases in, without
                 remounting a section's own sub-pages (e.g. workspace tabs) and losing their state. */}
@@ -263,6 +266,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
       {/* The Help & support page is the support centre itself; a second floating form would cover it. */}
       {!pathname.startsWith("/support") && <HelpWidget />}
       <GuidedTour me={me} />
+      <PlatformTourPopup me={me} />
 
       {/* Mobile bottom tab bar */}
       <nav
