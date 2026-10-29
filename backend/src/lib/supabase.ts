@@ -3,11 +3,11 @@ import { env } from "../config/env.js";
 
 /**
  * A stalled connection must fail fast instead of hanging the request until the platform kills it.
- * Storage uploads get longer.
+ * Auth calls and storage uploads get longer.
  */
 const timedFetch: typeof fetch = (input, init) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-  const ms = url.includes("/storage/v1/") ? 60_000 : 20_000;
+  const ms = url.includes("/storage/v1/") ? 60_000 : url.includes("/auth/v1/") ? 45_000 : 20_000;
   const signal = init?.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(ms)]) : AbortSignal.timeout(ms);
   return fetch(input, { ...init, signal });
 };

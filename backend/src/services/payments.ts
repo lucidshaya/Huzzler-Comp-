@@ -27,8 +27,17 @@ async function monthlyPlanCode(): Promise<string> {
   return code;
 }
 
+/** The payer's email: from the signed-in session, else looked up. A failed lookup is a retry, not "no email". */
+export async function payerEmail(userId: string, knownEmail?: string | null): Promise<string> {
+  if (knownEmail) return knownEmail;
+  const { data, error } = await db.auth.admin.getUserById(userId);
+  if (error) throw new HttpError(503, "We couldn't start checkout just now. Please try again.", "CHECKOUT_RETRY");
+  if (!data.user?.email) throw badRequest("Your account needs an email address to pay.");
+  return data.user.email;
+}
+
 /** Starts a Paystack checkout. Amounts always come from the plans table, never the client. */
-export async function initializePayment(userId: string, planId: PlanId) {
+export async function initializePayment(userId: string, planId: PlanId, knownEmail?: string | null) {
   const j = await getJourney(userId);
   const profile = await getProfile(userId);
   const upgrading = planId === "one_time" && j.plan_id === "monthly" && hasPaidAccess(j.status);
@@ -40,9 +49,7 @@ export async function initializePayment(userId: string, planId: PlanId) {
     const { data: g } = await db.from("guardian_consents").select("id").eq("user_id", userId).eq("status", "accepted").maybeSingle();
     if (!g) throw forbidden("A guardian needs to approve your account before payment.", "GUARDIAN_REQUIRED");
   }
-  const { data: authUser } = await db.auth.admin.getUserById(userId);
-  const email = authUser.user?.email;
-  if (!email) throw badRequest("Your account needs an email address to pay.");
+  const email = await payerEmail(userId, knownEmail);
 
   const plan = await getPlan(planId);
   const reference = `hz_${planId === "monthly" ? "m" : "o"}_${crypto.randomBytes(9).toString("hex")}`;

@@ -5,6 +5,7 @@ import { logger } from "../lib/logger.js";
 import { audit } from "../lib/audit.js";
 import { notify, emailUser, emailLayout } from "../lib/notify.js";
 import { badRequest, conflict, forbidden, HttpError, notFound } from "../lib/errors.js";
+import { payerEmail } from "./payments.js";
 import { hasPaidAccess, PAID_STATUSES, type JourneyStatus } from "../domain/journey.js";
 import { paystack, PaystackError, type PaystackTransaction } from "./paystack.js";
 import { getJourney } from "./journey.js";
@@ -76,14 +77,12 @@ export async function walletSummary(userId: string) {
   };
 }
 
-export async function initializeTokenPurchase(userId: string, packId: string) {
+export async function initializeTokenPurchase(userId: string, packId: string, knownEmail?: string | null) {
   const j = await getJourney(userId);
   if (!hasPaidAccess(j.status)) throw forbidden("Tokens are for members with an active plan. Choose a plan first.", "PAYMENT_REQUIRED");
   const { data: pack } = await db.from("token_packs").select("*").eq("id", packId).eq("active", true).maybeSingle();
   if (!pack) throw notFound("That token pack isn't available.");
-  const { data: authUser } = await db.auth.admin.getUserById(userId);
-  const email = authUser.user?.email;
-  if (!email) throw badRequest("Your account needs an email address to pay.");
+  const email = await payerEmail(userId, knownEmail);
 
   const reference = `${TOKEN_REF_PREFIX}${crypto.randomBytes(9).toString("hex")}`;
   ok(await db.from("token_purchases").insert({ user_id: userId, pack_id: pack.id, tokens: pack.tokens, amount_kobo: pack.amount_kobo, reference }), "token purchase insert");
