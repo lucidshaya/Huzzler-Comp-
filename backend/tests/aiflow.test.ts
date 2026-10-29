@@ -123,6 +123,13 @@ describe("help bot dead ends", () => {
     expect(deadEnd([...five.slice(0, 4), q("question about grades", false)], "question about offers").stuck).toBe(true);
   });
 
+  it("never treats greetings as dead ends", async () => {
+    const { deadEnd } = await import("../src/services/help.js");
+    const misses = [q("hi", false), q("hello", false), q("hey there", false)];
+    expect(deadEnd(misses, "hello")).toEqual({ stuck: false, reason: null });
+    expect(deadEnd(misses, "how do I get into the team workspace?").stuck).toBe(false);
+  });
+
   it("stops the model after repeated misses", async () => {
     const { deadEnd } = await import("../src/services/help.js");
     expect(deadEnd([q("my test won't submit", false)], "test won't submit still").stuck).toBe(true);

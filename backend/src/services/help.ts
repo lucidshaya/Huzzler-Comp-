@@ -106,6 +106,10 @@ const MAX_PROMPTS = 5;
 // Someone asking about something broken or account-specific usually needs a person, not the FAQ.
 const PROBLEM = /\b(won'?t|can'?t|cannot|isn'?t|doesn'?t|didn'?t|not working|not showing|error|bug|broken|stuck|missing|failed|charged|wrong|still)\b/i;
 
+// "hi", "thanks", "ok": small talk never counts toward a dead end.
+const SMALL_TALK = /^\s*(hi+|hello+|hey+|hiya|good (morning|afternoon|evening)|thanks?( you)?|thank u|ty|ok(ay)?|cool|great|yes|no)\b[\s!.?,a-z]{0,12}$/i;
+export const isSmallTalk = (q: string) => SMALL_TALK.test(q);
+
 type PriorQuery = { question: string; answered: boolean; helpful: boolean | null; top_faq_id: string | null };
 export type HelpTurn = { from: "user" | "bot"; text: string };
 
@@ -122,7 +126,9 @@ const overlap = (a: string, b: string) => {
  * Has this person hit a dead end with the bot? Looks at their questions from the last 30 minutes.
  * `stuck` means more AI won't help: skip the model and point them to a person.
  */
-export function deadEnd(prior: PriorQuery[], question: string) {
+export function deadEnd(all: PriorQuery[], question: string) {
+  if (isSmallTalk(question)) return { stuck: false, reason: null };
+  const prior = all.filter((p) => !isSmallTalk(p.question));
   const repeat = prior.some((p) => overlap(p.question, question) >= 0.6);
   const unanswered = prior.filter((p) => !p.answered).length;
   const unhelpful = prior.some((p) => p.helpful === false);
